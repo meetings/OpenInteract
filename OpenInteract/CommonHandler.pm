@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.28 2001/11/06 04:25:07 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.29 2001/12/01 15:25:38 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -605,8 +605,9 @@ sub remove {
 
     my $object_type  = $class->MY_OBJECT_TYPE;
     my $object_class = $class->MY_OBJECT_CLASS;
-    my $id_field     = $class->id_field;
-    my $object = eval { $class->fetch_object( $p->{ $id_field }, $id_field ) };
+    my $id_field     = $object_class->id_field;
+    my $object       = eval { $class->fetch_object( $p->{ $id_field },
+                                                    $id_field ) };
 
     return $class->search_form({ error_msg => $@ }) if ( $@ );
     unless ( $object->is_saved ) {
@@ -937,7 +938,7 @@ sub _search_criteria_customize    { return $_[1] }
 sub _search_build_where_customize { return 1 }
 sub _fetch_object_customize       { return $_[1] }
 sub _edit_customize               { return ( OK, undef ) }
-
+sub _remove_customize             { return 1 }
 
 
 1;

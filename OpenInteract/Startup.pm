@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.25 2001/11/28 05:55:07 lachoy Exp $
+# $Id: Startup.pm,v 1.26 2001/11/30 15:22:22 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -14,7 +14,7 @@ use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -247,7 +247,7 @@ sub create_temp_lib {
     unshift @INC, $lib_dir;
 
     File::Path::rmtree( $lib_dir ) if ( -d $lib_dir );
-    mkdir( $lib_dir );
+    mkdir( $lib_dir, 0777 );
 
     my $site_repos = $REPOS_CLASS->fetch( undef,
                                           { directory => $base_config->{website_dir} } );

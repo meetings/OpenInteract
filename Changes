@@ -1,5 +1,26 @@
 Revision history for Perl extension OpenInteract.
 
+1.36  Sat Dec  1 12:55:16 EST 2001
+
+Overall:
+
+ * Two bugfixes in core modules -- no package changes.
+
+Individual:
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Fixed call in remove() which made the id_field() call against the
+   wrong class, and added a stub for _remove_customize() (Thanks to
+   Andreas Nolte <andreas.nolte@bertelsmann.de> for pointing these
+   out)
+
+ * OpenInteract/Startup.pm:
+
+   - Added MASK argument to mkdir() (optional in 5.6.1, not in 5.5.x;
+   thanks to Randal for pointing this out)
+
+
 1.35  Thu Nov 29 00:46:51 EST 2001
 
 Overall:

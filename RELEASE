@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.36  Sat Dec  1 12:55:16 EST 2001
+
+  - Minor bugfixes, both in core OI modules. Easy upgrade.
+
+
 1.35  Thu Nov 29 00:46:51 EST 2001
 
   - Tons of configuration changes -- please see UPGRADE if you're
@@ -148,4 +153,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.14 2001/11/29 05:28:01 lachoy Exp $
+$Id: RELEASE,v 1.15 2001/12/01 17:37:59 lachoy Exp $

@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.27 2001/11/28 05:54:21 lachoy Exp $
+# $Id: Package.pm,v 1.28 2001/11/30 13:30:35 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -325,7 +325,7 @@ sub install_distribution {
         if ( scalar @failed_modules ) {
             die "Package $name-$version requires the following modules " .
                 "that are not currently installed: " . join( ', ', @failed_modules ) .
-                "Please install them and try again.\n";
+                ". Please install them and try again.\n";
         }
     }
 

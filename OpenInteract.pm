@@ -1,6 +1,6 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.22 2001/11/26 13:42:25 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.23 2001/12/01 17:38:12 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
@@ -8,7 +8,7 @@ use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = 1.35;
+$OpenInteract::VERSION  = 1.36;
 
 
 # Generic separator used in display
