@@ -1,0 +1,142 @@
+Revision history for Perl extension OpenInteract.
+
+1.05  Thu Feb  1 00:26:14 EST 2001
+
+  Added 'setup_static_environment' to OpenInteract/Startup.pm -- this
+  makes it *incredibly* easy to setup an OI environment outside of
+  Apache/CGI/Web-whatever, allowing you to do data reporting, import,
+  export, etc. 
+
+  Refactored (not 100%, but still pretty well) OpenInteract/Package.pm
+  to be easier to understand, including breaking up longer 'meaty'
+  subroutines into easier-to-digest versions. Added lots of POD
+  documentation as well.
+
+  Added website installation message to 'oi_manage' and modified it to
+  display an 'INSTALL' file whenever the package is installed to a
+  website (either via 'upgrade' or 'apply'). This means that package
+  authors can alert users to potential schema change or other API
+  modifications and be sure that users will see this when the package
+  is applied/upgraded -- minimize potential user excuses :-)
+
+  The basic OpenInteract documentation (included with the Perl
+  distributed in 'doc/') is now copied over to the OpenInteract base
+  installation directory (when you do 'oi_manage install') and is
+  copied from there to a website's HTML directory when you create a
+  new one. This means that the HTML OI documentation is available when
+  you first fire up your browser to see your website.
+
+  Lots of modifications to many packages, including the addition of a
+  new package to the core OpenInteract family: base_box. Let's give
+  him a big hand!
+
+1.04  Thu Dec 21 01:01:14 EST 2000
+
+  Modified OpenInteract/Package.pm to accommodate earlier versions of
+  Archive::Tar, which had very different interfaces. Added some more
+  items to the PREREQ piece of Makefile.PL and scrapped the
+  'INSTALLSCRIPT' option to let MakeMaker put the bin files in the
+  "right" place. 
+
+  **NOTE -- this means you should remove all older versions of
+  'oi_manage' that might be someplace like '/usr/local/bin'**
+
+  We now require version 2.00 of the Template Toolkit. Version 1.06+
+  might still work, but it's no longer actively supported.
+
+  Modified scripts/oi_manage to implement a 'list_actions' command,
+  which reads in all your website action.perl files and then tells you
+  all the actions programmed in the system and which package the
+  action comes from.
+
+  Many changes to various packages -- see the changelogs for
+  'base', 'base_security', 'base_theme', 'static_page' and several
+  others.
+
+1.03  Nov 30 2000
+
+  Added some modifications to when you install OpenInteract and when
+  you create a new package (OpenInteract/Package.pm;
+  script/oi_manage). Modified documentation in the Developer and Admin
+  guides as well as the two INSTALL documents; got that bulky .GIF out
+  of the distribution, replacing it with a slightly lame Visio
+  drawing (to PNG).
+
+  Relatively minor fixes to the packages news, base_error, base and
+  system_doc. See their 'Changes' files for more info.
+
+  Modified scripts/oi_manage to have the same semantics for
+  'check_package' as for 'export_package' -- that is, you can chdir to
+  the working directory for a package and run the command without any
+  parameters and have a check properly performed.
+
+  (minor) Superficial change in just about every file to modify email
+  'cwinters@intes.net' to 'chris@cwinters.com'. Also changed all RCS
+  '$Header' tags to '$Id'.
+
+1.02  Nov 10 2000
+
+  Package management and oi_manage routines are pretty much rock-solid
+  as done from informal testing. We've made new installs and websites
+  by the handful and everything has gone well. Added lots of overall
+  documentation (in the 'doc/' directory) including targeted guides
+  for managers, administrators and developers, plus a glossary, all in
+  HTML format. Eliminated a pretty evil bug in the
+  'OpenInteract/Template.pm' file of the 'base' package which only
+  manifested itself when running more than one website. SQL
+  installation has also been smoothed out and tested in numerous
+  ways. Lots of other little changes (structure, format, etc.).
+
+  Also made some changes to terminology and enforced it throughout. A
+  'base installation' is where you first install OpenInteract (using
+  'oi_manage') and a 'server' is the Apache/mod_perl process. A
+  'website' is a particular instantiation of OpenInteract with its own
+  packages, namespace, etc. The definition for 'package' hasn't really
+  changed, but we've made a package kindasorta synonymous with 'tool',
+  even though a package can contain more than one tool. 
+
+1.01  Nov 3 2000
+
+  Lots of new things -- massively overhauled package management
+  (oi_manage and OpenInteract::Package) including scads of
+  documentation and the functions for package removal and upgrade
+  capabilities, you can check a package, get a listing of packages
+  installed to an application or to the base installation, and can now
+  create a 'skeleton' package, which should help out a little bit with
+  development; more documentation in the packages distributed with the
+  system. You can also add or dump a package's templates, test a
+  database connection given the configuration parameters for an
+  application, and (more below) install the SQL structures and data
+  for a package.
+
+  Added the class 'OpenInteract::DBI' which gives us a central
+  location for connecting to a database. Also modified how the
+  configuration file is setup wrt database info.
+
+  All 'module.perl' files will hereafter be known as 'action.perl' --
+  this is so we can better communicate the concept of the 'Action
+  Table' and what it means when you're developing packages and
+  applications.
+
+  Added lots of configuration documentation -- see all the files in
+  'conf/'. The 'spops.perl' and 'action.perl' files are now
+  well-documented and OpenInteract::Package was modified to copy these
+  sample files into a new package when a skeleton is created.
+
+  Also modified the 'full_text' scripts for doing certain actions from
+  the command-line -- these are good scripts to review if you want to
+  create an OpenInteract 'environment' (all the classes created and
+  linked, database handle and config object created, etc.) from a
+  script rather than from mod_perl.
+
+  Added 'OpenInteract::SQLInstall' and modified all of the packages to
+  use its methods as well as translated their incoming structures and
+  data to its format. (This was much more work than it sounds like :)
+
+  Numerous other small-to-medium fixes here and there.
+
+1.00  Sep 28 2000
+
+  First public version. Everything is new!
+
+

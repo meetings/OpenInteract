@@ -1,0 +1,21 @@
+=head1 NAME
+
+%%NAME%% - This package will do everything!
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head1 BUGS 
+
+None yet!
+
+=head1 TO DO
+
+Nothing
+
+=head1 SEE ALSO
+
+=head1 AUTHORS
+
+Who AmI <me@whoami.com>

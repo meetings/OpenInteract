@@ -1,0 +1,208 @@
+INSTALLING AN OPENINTERACT WEBSITE
+
+This document should help you install an OpenInteract website. (Think
+of OpenInteract as two parts: the installation and any number of
+websites. Without a website, the installation is pretty useless, and a
+website cannot exist without the installation.)
+
+
+(1) Install a website
+
+Be sure OpenInteract is installed and note its directory. This is
+referred to as the 'base_dir' below.
+
+Assuming that the directory you specified for the scripts packaged
+with OpenInteract is in your path, you can then install a new
+website:
+
+ oi_manage --base_dir=%%INTERACT_DIR%% \
+           --website_name=%%WEBSITE_NAME%% \
+           --website_dir=%%WEBSITE_DIR%% \
+           create_website
+
+This creates a new website in the 'website_dir' you specified
+and installs all the packages necessary to run OpenInteract. (If the
+'website_dir' directory already exists the command will fail.)
+
+
+(2) Configure the website.
+
+When you install a website, you also get a few configuration
+files. Most of the values in the files have been filled in for you,
+but some have not.
+
+With a plaintext editor (emacs, vi, pico, etc.) Edit the file:
+
+ %%WEBSITE_DIR%%/conf/server.perl
+
+Change the following values:
+
+ 'smtp_host' 
+
+   Set to an available server to use for an SMTP host. If you don't
+   know, check whether localhost (127.0.0.1) works.
+
+ 'admin_email'
+
+   Set to your email address. You can change this later if you want.
+
+ 'session_info' 
+
+   If you're using MySQL as your SQL database, you can leave this
+   alone. Otherwise you'll probably want to change it to either
+   'Apache::Session::Sybase' (if you're using a Sybase database) or
+   'Apache::Session::DBI' for most other SQL databases.
+
+ 'db_info'
+
+   This tells OpenInteract how to connect to your database. Here are
+   some sample values:
+
+       ...
+       'db_info' => {
+         'db_owner'    => '',
+         'username'    => 'dbuser',
+         'password'    => 'dbpassword',
+         'dsn'         => 'mysql',
+         'db_name'     => 'MyAppDB',
+         'driver_name' => 'mysql',
+       },
+       ...
+
+That's it!
+
+(Note that you might want to be careful with permissions used on this
+file since it has sensitive username/password information.)
+
+
+(3) Create your database and test the connection
+
+If the database for which you entered information in the previous step
+isn't created, do so now. (The specific action for doing this depends
+on the database you're using. You might need to talk to an
+administrator to perform the action.)
+
+Once the database is created, you can test the database connection
+from OpenInteract's point of view:
+
+ oi_manage --website_dir=%%WEBSITE_DIR%% test_db
+
+If everything comes back marked 'ok', then you're in good shape.
+
+
+(4) Install SQL files
+
+If you'd like, go into the 'pkg/' directory and explore the files in
+each package's 'data/' and 'struct' directories. These will be
+executed in the next step, but if you'd like to change information go
+ahead. 
+
+Run the command:
+
+ oi_manage --website_dir=%%WEBSITE_DIR%% \
+           --package=INITIAL \
+           install_sql
+
+(Note: capitalization of 'INITIAL' is important!)
+
+This installs the SQL structures and initial data for the packages
+shipped with OpenInteract. Hopefully all the statements and programs
+execute with an 'ok' status.
+
+Be sure to view the status messages! Some packages might install
+default information and give you details about that information in
+these messages. For instance, the 'base_user' package creates a
+'superuser' user object and assigns it a random eight-character
+password. This password is displayed in the status messages, and if
+you chose 'crypt_password' in your configuration file you will NEVER
+be able to know the password for the superuser. If this happens,
+you'll have to just remove the directory tree with your website and
+reinstall. Yuck.
+
+
+(5) Import templates
+
+Bring the templates used in the various packages into your
+database. Once this is done you can edit them via the web browser.
+
+Run the command:
+
+ oi_manage --website_dir=%%WEBSITE_DIR%% \ 
+           --package=INITIAL \
+           install_template
+
+This installs the templates from the packages listed into you SQL
+database. Note that you can make changes to the templates at any time
+and re-import them into the database using this same command.
+
+
+(6) Edit Apache virtual host configuration
+
+Using the static/modperl configuration assumes that you have already
+setup a front-end proxy configuration as discussed at the following
+URLs:
+
+ http://perl.apache.org/guide/strategy.html#Alternative_architectures_for_ru
+ http://perl.apache.org/guide/scenario.html#One_Light_and_One_Heavy_Server_w
+ http://perl.apache.org/guide/scenario.html#mod_proxy
+
+Further, OpenInteract assumes that if you're running the proxy server
+configuration you've setup the front-end to pass the IP address to the
+back-end, as described in:
+
+ http://perl.apache.org/guide/scenario.html#Getting_the_Remote_Server_IP_in_
+
+The OpenInteract Administrator's Guide (found in doc/admin.html) has
+details about building the different servers. It's definitely worth
+the time to read about this setup because it can help OpenInteract be
+a big success for you.
+
+Edit the files:
+
+ %%WEBSITE_DIR%%/conf/httpd_static.conf
+ %%WEBSITE_DIR%%/conf/httpd_modperl.conf
+
+And follow the directions there.
+
+If you're not using virtual hosts, then copy the information within
+the <VirtualHost></VirtualHost> tags into your main config file and
+skip the next step.
+
+
+(7) Edit Apache configuration
+
+In your static httpd server configuration, add the line:
+
+ Include %%WEBSITE_DIR%%/conf/httpd_static.conf
+
+and in your mod_perl httpd server configuration, add the line:
+
+ Include %%WEBSITE_DIR%%/conf/httpd_modperl.conf
+
+
+(8) Run Apache!
+
+Startup Apache as you normally would, and hopefully everything will
+be up and running!
+
+
+(9) Connect to your website
+
+Open up a web browser to your hostname or IP address. You should see a
+welcome page. Login with the username 'superuser' and the password you
+saw in step (4). 
+
+Create a new user for yourself (click on the 'Users - new' link in the
+Admin Tools box), and then assign the user to the 'site admin' group
+(click on 'Groups - list' in the Admin Tools box and then the 'Detail'
+link next to the site admin group.)
+
+Now you can start having fun!
+
+
+=========================
+
+Revision info: 
+  $Revision: 1.6 $
+  $Date: 2001/01/01 16:18:09 $
+  $Author: cwinters $

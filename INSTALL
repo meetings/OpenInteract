@@ -1,0 +1,66 @@
+INSTALLING OPENINTERACT
+
+Pre-requisites:
+
+ - Ensure you have SPOPS installed
+
+ - Ensure you have GDBM_File installed. (What? You don't? There's a
+ Win32 PPM for it; if you don't have it on unix, then there's no
+ hope. Actually, there is hope: bug Chris (chris@cwinters.com) to use
+ other DBM or backend implementations.)
+
+
+(1) Run the normal perl install
+
+ perl Makefile.PL
+ make
+ make test (no tests yet...)
+ make install
+
+This procedure will install the base libraries. Normal Perl
+installation rules apply.
+
+
+(2) Run the OpenInteract install
+
+Without changing directories from the directory where you unpacked the
+OpenInteract distribution, run:
+
+ oi_manage --base_dir=/path/to/installation install
+
+The 'oi_manage' script should have been installed to a publically
+accessible place (e.g., '/usr/local/bin' or '/usr/bin') for you when
+you installed the rest of the library with 'make install'. If not,
+just copy the file 'script/oi_manage' to an accessible place. (You can
+also just run 'script/oi_manage install', but then 'oi_manage' won't
+be accessible to manipulate future websites and configuration
+information. This makes life hard for you. Why do that?)
+
+This command creates the OpenInteract base directory and installs all
+the packages that were distributed with the system.
+
+That's it! OpenInteract is now installed and you should never need to
+do this again. Upgrades to packages and installation of new packages
+are done through the OpenInteract package system (and the 'oi_manage'
+script) and work on existing installations.
+
+
+(3) Read up
+
+Check out the documentation: 
+
+1. INSTALL.website (in this directory): Tells you how to create a new
+OpenInteract website. This document is also copied to the website
+directory when you create it.
+
+2. doc/admin.html: More information about administering OpenInteract,
+including notes about packages, creating websites, and
+building/configuring Apache.
+
+
+=========================
+
+Revision info: 
+  $Revision: 1.9 $
+  $Date: 2001/01/01 16:21:06 $
+  $Author: cwinters $
