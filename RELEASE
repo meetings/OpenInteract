@@ -1,6 +1,23 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.1  Fri Jul 20 07:00:55 EDT 2001
+
+  - Requires SPOPS version 0.41
+
+  - New package 'results_manage' makes it simple to manage and persist
+  search results
+
+  - Many packages use the new SPOPS iterators to return results, which
+  should reduce resource consumption, in some cases dramatically.
+
+  - Many modules were moved from the 'base' package to the core
+  distribution, which will hopefully make the whole process more
+  understandable -- and browseable via 'perldoc'.
+
+  - Lots of smaller changes -- see 'Changes' file for more info
+
+
 1.07  Sun Jun 10 14:31:36 EDT 2001
 
   * Requires SPOPS version 0.40.
@@ -47,6 +64,7 @@ RELEASE NOTES: OpenInteract
    
   * Lots of small changes -- see 'Changes' file for more info.
 
+
 1.06  Sun Feb 25 15:16:43 EST 2001
 
   * Package repository format changed. See 'UPGRADE' for upgrading
@@ -73,4 +91,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.5 2001/06/10 18:17:01 lachoy Exp $
+$Id: RELEASE,v 1.7 2001/07/20 09:48:34 lachoy Exp $

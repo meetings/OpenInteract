@@ -19,7 +19,7 @@ will explain things in a little more detail, and finally, along the
 way, we will show you how to build a simple package that displays data
 from a database (following tradition, this will be the famous fruit
 example database (table fruit, fields id, name, taste, price), so
-things don't get too complicated.
+things don't get too complicated.</p>
 
 
 <h1>Packages</h1>
@@ -34,13 +34,14 @@ In OpenInteract, packages implement the actual application
 functionality.  OpenInteract handles the storage interface (e.g.,
 putting your objects in a database), dispatches URL requests to your
 objects (this is called <EM>handling</EM> an <EM>action</EM>),
-security, authentication and authorization, and session management.
+security, authentication and authorization, and session
+management.</p>
 
 <P>
 Applications need to define objects, which is how an application handles
 its state. It also needs to define how the objects are to be manipulated,
 which users can access them and how functionality is exposed to the user
-(by way of a URL-to-action mapping).
+(by way of the URL-to-action mapping).</p>
 
 <P>
 What goes into a package? In general, you will find:
@@ -133,8 +134,8 @@ fruit/MANIFEST
 <p>
 Now, what does all this stuff mean to you?
 
-<P>
-<PRE><FONT SIZE="-1"> 
+<p>
+<pre><font size="-1"> 
 fruit                      # Main directory
 fruit/conf                 # Configuration directory
 fruit/conf/spops.perl      # Persistent object(s) configuration
@@ -158,13 +159,13 @@ fruit/MANIFEST.SKIP        # Regexes to skip when creating MANIFEST
 fruit/package.conf         # Basic package configuration (name, author, ...)
 fruit/Changes              # Changelog of your package
 fruit/MANIFEST             # List of files in package
-</FONT></PRE>
+</font></pre>
 
 <P>
 You will normally need to edit/add the following:
 
-<P>
-<PRE><FONT SIZE="-1">
+<p>
+<pre><font size="-1">
 fruit/package.conf         # Add name, version, author information
 fruit/MANIFEST             # Add names of distribution files
 fruit/Changes              # Let people know about what you've improved/fixed
@@ -176,17 +177,17 @@ fruit/template             # HTML to display and manipulate your objects
 fruit/OpenInteract         # Optional Perl modules defining object behavior
 fruit/OpenInteract/Handler # Manipulate objects for desired functionality
 fruit/doc/mypackage.pod    # Last but not least, tell the world about it
-</FONT></PRE>
+</font></pre>
 
 <P>
 By the way, the MANIFEST file can be created automatically. (Perl is
 great.) Here's how:
 
-<P>
-<PRE><FONT SIZE="-1"> 
+<p>
+<pre><font size="-1"> 
 $ cd /path/to/mypackage
 $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
-</FONT></PRE>
+</font></pre>
 
 <P>
 That's it! If you have an old 'MANIFEST' file in the directory it will be
@@ -196,28 +197,71 @@ copied to 'MANIFEST.bak'. Also note that files matching patterns in the
 <p>Now we'll step through what makes up a package and along the way
 edit the necessary files to make our own package.
 
+
+<h1>How to organize your development process</h1>
+
+<p>A very important point in organizing your development process for
+working with OpenInteract is to establish discipline about where you
+will work -- that is, in which directory you should edit files in the
+iterative process of getting an application or tool to work.</p>
+
+<p>For all your work, it is recommended that you edit the files in the
+directory created for you by oi_manage, <b>not</b> in the website
+directory, and <b>not</b> in the base directory of your OpenInteract
+installation.  </p>
+
+<p>In fact, editing files in your website directory or in the base
+directory is nearly guaranteed to give you headaches. Don't do
+that. The only exception to this is quick-and-dirty debugging of
+handler code (inserting print statements and the like).</p>
+
+<p>The reason for this is that the process of installing a package to
+the base directory and then applying or upgrading it to a website uses
+the information you provide in your files from the package directory
+(the one created by oi_manage for you) to do all sort of smart things,
+and in that process the original files are changed, and some even
+"disappear" (e.g., code classes).  (If you are interested, look at
+some diff output for the directories in question.)</p>
+
+<p>So, save yourself the trouble and only work from the package
+directory, never from anywhere else. It is trivial to write a little
+script that automates the install/apply/upgrade/server restart cycle
+for your site, and you will never have to worry again.</p>
+
+<p>If you work with designers (people working only on templates), they
+will probably work in the website database, not in the filesystem.  Be
+sure to coordinate updates from the filesystem via "oi_manage
+install_template" with their changes. It is good practice to run a
+small job to call "oi_manage dump_template" to "rescue" any
+database-only changes in the templates during the install process for
+a package during development.</p>
+
 <H1>Package composition</H1>
 
 <P>
 Now that you've created a package already, you've seen most of its
 contents. (The ones you care about, anyway.) However, each package is
-a <code>OpenInteract::Package</code> object -- a normal SPOPS
-object. (An <a href="spops_overview.html">SPOPS overview</a> is
-included with this documentation, and you can find out much more from
-<code>perldoc SPOPS</code>.)
+also related to the <code>OpenInteract::Package</code> class and, once
+installed, can be referenced by a
+<code>OpenInteract::PackageRepository</code> object.</p>
 
 <P>
-OpenInteract maintains a registry of installed packages in a central
-location. (To find the file, go to the <code>conf/</code> directory of
+The PackageRepository object represents a registry of installed
+packages in a central location. OpenInteract maintains such a
+repository for the base installation as well as for each individual
+website. (To find the file, go to the <code>conf/</code> directory of
 your base OpenInteract installation. The
-<code>package_install.gdbm</code> holds the information.)
+<code>package_repository.perl</code> holds the information.)
 
 <P>
 This registry includes meta information about all currently installed
 packages -- author, install date, version, etc. You can browse the
 information using a command-line tool (named <code>oi_manage</code>)
 to see what is currently installed, along with querying the
-information to find dependencies, authors, etc.
+information to find dependencies, authors, etc. (In times of
+emergency, you can also open up the file directly for editing since
+it's a simple <code>Data::Dumper</code>-serialized Perl data
+structure. But this is strongly discouraged otherwise.</p>
 
 
 <h2>package.conf: General package information</h2>
@@ -443,76 +487,34 @@ $spops = {
 Yes. But it's actually easy to modify. And it has a lot of comments,
 as you might have noticed. Just follow the online instructions. BTW,
 you are expected to edit this stuff, and to uncomment all the lines
-that do apply to you.
+that do apply to you.</p>
+
+<p>Here's the final file with all the comments removed:</p>
 
 <pre><font size="-1">
+$ cat conf/spops.perl
+$spops = {
+            'fruit' => {
+              class        => 'OpenInteract::Fruit',
+              isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  
+                                    SPOPS::DBI::MySQL  SPOPS::DBI / ],
+              field        => [ qw/ id name taste price / ], 
+              id_field     => 'id',
 
-[ ... editing it ... and doing a diff to show you what we edited ... ]
-
-$ diff conf/spops.perl~ conf/spops.perl
-50c50
-< #            'object-alias' => {
----
->             'fruit' => {
-56c56
-< #              class        => 'OpenInteract::User',
----
->               class        => 'OpenInteract::Fruit',
-68c68
-< #              isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  SPOPS::DBI::MySQL  SPOPS::DBI / ],
----
->               isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  SPOPS::DBI::MySQL  SPOPS::DBI / ],
-72c72
-< #              field        => [ qw/ user_id first_name last_name email language
----
->               field        => [ qw/ id name taste price / ], 
-78c78
-< #              id_field     => 'user_id',
----
->               id_field     => 'id',
-85c85
-< #              no_insert    => [ qw/ user_id / ],
----
->               no_insert    => [ qw/ id / ],
-89c89
-< #              no_update    => [ qw/ user_id / ],
----
->               no_update    => [ qw/ id / ],
-95c95
-< #              skip_undef   => [ qw/ last_login num_logins password language removal_date theme_id / ],
----
->               skip_undef   => [ qw/ name taste price / ],
-111c111
-< #              base_table   => 'sys_user',
----
->               base_table   => 'fruit',
-139,143c139,143
-< #              creation_security => {
-< #                 u   => 'WRITE',
-< #                 g   => { 3 => 'WRITE' },
-< #                 w   => 'READ',
-< #              },
----
->               creation_security => {
->                  u   => 'WRITE',
->                  g   => { 3 => 'WRITE' },
->                  w   => 'READ',
->               },
-159c159
-< #              name => sub { return $_[0]->full_name },
----
->               name => 'name', 
-163c163
-< #              object_name => 'User',
----
->               object_name => 'fruit',
-166c166
-< };
-\ No newline at end of file
----
-> };
+              no_update    => [ qw/ id / ],
+              skip_undef   => [ qw/ name taste price / ],
+              base_table   => 'fruit',
+              creation_security => {
+                 u   => 'WRITE',
+                 g   => { 3 => 'WRITE' },
+                 w   => 'READ',
+              },
+              display => { url => '/Fruit/show/' },
+              name => 'name', 
+              object_name => 'fruit',
+            },
+};
 </font></pre>
-
 
 <h2>struct/ and data/: Describe SQL structures and data</h2>
 
@@ -566,22 +568,16 @@ $data = [
 database-independent that way.
 
 <p>We have now to create a special class that will do the setup for
-our data in the database. We just edit the template provided for us.
+our data in the database. We just edit the template provided for us.</p>
+
+<p>After editing, our <code>%files</code> data structure looks like:</p>
 
 <pre><font size="-1">
-
-[ ... editing OpenInteract/SQLInstall/Fruit.pm ... ]
-
-$ diff OpenInteract/SQLInstall/Fruit.pm~ OpenInteract/SQLInstall/Fruit.pm
-32c32
-<  tables   => [],
----
->  tables   => [ 'create-table-fruit.sql' ],
-42c42
-<  data     => [],
----
->  data     => [ 'fruit-initial-data.perl' ],
-
+my %files = (
+ tables   => [ 'create-table-fruit.sql' ],
+ data     => [ 'fruit-initial-data.perl' ],
+ security => [],
+);
 </font></pre>
 
 <p>Since we're just in development, we won't actually install these
@@ -695,17 +691,14 @@ use strict;
 $OpenInteract::Handler::Fruit::VERSION = '0.01';
 $OpenInteract::Handler::Fruit::author = 'lemburg@aixonix.de';
 
-my $DEBUG  = 1;
-my $TMPL_CLASS = 'OpenInteract::Template::Toolkit';
-
 sub handler {
-  my $class = shift;
-  my $p     = shift;
+  my ( $class, $p ) = @_;
   my $R = OpenInteract::Request->instance;
   my $fruits = $R->fruit->fetch_group( { 'order' => 'name' } ); 
   my $params = { fruits_in_store => $fruits };
-  my $tmpl_name = 'fruit-display';
-  return $TMPL_CLASS->handler( {}, $params, { db => $tmpl_name } );
+  return $R->template->handler( {}, $params, 
+                                { db      => 'fruit-display', 
+                                  package => 'fruit' } );
 }
 
 1;
@@ -717,33 +710,24 @@ sub handler {
 <p>Well, after having written this handler - how will it get called by
 the user?
 
-<p>This is what the action.perl file is for. Remember, it maps URLs to
-handlers. So, we simply put in a URL (we just make one up - that's the
+<p>This is what the <code>action.perl</code> file is for. Remember,
+the action table maps URLs to handlers. And the action table is formed
+by all the information in the <code>action.perl</code> files in a
+website.</p>
+
+<p>So, we simply put in a URL (we just make one up - that's the
 nice thing with dynamic web pages), and map it to our handler
 routine. Then, we the user types in the URL, or clicks on a link that
 contains the URL, our handler will magically get called, returns its
-HTML, and the user can have a look at our Fruit objects.
+HTML, and the user can have a look at our Fruit objects.</p>
 
 <pre><font size="-1">
-[ ... editing again ... ]
-
-$ diff conf/action.perl~ conf/action.perl
-14c14
-<    'action-key' => {
----
->    'fruit' => {
-19c19
-<      class   => '',
----
->      class   => 'OpenInteract::Handler::Fruit',
-25c25
-< #     method  => '',
----
->      method  => 'handler',
-48c48
-< #   },
----
->    },
+$action = {
+   'fruit' => {
+     class   => 'OpenInteract::Handler::Fruit',
+     method  => 'handler',
+   },
+};
 </font></pre>
 
 
@@ -752,7 +736,8 @@ $ diff conf/action.perl~ conf/action.perl
 <p>Documentation of the Fruit package is left as an exercise for the
 reader. Go read <code>perldoc perlpod</code>. A starter documentation
 file is available in <code>doc/package.pod</code> when you run
-<code>oi_manage</code> to create a package skeleton. (Aren't we nice?)
+<code>oi_manage</code> to create a package skeleton. (Aren't we
+nice?)</p>
 
 <h2>MANIFEST - Add names of distribution files</h2>
 
@@ -762,10 +747,10 @@ approximation would be just all the files in the current directory and
 its subdirectories.  This can be done automatically. (Perl is great.)
 Here's how:
 
-<PRE><FONT SIZE="-1"> 
+<pre><font size="-1"> 
 $ cd fruit
 $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
-</FONT></PRE>
+</font></pre>
 
 <P>
 That's it! If you have an old 'MANIFEST' file in the directory it will be
@@ -799,7 +784,7 @@ Added to MANIFEST: struct/create-table-fruit.sql
 Added to MANIFEST: template/fruit-display.meta
 Added to MANIFEST: template/fruit-display.tmpl
 
-$ oi_manage --package_dir ./ check_package
+$ oi_manage check_package
 Running check_package...
 =========================
 
@@ -837,11 +822,11 @@ fruit
 Finished export_package!
 </font></pre>
 
-
 <p>Installing the package into the local OpenInteract package registry:
 
 <pre><font size="-1">
-$ oi_manage --base_dir /tmp/OpenInteract --package_file fruit-0.01.tar.gz install_package
+$ oi_manage install_package --base_dir /tmp/OpenInteract \
+                            --package_file fruit-0.01.tar.gz
 Running install_package...
 =========================
 
@@ -854,7 +839,9 @@ Finished installing package!
 <p>Applying the package to our website:
 
 <pre><font size="-1">
-$ oi_manage --base_dir /tmp/OpenInteract --website_dir /home/oi_wizards/work/myOI --package fruit apply_package
+$ oi_manage apply_package --base_dir /tmp/OpenInteract \
+                          --website_dir /home/oi_wizards/work/myOI \
+                          --package fruit
 Running apply_package...
 =========================
 

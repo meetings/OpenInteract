@@ -205,10 +205,6 @@ Latest news, package repository, everything else.
 
  http://www.openinteract.org/
 
-=head1 REVISION
-
-This document is for version B<1.06> of OpenInteract.
-
 =head1 CONTACT
 
 Thanks for trying out OpenInteract! If you have any questions,
@@ -231,11 +227,39 @@ in the source distribution), or (at your option) any later version.
 
 =item *
 
+OpenInteract
+
+=item *
+
 OpenInteract::ApacheStartup
 
 =item *
 
+OpenInteract::Auth
+
+=item *
+
+OpenInteract::Cache
+
+=item *
+
+OpenInteract::Cache::File
+
+=item *
+
+OpenInteract::Cache::IPC
+
+=item *
+
 OpenInteract::Config
+
+=item *
+
+OpenInteract::Cookies::Apache
+
+=item *
+
+OpenInteract::Cookies::CGI
 
 =item *
 
@@ -251,6 +275,14 @@ OpenInteract::Error
 
 =item *
 
+OpenInteract::Error::Main
+
+=item *
+
+OpenInteract::Error::System
+
+=item *
+
 OpenInteract::Package
 
 =item *
@@ -263,6 +295,18 @@ OpenInteract::Request
 
 =item *
 
+OpenInteract::Session
+
+=item *
+
+OpenInteract::Session::DBI
+
+=item *
+
+OpenInteract::Session::MySQL
+
+=item *
+
 OpenInteract::SPOPS
 
 =item *
@@ -272,6 +316,22 @@ OpenInteract::SQLInstall
 =item *
 
 OpenInteract::Startup
+
+=item *
+
+OpenInteract::Template
+
+=item *
+
+OpenInteract::Template::Toolkit
+
+=item *
+
+OpenInteract::UI::Main
+
+=item *
+
+OpenInteract::Utility
 
 =back
 
@@ -318,6 +378,10 @@ base_theme
 =item *
 
 base_user
+
+=item *
+
+results_manage
 
 =item *
 

@@ -1,13 +1,13 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.4 2001/05/30 17:30:42 lachoy Exp $
+# $Id: DBI.pm,v 1.5 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -15,67 +15,67 @@ use constant DEFAULT_READ_LEN => 32768;
 use constant DEFAULT_TRUNC_OK => 0;
 
 sub connect {
-  my ( $class, $db_info, $p ) = @_;
-  $p ||= {};
+    my ( $class, $db_info, $p ) = @_;
+    $p ||= {};
 
-  # Allow callback to modify the connection info; note that we 
-  # dereference $db_info for a reason here -- so we don't mess up the 
-  # original information, say, in the config hashref
+    # Allow callback to modify the connection info; note that we 
+    # dereference $db_info for a reason here -- so we don't mess up the 
+    # original information, say, in the config hashref
 
-  if ( ref $p->{pre_connect} eq 'CODE' ) {
-    DEBUG && _w( 2, "before pre_connect code: ", Dumper( $db_info ) );
-    my $new_db_info = $p->{pre_connect}->( \%{ $db_info } );
-    $db_info = $new_db_info  if ( $new_db_info->{dsn} );
-  }
-
-  # Make the actual connection -- let the 'die' trickle up to our
-  # caller if it happens
-
-  my $dsn      = "DBI:$db_info->{driver_name}:$db_info->{dsn}";
-  my $username = $db_info->{username};
-  my $password = $db_info->{password};
-  DEBUG && _w( 2, "Connecting with ($dsn) ($username) ($password)" );
-  my $db = DBI->connect( $dsn, $username, $password )
-               || die "Connect failed: $DBI::errstr\n";
-  DEBUG && _w( 1, "DBI::connect >> Connected ok" );
-
-  # If we have specified a 'db_name', go ahead and 'use' that
-
-  if ( $db_info->{db_name} ) {
-    DEBUG && _w( 1, "Use right database ($db_info->{db_name})." );
-    my $rv = $db->do( "use $db_info->{db_name}" );
-    unless ( $rv ) {
-      my $msg = $DBI::errstr;
-      $db->disconnect;
-      die "Use database failed: $msg\n";
+    if ( ref $p->{pre_connect} eq 'CODE' ) {
+        DEBUG && _w( 2, "before pre_connect code: ", Dumper( $db_info ) );
+        my $new_db_info = $p->{pre_connect}->( \%{ $db_info } );
+        $db_info = $new_db_info  if ( $new_db_info->{dsn} );
     }
-  }
 
-  # We don't set this until here so we can control the format of the
-  # error...
+    # Make the actual connection -- let the 'die' trickle up to our
+    # caller if it happens
 
-  $db->{RaiseError}  = 1;
-  $db->{PrintError}  = 0;
-  $db->{ChopBlanks}  = 1;
-  $db->{AutoCommit}  = 1;
-  $db->{LongReadLen} = $db_info->{long_read_len} || DEFAULT_READ_LEN;
-  $db->{LongTruncOk} = $db_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
+    my $dsn      = "DBI:$db_info->{driver_name}:$db_info->{dsn}";
+    my $username = $db_info->{username};
+    my $password = $db_info->{password};
+    DEBUG && _w( 2, "Connecting with ($dsn) ($username) ($password)" );
+    my $db = DBI->connect( $dsn, $username, $password )
+                         || die "Connect failed: $DBI::errstr\n";
+    DEBUG && _w( 1, "DBI::connect >> Connected ok" );
 
-  # Allow callback to do something with the database handle along with
-  # the parameters used to connect to it.
+    # If we have specified a 'db_name', go ahead and 'use' that
 
-  if ( ref $p->{post_connect} eq 'CODE' ) {
-    DEBUG && _w( 1, "Calling post_connect code with handle and info" );
-    $p->{post_connect}->( \%{ $db_info }, $db );
-  }
-  return $db;
+    if ( $db_info->{db_name} ) {
+        DEBUG && _w( 1, "Use right database ($db_info->{db_name})." );
+        my $rv = $db->do( "use $db_info->{db_name}" );
+        unless ( $rv ) {
+            my $msg = $DBI::errstr;
+            $db->disconnect;
+            die "Use database failed: $msg\n";
+        }
+    }
+
+    # We don't set this until here so we can control the format of the
+    # error...
+
+    $db->{RaiseError}  = 1;
+    $db->{PrintError}  = 0;
+    $db->{ChopBlanks}  = 1;
+    $db->{AutoCommit}  = 1;
+    $db->{LongReadLen} = $db_info->{long_read_len} || DEFAULT_READ_LEN;
+    $db->{LongTruncOk} = $db_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
+
+    # Allow callback to do something with the database handle along with
+    # the parameters used to connect to it.
+
+    if ( ref $p->{post_connect} eq 'CODE' ) {
+        DEBUG && _w( 1, "Calling post_connect code with handle and info" );
+        $p->{post_connect}->( \%{ $db_info }, $db );
+    }
+    return $db;
 }
 
 sub _w {
-  return unless ( DEBUG >= shift );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
+    return unless ( DEBUG >= shift );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;

@@ -1,6 +1,6 @@
 package OpenInteract::Error;
 
-# $Id: Error.pm,v 1.2 2001/05/30 17:30:42 lachoy Exp $
+# $Id: Error.pm,v 1.3 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 
@@ -19,58 +19,59 @@ $OpenInteract::Error::extra      = ();
 $OpenInteract::Error::notes      = undef;
 
 sub clear {
-  $OpenInteract::Error::user_msg   = undef;
-  $OpenInteract::Error::system_msg = undef;
-  $OpenInteract::Error::type       = undef;
-  $OpenInteract::Error::package    = undef;
-  $OpenInteract::Error::filename   = undef;
-  $OpenInteract::Error::line       = undef;
-  $OpenInteract::Error::method     = undef;
-  $OpenInteract::Error::extra      = {};
-  $OpenInteract::Error::notes      = undef;
+    $OpenInteract::Error::user_msg   = undef;
+    $OpenInteract::Error::system_msg = undef;
+    $OpenInteract::Error::type       = undef;
+    $OpenInteract::Error::package    = undef;
+    $OpenInteract::Error::filename   = undef;
+    $OpenInteract::Error::line       = undef;
+    $OpenInteract::Error::method     = undef;
+    $OpenInteract::Error::extra      = {};
+    $OpenInteract::Error::notes      = undef;
 }
 
 # Retrieve all the package variables in a hashref
 sub get {
-  my ( $class ) = @_;
-  return { user_msg   => $OpenInteract::Error::user_msg,
-           system_msg => $OpenInteract::Error::system_msg,
-           type       => $OpenInteract::Error::type,
-           package    => $OpenInteract::Error::package,
-           filename   => $OpenInteract::Error::filename,
-           line       => $OpenInteract::Error::line,
-           method     => $OpenInteract::Error::method,
-           extra      => $OpenInteract::Error::extra,
-           notes      => $OpenInteract::Error::notes };
+    my ( $class ) = @_;
+    return { user_msg   => $OpenInteract::Error::user_msg,
+             system_msg => $OpenInteract::Error::system_msg,
+             type       => $OpenInteract::Error::type,
+             package    => $OpenInteract::Error::package,
+             filename   => $OpenInteract::Error::filename,
+             line       => $OpenInteract::Error::line,
+             method     => $OpenInteract::Error::method,
+             extra      => $OpenInteract::Error::extra,
+             notes      => $OpenInteract::Error::notes };
 }
 
 
 # Set all package variables
 
 sub set {
-  my ( $class, $p ) = @_;
-  no strict 'refs';
+    my ( $class, $p ) = @_;
+    no strict 'refs';
 
-  # First clean everything up so there's nothing 
-  # hanging around from a previous error
+    # First clean everything up so there's nothing 
+    # hanging around from a previous error
 
-  OpenInteract::Error->clear;
+    OpenInteract::Error->clear;
 
-  # Then set everything passed in
+    # Then set everything passed in
 
-  foreach my $key ( keys %{ $p } ) {
-    warn "OpenInteractI::Error::set >> Setting error $key to $p->{ $key }\n" if ( DEBUG );
-    ${ 'OpenInteract::Error::' . $key } = $p->{ $key };
-  }
+    foreach my $key ( keys %{ $p } ) {
+        warn "OpenInteractI::Error::set >> Setting error $key to $p->{ $key }\n" if ( DEBUG );
+        ${ 'OpenInteract::Error::' . $key } = $p->{ $key };
+    }
 
-  # Set the caller information if the user didn't pass
-  # anything in
-  unless ( $p->{package} and $p->{filename} and $p->{line} ) {
-    ( $OpenInteract::Error::package, 
-      $OpenInteract::Error::filename, 
-      $OpenInteract::Error::line ) = caller;
-  }
-  return OpenInteract::Error->get;
+    # Set the caller information if the user didn't pass
+    # anything in
+
+    unless ( $p->{package} and $p->{filename} and $p->{line} ) {
+        ( $OpenInteract::Error::package, 
+          $OpenInteract::Error::filename, 
+          $OpenInteract::Error::line ) = caller;
+    }
+    return OpenInteract::Error->get;
 }
 
 
@@ -78,16 +79,16 @@ sub set {
 # send it over to the error object...
 
 sub throw {
- my ( $class, $p ) = @_;
- my $R = OpenInteract::Request->instance;
- unless ( $p->{package} and $p->{filename} and $p->{line} ) {
-   my ( $cpkg, $cfile, $cline ) = caller;
-   $p->{package}  = $cpkg;
-   $p->{filename} = $cfile;
-   $p->{line}     = $cline;
- }
- my $error_obj_class = $R->CONFIG->{error_object_class};
- return $error_obj_class->throw( $p );
+    my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
+    unless ( $p->{package} and $p->{filename} and $p->{line} ) {
+        my ( $cpkg, $cfile, $cline ) = caller;
+        $p->{package}  = $cpkg;
+        $p->{filename} = $cfile;
+        $p->{line}     = $cline;
+    }
+    my $error_obj_class = $R->CONFIG->{error_object_class};
+    return $error_obj_class->throw( $p );
 }
 
 1;
@@ -222,7 +223,7 @@ the same name in the error object class.
 =head1 NOTES
 
 Some people might find it easier to alias a local package variable to
-an Interact error variable. For instance, you can do:
+an OpenInteract error variable. For instance, you can do:
 
  *err_user_msg   = \$OpenInteract::Error::user_msg;
  *err_system_msg = \$OpenInteract::Error::system_msg;

@@ -1,6 +1,6 @@
 package OpenInteract::Config;
 
-# $Id: Config.pm,v 1.3 2001/06/01 01:19:11 lachoy Exp $
+# $Id: Config.pm,v 1.4 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 require Exporter;
@@ -10,7 +10,7 @@ require Exporter;
 #$AUTOLOAD = '';
 
 @OpenInteract::Config::ISA       = qw( Exporter );
-$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Config::EXPORT_OK = qw( _w DEBUG );
 my %CONFIG_TYPES = (
    'perl' => 'OpenInteract::Config::PerlFile',
@@ -29,19 +29,19 @@ sub save_config { return undef; }
 # variable $type and create an object based on it.
 
 sub instance {
-  my ( $pkg, $type, @params ) = @_;
+    my ( $pkg, $type, @params ) = @_;
 
-  # Backwards compatibility fix -- this probably won't be here forever.
+    # Backwards compatibility fix -- this probably won't be here forever.
 
-  $type ||= 'perl';
-  my $class = $CONFIG_TYPES{ $type };  
-  die "No configuration class corresponding to type ($type)" unless ( $class );
-  eval "require $class";
-  if ( $@ ) {
-    die "Configuration class ($class) cannot be used. Error: $@";
-  }
-  my $data = $class->read_config( @params );
-  return bless( $data, $class );
+    $type ||= 'perl';
+    my $class = $CONFIG_TYPES{ $type };  
+    die "No configuration class corresponding to type ($type)" unless ( $class );
+    eval "require $class";
+    if ( $@ ) {
+        die "Configuration class ($class) cannot be used. Error: $@";
+    }
+    my $data = $class->read_config( @params );
+    return bless( $data, $class );
 }
 
 
@@ -52,65 +52,65 @@ sub instance {
 # operates on $R
 
 sub flatten_action_config {
-  my ( $self ) = @_;
-  my $default_action = $self->{action}->{_default_action_info_} || $self->{action}->{default};
-  my @names = ();
-  foreach my $action_key ( keys %{ $self->{action} } ) {
-    next if ( $action_key eq 'default' or $action_key =~ /^_/ );
-    foreach my $def ( keys %{ $default_action } ) {
-      $self->{action}->{ $action_key }->{ $def } ||= $default_action->{ $def };
+    my ( $self ) = @_;
+    my $default_action = $self->{action}->{_default_action_info_} || $self->{action}->{default};
+    my @names = ();
+    foreach my $action_key ( keys %{ $self->{action} } ) {
+        next if ( $action_key eq 'default' or $action_key =~ /^_/ );
+        foreach my $def ( keys %{ $default_action } ) {
+            $self->{action}->{ $action_key }->{ $def } ||= $default_action->{ $def };
+        }
+
+        # Also ensure that the action information knows its own key
+
+        $self->{action}->{ $action_key }->{name} = $action_key;
+        push @names, $action_key;
     }
-
-    # Also ensure that the action information knows its own key
-
-    $self->{action}->{ $action_key }->{name} = $action_key;
-    push @names, $action_key;
-  }
-  return \@names;
+    return \@names;
 }
 
 
 # Set a parameter
 
 sub param_set {
-  my ( $self, $config, $value ) = @_;
-  $config = lc $config;
-  $self->{ $config } = $value if ( $value );
-  return $self->{ $config };
+    my ( $self, $config, $value ) = @_;
+    $config = lc $config;
+    $self->{ $config } = $value if ( $value );
+    return $self->{ $config };
 }
 
 
 # Get the value of a key
 
 sub get {
-  my ( $self, @p ) = @_;
-  my @configs = ();
-  foreach my $conf ( @p ) {
-    push @configs, $self->param_set( $conf );
-  }
-  if ( scalar @configs == 1 ) {
-    return $configs[0];
-  }
-  return @configs;
+    my ( $self, @p ) = @_;
+    my @configs = ();
+    foreach my $conf ( @p ) {
+        push @configs, $self->param_set( $conf );
+    }
+    if ( scalar @configs == 1 ) {
+        return $configs[0];
+    }
+    return @configs;
 }
 
 
 # Allow you to set multiple values at once
 
 sub set {
-  my ( $self, $p ) = @_;
-  my %configs = ();
-  my $count = 0;
-  my $last_conf = '';           # hack to return one value if only one passed in
-  foreach my $conf ( keys %{ $p } ) {
-    $configs{ $conf } = $self->param_set( $conf, $p->{ $conf } );
-    $last_conf = $conf;
-    $count++;
-  }
-  if ( $count == 1 ) {
-    return $configs{ $last_conf };
-  }
- return %configs;
+    my ( $self, $p ) = @_;
+    my %configs = ();
+    my $count = 0;
+    my $last_conf = '';           # hack to return one value if only one passed in
+    foreach my $conf ( keys %{ $p } ) {
+        $configs{ $conf } = $self->param_set( $conf, $p->{ $conf } );
+        $last_conf = $conf;
+        $count++;
+    }
+    if ( $count == 1 ) {
+        return $configs{ $last_conf };
+    }
+    return %configs;
 }
 
 
@@ -119,21 +119,21 @@ sub set {
 # config object would be stable
 
 sub get_dir {
-  my ( $self, $dir_tag ) = @_;
-  my $dir_hash = $self->{dir};
-  $dir_tag =~ s/_dir$//;
-  my $dir = $dir_hash->{ lc $dir_tag };
-  DEBUG && _w( 1, "get_dir(): start out with <<$dir>>" );
-  return undef if ( ! $dir );
-  while ( $dir =~ m|^\$([\w\_]+)/| ) {
-    my $orig_lookup = $1;
-    my $lookup_dir = lc $orig_lookup;
-    DEBUG && _w( 1, " get_dir(): found lookup dir of <<$lookup_dir>>" );
-    return undef if ( ! $dir_hash->{ $lookup_dir } );
-    $dir =~ s/^\$$orig_lookup/$dir_hash->{ $lookup_dir }/;
-    DEBUG && _w( 1, " get_dir(): new directory: <<$dir>>" );
-  }
-  return $dir;
+    my ( $self, $dir_tag ) = @_;
+    my $dir_hash = $self->{dir};
+    $dir_tag =~ s/_dir$//;
+    my $dir = $dir_hash->{ lc $dir_tag };
+    DEBUG && _w( 1, "get_dir(): start out with <<$dir>>" );
+    return undef if ( ! $dir );
+    while ( $dir =~ m|^\$([\w\_]+)/| ) {
+        my $orig_lookup = $1;
+        my $lookup_dir = lc $orig_lookup;
+        DEBUG && _w( 1, " get_dir(): found lookup dir of <<$lookup_dir>>" );
+        return undef if ( ! $dir_hash->{ $lookup_dir } );
+        $dir =~ s/^\$$orig_lookup/$dir_hash->{ $lookup_dir }/;
+        DEBUG && _w( 1, " get_dir(): new directory: <<$dir>>" );
+    }
+    return $dir;
 }
 
 # Allow you to call config keys as methods -- we should probably get
@@ -152,10 +152,10 @@ sub get_dir {
 
 
 sub _w {
-  return unless ( DEBUG >= shift );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
+    return unless ( DEBUG >= shift );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;

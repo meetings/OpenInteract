@@ -1,6 +1,6 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.3 2001/05/30 17:30:42 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.4 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 use vars qw( $PKG_DB_FILE );
@@ -12,7 +12,7 @@ use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
 
 @OpenInteract::PackageRepository::ISA       = qw( Exporter  SPOPS::Utility  SPOPS::HashFile );
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -38,14 +38,14 @@ use constant META_KEY => 'META_INF';
 #  OpenInteract::PackageRepository->class_initialize;
 
 sub _class_initialize { 
-  my ( $class, $CONFIG ) = @_;
-  my $count = 1;
-  my $C = $class->CONFIG;
-  $C->{field} = {};
-  foreach my $field ( @{ $C->{field_list} } ) {
-    $C->{field}->{ $field } = $count;
-    $count++;
-  }
+    my ( $class, $CONFIG ) = @_;
+    my $count = 1;
+    my $C = $class->CONFIG;
+    $C->{field} = {};
+    foreach my $field ( @{ $C->{field_list} } ) {
+        $C->{field}->{ $field } = $count;
+        $count++;
+    }
 }
 
 
@@ -54,18 +54,18 @@ sub _class_initialize {
 # to pass to SPOPS::HashFile.
 
 sub new {
-  my ( $class, $p ) = @_;
-  if ( ! $p->{filename} and $p->{directory} ) {
-    $p->{filename} = join( '/', $p->{directory}, $PKG_DB_FILE );
-  }
-  $p->{perm} ||= 'new';
-  return $class->SUPER::new( $p );
+    my ( $class, $p ) = @_;
+    if ( ! $p->{filename} and $p->{directory} ) {
+        $p->{filename} = join( '/', $p->{directory}, $PKG_DB_FILE );
+    }
+    $p->{perm} ||= 'new';
+    return $class->SUPER::new( $p );
 }
 
 
 sub initialize {
-  my ( $self, $p ) = @_;
-  $self->{ META_KEY() } = { base_dir => $p->{directory} };
+    my ( $self, $p ) = @_;
+    $self->{ META_KEY() } = { base_dir => $p->{directory} };
 }
 
 
@@ -74,40 +74,40 @@ sub initialize {
 # reference to the repository object before we serialize.
 
 sub pre_save_action {
-  my ( $self, $p ) = @_;
-  foreach my $pkg_key ( keys %{ $self } ) {
-    next if ( $pkg_key eq META_KEY );
-    unless ( -d $self->{ $pkg_key }->{base_dir} ) {
-      warn( "Cannot save package repository: the OpenInteract base installation ",
-            "directory for package ($pkg_key) is not specified or does not exist!" );
-      return undef;
+    my ( $self, $p ) = @_;
+    foreach my $pkg_key ( keys %{ $self } ) {
+        next if ( $pkg_key eq META_KEY );
+        unless ( -d $self->{ $pkg_key }->{base_dir} ) {
+            warn( "Cannot save package repository: the OpenInteract base installation ",
+                  "directory for package ($pkg_key) is not specified or does not exist!" );
+            return undef;
+        }
+        unless ( $self->{ $pkg_key }->{name} and $self->{ $pkg_key }->{version} ) {
+            warn( "Cannot save package repository: both the package 'name' and 'version' ",
+                  "must be specified for package ($pkg_key) before saving.\n" );
+            return undef;
+        }
+        delete $self->{ $pkg_key }->{repository};
     }
-    unless ( $self->{ $pkg_key }->{name} and $self->{ $pkg_key }->{version} ) {
-      warn( "Cannot save package repository: both the package 'name' and 'version' ",
-            "must be specified for package ($pkg_key) before saving.\n" );
-      return undef;
-    }
-    delete $self->{ $pkg_key }->{repository};
-  }
-  return 1;
+    return 1;
 }
 
 
 # Restore all the repository references
 
 sub post_save_action {
-  my ( $self, $p ) = @_;
-  $self->_set_repository;
-  return 1;
+    my ( $self, $p ) = @_;
+    $self->_set_repository;
+    return 1;
 }
 
 
 # Save a reference to the repository in each package info
 
 sub post_fetch_action {
-  my ( $self, $filename, $p ) = @_;
-  $self->_set_repository;
-  return 1;
+    my ( $self, $filename, $p ) = @_;
+    $self->_set_repository;
+    return 1;
 }
 
 
@@ -115,12 +115,12 @@ sub post_fetch_action {
 # hashrefs.
 
 sub _set_repository {
-  my ( $self ) = @_;
-  foreach my $pkg_key ( keys %{ $self } ) {
-    next if ( $pkg_key eq META_KEY );
-    _w( 1, "Setting repository in package key $pkg_key" );
-    $self->{ $pkg_key }->{repository} = $self;
-  }
+    my ( $self ) = @_;
+    foreach my $pkg_key ( keys %{ $self } ) {
+        next if ( $pkg_key eq META_KEY );
+        DEBUG && _w( 1, "Setting repository in package key $pkg_key" );
+        $self->{ $pkg_key }->{repository} = $self;
+    }
 }
 
 
@@ -128,46 +128,46 @@ sub _set_repository {
 # filename to the SPOPS::HashFile->fetch() method
 
 sub fetch {
-  my ( $class, $filename, $p ) = @_;
-  $filename ||= '';
-  $p        ||= {};
-  _w( 1, "Trying to fetch file ($filename)  with info ", Dumper( $p ) );
-  $p->{perm} ||= 'write';
-  return $class->SUPER::fetch( $filename, $p ) if ( $filename );
-  if ( $p->{directory} ) {
-    if ( ! -d $p->{directory} ) {
-      die "Cannot open package repository in $p->{directory}: the directory does not exist.\n";
+    my ( $class, $filename, $p ) = @_;
+    $filename ||= '';
+    $p        ||= {};
+    DEBUG && _w( 1, "Trying to fetch file ($filename)  with info ", Dumper( $p ) );
+    $p->{perm} ||= 'write';
+    return $class->SUPER::fetch( $filename, $p ) if ( $filename );
+    if ( $p->{directory} ) {
+        if ( ! -d $p->{directory} ) {
+            die "Cannot open package repository in $p->{directory}: the directory does not exist.\n";
+        }
+        $filename = $class->package_filename( $p->{directory} );
+        my $object = $class->SUPER::fetch( $filename, $p );
+        $object->{ META_KEY() } ||= { base_dir => $p->{directory} };
+        return $object;
     }
-    $filename = $class->package_filename( $p->{directory} );
-    my $object = $class->SUPER::fetch( $filename, $p );
-    $object->{ META_KEY() } ||= { base_dir => $p->{directory} };
-    return $object;
-  }
-  die "Cannot open package repository without a filename or directory.\n";
+    die "Cannot open package repository without a filename or directory.\n";
 }
 
 
 # Either saves/updates package info in the repository
 
 sub save_package {
-  my ( $self, $info ) = @_;
-  my $pkg_key = $self->_make_package_key( $info );
-  delete $info->{repository};
-  $self->{ $pkg_key } = $info;
-  $info->{repository} = $self;
-  return $info;
+    my ( $self, $info ) = @_;
+    my $pkg_key = $self->_make_package_key( $info );
+    delete $info->{repository};
+    $self->{ $pkg_key } = $info;
+    $info->{repository} = $self;
+    return $info;
 }
 
 sub _make_package_key {
-  my ( $self, $info ) = @_;
-  return join( '-', $info->{name}, $info->{version} );
+    my ( $self, $info ) = @_;
+    return join( '-', $info->{name}, $info->{version} );
 }
 
 
 sub remove_package {
-  my ( $self, $info ) = @_;
-  my $pkg_key = $self->_make_package_key( $info );
-  return delete $self->{ $pkg_key };
+    my ( $self, $info ) = @_;
+    my $pkg_key = $self->_make_package_key( $info );
+    return delete $self->{ $pkg_key };
 }
 
 # Retrieves the newest package given only a name; so if there are
@@ -183,45 +183,45 @@ sub remove_package {
 # the highest
 
 sub fetch_package_by_name {
-  my ( $self, $p ) = @_;
-  my $name = lc $p->{name};
-  _w( 1, "Trying to retrieve package $name" );
-  my @match = ();
-  foreach my $pkg_key ( keys %{ $self } ) {
-    next unless ( ref $self->{ $pkg_key } eq 'HASH' );
-    if ( $self->{ $pkg_key }->{name} eq $name ) {
-      push @match, $self->{ $pkg_key };
-      _w( 1, "Found package $pkg_key; try to match up with package $name" );
+    my ( $self, $p ) = @_;
+    my $name = lc $p->{name};
+    DEBUG && _w( 1, "Trying to retrieve package $name" );
+    my @match = ();
+    foreach my $pkg_key ( keys %{ $self } ) {
+        next unless ( ref $self->{ $pkg_key } eq 'HASH' );
+        if ( $self->{ $pkg_key }->{name} eq $name ) {
+            push @match, $self->{ $pkg_key };
+            DEBUG && _w( 1, "Found package $pkg_key; try to match up with package $name" );
+        }
     }
-  }
-  my $final = undef;
-  my $ver   = 0;
-  foreach my $info ( @match ) {
-    if ( $info->{version} > $ver ) {
-      $final = $info;
-      $ver   = $info->{version};
+    my $final = undef;
+    my $ver   = 0;
+    foreach my $info ( @match ) {
+        if ( $info->{version} > $ver ) {
+            $final = $info;
+            $ver   = $info->{version};
+        }
+        DEBUG && _w( 1, "Current version for matching $info->{name}: $ver" );
+        return $info   if ( $p->{version} and $info->{version} == $p->{version} );
     }
-    _w( 1, "Current version for matching $info->{name}: $ver" );
-    return $info   if ( $p->{version} and $info->{version} == $p->{version} );
-  }
 
-  # If we wanted an exact match and didn't find it, return nothing,
-  # otherwise return the latest version
+    # If we wanted an exact match and didn't find it, return nothing,
+    # otherwise return the latest version
 
-  return undef  if ( $p->{version} ); 
-  return $final;
+    return undef  if ( $p->{version} ); 
+    return $final;
 }
 
 
 # Retrieve all packages in a repository
 
 sub fetch_all_packages {
-  my ( $self ) = @_;
-  my @package_list = ();
-  foreach my $pkg_key ( sort keys %{ $self } ) {
-    push @package_list, $self->{ $pkg_key }   unless ( $pkg_key eq META_KEY );
-  }
-  return \@package_list;
+    my ( $self ) = @_;
+    my @package_list = ();
+    foreach my $pkg_key ( sort keys %{ $self } ) {
+        push @package_list, $self->{ $pkg_key }   unless ( $pkg_key eq META_KEY );
+    }
+    return \@package_list;
 }
 
 
@@ -229,13 +229,13 @@ sub fetch_all_packages {
 # request on to OpenInteract::Package
 
 sub find_file {
-  my ( $self, $pkg_info, @files ) = @_;
-  my $info = $pkg_info;
-  unless ( ref $info eq 'HASH' ) {
-    $info = $self->fetch_package_by_name({ name => $pkg_info });
-  }
-  return undef unless ( scalar keys %{ $info } );
-  return OpenInteract::Package->find_file( $info, @files );
+    my ( $self, $pkg_info, @files ) = @_;
+    my $info = $pkg_info;
+    unless ( ref $info eq 'HASH' ) {
+        $info = $self->fetch_package_by_name({ name => $pkg_info });
+    }
+    return undef unless ( scalar keys %{ $info } );
+    return OpenInteract::Package->find_file( $info, @files );
 }
 
 
@@ -243,26 +243,26 @@ sub find_file {
 # is specified.
 
 sub verify_package {
-  my ( $self, @package_names ) = @_;
-  my $num_names = scalar @package_names;
-  my @pkg_exist = ();
-  foreach my $pkg_name ( @package_names ) {
-    my $info = $self->fetch_package_by_name({ name => $pkg_name });
-    _w( 1, sprintf( "Verify package status %-20s: %s", 
-                    $pkg_name,  ( $info ) ? "exists (Version $info->{version})" : 'does not exist' ) );
-    push @pkg_exist, $info  if ( scalar keys %{ $info } );
-  }
-  return $pkg_exist[0] if ( $num_names == 1 );
-  return \@pkg_exist;
+    my ( $self, @package_names ) = @_;
+    my $num_names = scalar @package_names;
+    my @pkg_exist = ();
+    foreach my $pkg_name ( @package_names ) {
+        my $info = $self->fetch_package_by_name({ name => $pkg_name });
+        DEBUG && _w( 1, sprintf( "Verify package status %-20s: %s", 
+                        $pkg_name,  ( $info ) ? "exists (Version $info->{version})" : 'does not exist' ) );
+        push @pkg_exist, $info  if ( scalar keys %{ $info } );
+    }
+    return $pkg_exist[0] if ( $num_names == 1 );
+    return \@pkg_exist;
 }
 
 
 sub _w {
-  my $lev = shift;
-  return unless ( DEBUG >= $lev );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
+    my $lev = shift;
+    return unless ( DEBUG >= $lev );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 

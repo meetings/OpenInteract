@@ -1,6 +1,6 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.8 2001/05/30 17:29:00 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.9 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 use OpenInteract::Startup;
@@ -8,7 +8,7 @@ use OpenInteract::Startup;
 use constant DEBUG => 0;
 
 $OpenInteract::ApacheStartup::VERSION   = '1.07';
-$OpenInteract::ApacheStartup::Revision  = substr(q$Revision: 1.8 $, 10);
+$OpenInteract::ApacheStartup::Revision  = substr(q$Revision: 1.9 $, 10);
 
 # Create a handler to put the X-Forwarded-For header into the IP
 # address -- thanks Stas! (perl.apache.org/guide/)
@@ -26,158 +26,159 @@ my $PROXY_SUB = <<'PROXY';
 PROXY
 
 sub initialize {
-  my ( $class, $bc_file ) = @_;
+    my ( $class, $bc_file ) = @_;
 
-  DEBUG && _w( 1, "ApacheStartup: Reading in information for configuration: $bc_file" );
+    DEBUG && _w( 1, "ApacheStartup: Reading in information for configuration: $bc_file" );
 
-  # We read the base config in first, so we can snag the apache modules
+    # We read the base config in first, so we can snag the apache modules
 
-  my $BASE_CONFIG = OpenInteract::Startup->read_base_config( { filename => $bc_file } );
-  die "Cannot create base configuration from ($bc_file)!" unless ( $BASE_CONFIG );
-  DEBUG && _w( 1, " --base configuration read in ok." );
+    my $BASE_CONFIG = OpenInteract::Startup->read_base_config( { filename => $bc_file } );
+    die "Cannot create base configuration from ($bc_file)!" unless ( $BASE_CONFIG );
+    DEBUG && _w( 1, " --base configuration read in ok." );
 
-  # Read in all the Apache classes -- do this separately since we need
-  # to ensure that Apache::DBI gets included before DBI
-  #
-  # Word of warning! We also need to do this before using the class
-  # 'OpenInteract::DBI', since it 'use's the DBI module itself. Keeping
-  # Apache::DBI before DBI is quite important, and if there's any
-  # confusing in the future about it we might as well put the
-  # 'PerlModule Apache::DBI' before the PerlRequire statement into the
-  # modperl httpd.conf
+    # Read in all the Apache classes -- do this separately since we need
+    # to ensure that Apache::DBI gets included before DBI
+    #
+    # Word of warning! We also need to do this before using the class
+    # 'OpenInteract::DBI', since it 'use's the DBI module itself. Keeping
+    # Apache::DBI before DBI is quite important, and if there's any
+    # confusing in the future about it we might as well put the
+    # 'PerlModule Apache::DBI' before the PerlRequire statement into the
+    # modperl httpd.conf
 
-  my $config_dir = join( '/', $BASE_CONFIG->{website_dir}, $BASE_CONFIG->{config_dir} );
-  OpenInteract::Startup->require_module({ filename => "$config_dir/apache.dat" });
-  DEBUG && _w( 1, " --apache modules read in ok." );
+    my $config_dir = join( '/', $BASE_CONFIG->{website_dir}, 
+                                $BASE_CONFIG->{config_dir} );
+    OpenInteract::Startup->require_module({ filename => "$config_dir/apache.dat" });
+    DEBUG && _w( 1, " --apache modules read in ok." );
 
- # The big enchilada -- do just about everything here and get back the 
- # list of classes that need to be initialized along with the config object. 
- # Note that we do not pass the necessary parameters to initialize aliases
- # and to create/initialize the SPOPS classes -- we do that in the child
- # init handler below
+    # The big enchilada -- do just about everything here and get back the 
+    # list of classes that need to be initialized along with the config object. 
+    # Note that we do not pass the necessary parameters to initialize aliases
+    # and to create/initialize the SPOPS classes -- we do that in the child
+    # init handler below
 
-  my ( $init_class, $C ) = OpenInteract::Startup->main_initialize({
-                               base_config => $BASE_CONFIG });
-  die "No configuration object returned from initialization!\n" unless ( $C );
-  DEBUG && _w( 1, " --main initialization completed ok." );
+    my ( $init_class, $C ) = OpenInteract::Startup->main_initialize({
+                                   base_config => $BASE_CONFIG });
+    unless ( $C ) { die "No configuration object returned from initialization!\n"; }
+    DEBUG && _w( 1, " --main initialization completed ok." );
 
-  OpenInteract::Startup->require_module({ class => $C->{session_info}->{class} });
+    OpenInteract::Startup->require_module({ class => $C->{session_info}->{class} });
 
-  # Figure out how to do this more cleanly in the near future -- maybe
-  # just do it by hand for this special class?
+    # Figure out how to do this more cleanly in the near future -- maybe
+    # just do it by hand for this special class?
 
-  push @{ $init_class }, 'OpenInteract::PackageRepository';
+    push @{ $init_class }, 'OpenInteract::PackageRepository';
 
- # Stas Beckman (stas@stason.org) wrote up a section in the mod_perl
- # developer guide (perl.apache.org/guide/) about how this
- # 'install_driver' thing saves memory. <shrug>
+    # Stas Beckman (stas@stason.org) wrote up a section in the
+    # mod_perl developer guide (perl.apache.org/guide/) about how this
+    # 'install_driver' thing saves memory. <shrug>
 
-  my $db_info = $C->{db_info};
-  DBI->install_driver( $db_info->{driver_name} );
-  DEBUG && _w( 1, " --installed DBD driver ($db_info->{driver_name}) ok." );
+    my $db_info = $C->{db_info};
+    DBI->install_driver( $db_info->{driver_name} );
+    DEBUG && _w( 1, " --installed DBD driver ($db_info->{driver_name}) ok." );
 
-  # Check to see if the proxy subroutine has been loaded; if not, create it
+    # Check to see if the proxy subroutine has been loaded; if not, create it
 
-  eval { OpenInteract->ProxyRemoteAddr() };
-  if ( $@ =~ /^Can\'t locate object method "ProxyRemoteAddr"/ ) {
-    DEBUG && _w( 1, "Creating proxy subroutine" );
-    eval $PROXY_SUB;
-    die "Cannot create proxy subroutine! $@" if ( $@ );
-    DEBUG && _w( 1, " --installed proxy subroutine ok." );
-  }
+    eval { OpenInteract->ProxyRemoteAddr() };
+    if ( $@ =~ /^Can\'t locate object method "ProxyRemoteAddr"/ ) {
+        DEBUG && _w( 1, "Creating proxy subroutine" );
+        eval $PROXY_SUB;
+        die "Cannot create proxy subroutine! $@" if ( $@ );
+        DEBUG && _w( 1, " --installed proxy subroutine ok." );
+    }
 
- # Setup caching info for use in the child init handler below
+    # Setup caching info for use in the child init handler below
 
-  my $cache_info      = $C->{cache_info}->{data};
-  my $cache_class     = $cache_info->{class};
-  my $ipc_cache_class = $C->{cache}->{ipc}->{class};
+    my $cache_info      = $C->{cache_info}->{data};
+    my $cache_class     = $cache_info->{class};
+    my $ipc_cache_class = $C->{cache}->{ipc}->{class};
 
-  # Do these initializations every time, unless we're on Win32 (they
-  # have just call the routine to call something else...)
+    # Do these initializations every time, unless we're on Win32 (they
+    # have just call the routine to call something else...)
 
-  my ( $init_sub, $OS );
-  unless ($OS = $^O) {
-    require Config;
-    $OS = $Config::Config{'osname'};
-  }
-  if ($OS=~/Win/i) {
-    $OS = 'WINDOWS';
-  }
+    my ( $init_sub, $OS );
+    unless ($OS = $^O) {
+        require Config;
+        $OS = $Config::Config{'osname'};
+    }
 
-  # See the second sub for comments...
+    # See the second sub for comments...
 
-  if ( $OS eq 'WINDOWS' ) {
-    DEBUG && _w( 1, "Running initialization for Windows." );
-    srand;
-    $cache_class->class_initialize(     { config => $C } )  if ( $cache_info->{use} );
-    $ipc_cache_class->class_initialize( { config => $C } )  if ( $cache_info->{use_ipc} );
+    if ( $OS=~/Win/i ) {
+        DEBUG && _w( 1, "Running initialization for Windows." );
+        srand;
+        $cache_class->class_initialize(     { config => $C } )  if ( $cache_info->{use} );
+        $ipc_cache_class->class_initialize( { config => $C } )  if ( $cache_info->{use_ipc} );
 
-    my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
-    $REQUEST_CLASS->setup_aliases;
+        my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
+        $REQUEST_CLASS->setup_aliases;
 
-    OpenInteract::Startup->initialize_spops({ config => $C, class => $init_class });
+        OpenInteract::Startup->initialize_spops({ config => $C, class => $init_class });
 
-    eval { OpenInteract::Template::Toolkit->initialize( { config => $C } ) };
-    my $tmpl_status = ( $@ ) ? $@ : 'ok';
-    DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
+        eval { OpenInteract::Template::Toolkit->initialize( { config => $C } ) };
+        my $tmpl_status = ( $@ ) ? $@ : 'ok';
+        DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
 
-    eval { OpenInteract::Error::Main->initialize({ config => $C }) };
-    my $err_status  = ( $@ ) ? $@ : 'ok';
-    DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
-  }
+        eval { OpenInteract::Error::Main->initialize({ config => $C }) };
+        my $err_status  = ( $@ ) ? $@ : 'ok';
+        DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
+    }
 
-  else {
-    DEBUG && _w( 1, "Seeding childinit handler (non-Windows)" );
+    else {
+        DEBUG && _w( 1, "Seeding childinit handler (non-Windows)" );
 
-    my $init_sub = sub {
+        my $init_sub = sub {
 
-      # seed the random number generator per child -- note that we can
-      # probably take this out as of mod_perl >= 1.25
+            DEBUG && _w( 1, "PerlChildInitHandler being executed for Child ($$)" );
 
-      srand;
+            # seed the random number generator per child -- note that we can
+            # probably take this out as of mod_perl >= 1.25
 
-      # Connect to the db but throw away the handler that is returned --
-      # this just 'primes the pump' and makes the DB connection when the
-      # child is started versus when the first request is received
-      # (probably not necessary using mysql, but for heavier databases it
-      # can be a Good Thing)
+            srand;
 
-      OpenInteract::DBI->connect( $db_info );
+            # Connect to the db but throw away the handle that is returned
+            # -- this just 'primes the pump' and makes the DB connection
+            # when the child is started versus when the first request is
+            # received (probably not necessary using mysql, but for heavier
+            # databases it can be a Good Thing)
 
-      $cache_class->class_initialize(     { config => $C })  if ( $cache_info->{use} );
-      $ipc_cache_class->class_initialize( { config => $C })  if ( $cache_info->{use_ipc} );
+            OpenInteract::DBI->connect( $db_info );
 
-      # Tell OpenInteract::Request to setup aliases if they haven't already
+            $cache_class->class_initialize(     { config => $C })  if ( $cache_info->{use} );
+            $ipc_cache_class->class_initialize( { config => $C })  if ( $cache_info->{use_ipc} );
 
-      my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
-      $REQUEST_CLASS->setup_aliases;
+            # Tell OpenInteract::Request to setup aliases if they haven't already
 
-      # Initialize all the SPOPS object classes
+            my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
+            $REQUEST_CLASS->setup_aliases;
 
-      OpenInteract::Startup->initialize_spops({ config => $C, class => $init_class });
+            # Initialize all the SPOPS object classes
 
-      # Create the persistent template object for our website
+            OpenInteract::Startup->initialize_spops({ config => $C, 
+                                                      class  => $init_class });
 
-      eval { OpenInteract::Template::Toolkit->initialize({ config => $C }) };
-      my $tmpl_status = ( $@ ) ? $@ : 'ok';
-      DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
+            # Create the persistent template object for our website
 
-      # Create a list of error handlers for our website
+            eval { OpenInteract::Template::Toolkit->initialize({ config => $C }) };
+            my $tmpl_status = ( $@ ) ? $@ : 'ok';
+            DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
 
-      eval { OpenInteract::Error::Main->initialize({ config => $C }) };
-      my $err_status  = ( $@ ) ? $@ : 'ok';
-      DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
-    }; 
-    Apache->push_handlers( PerlChildInitHandler => $init_sub );
-  }
+            # Create a list of error handlers for our website
+
+            eval { OpenInteract::Error::Main->initialize({ config => $C }) };
+            my $err_status  = ( $@ ) ? $@ : 'ok';
+            DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
+        }; 
+        Apache->push_handlers( PerlChildInitHandler => $init_sub );
+    }
 
 }
 
 sub _w {
-  return unless ( DEBUG >= shift );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
+    return unless ( DEBUG >= shift );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;

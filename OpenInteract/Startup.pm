@@ -1,16 +1,18 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.7 2001/06/03 14:03:04 lachoy Exp $
+# $Id: Startup.pm,v 1.11 2001/07/12 16:07:07 lachoy Exp $
 
 use strict;
-use Data::Dumper qw( Dumper );
+use Data::Dumper  qw( Dumper );
+use Getopt::Long  qw( GetOptions );
 use OpenInteract::Config;
 use OpenInteract::Error;
 use OpenInteract::Package;
 use OpenInteract::PackageRepository;
+use SPOPS::Configure;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -18,120 +20,156 @@ my $REPOS_CLASS = 'OpenInteract::PackageRepository';
 my $PKG_CLASS   = 'OpenInteract::Package';
 
 sub main_initialize {
-  my ( $class, $p ) = @_;
+    my ( $class, $p ) = @_;
 
-  # Ensure we can find the base configuration, and use it or read it in
+    # Ensure we can find the base configuration, and use it or read it in
 
-  return undef unless ( $p->{base_config} or $p->{base_config_file} );
-  my $bc = $p->{base_config} || 
-           $class->read_base_config({ filename => $p->{base_config_file} });
+    return undef unless ( $p->{base_config} or $p->{base_config_file} );
+    my $bc = $p->{base_config} || 
+             $class->read_base_config({ filename => $p->{base_config_file} });
 
-  # Create our main config object
+    # Create our main config object
 
-  my $C = $class->create_config({ base_config  => $bc });
+    my $C = $class->create_config({ base_config  => $bc });
 
-  # Initialize OpenInteract::Package -- it's a SPOPS class, but it's
-  # different from the rest in that we actually *use* it to create the
-  # other classes/modules (bootstrapping thing)
+    # Initialize OpenInteract::Package -- it's a SPOPS class, but it's
+    # different from the rest in that we actually *use* it to create the
+    # other classes/modules (bootstrapping thing)
 
-  $REPOS_CLASS->class_initialize( $C );
+    $REPOS_CLASS->class_initialize( $C );
 
-  # Read in our fundamental modules -- these should be in our @INC
-  # already, since the 'request_class' is in 'OpenInteract/OpenInteract'
-  # and the 'stash_class' is in 'MyApp/MyApp'
+    # Read in our fundamental modules -- these should be in our @INC
+    # already, since the 'request_class' is in 'OpenInteract/OpenInteract'
+    # and the 'stash_class' is in 'MyApp/MyApp'
 
-  $class->require_module({ class => [ $bc->{request_class}, $bc->{stash_class} ] });
+    $class->require_module({ class => [ $bc->{request_class}, $bc->{stash_class} ] });
 
-  # Either use a package list provided or read in all the packages from
-  # the website package database
+    # Either use a package list provided or read in all the packages from
+    # the website package database
 
-  my $packages = [];
-  my $repository = $REPOS_CLASS->fetch( undef, { directory => $bc->{website_dir} } );
-  if ( my $package_list = $p->{package_list} ) {
-    foreach my $pkg_name ( @{ $p->{package_list} } ) {
-      my $pkg_info = $repository->fetch_pacakge_by_name({ name => $pkg_name });
-      push @{ $packages }, $pkg_info  if ( $pkg_info );
+    my $packages = [];
+    my $repository = $REPOS_CLASS->fetch( undef, { directory => $bc->{website_dir} } );
+    if ( my $package_list = $p->{package_list} ) {
+        foreach my $pkg_name ( @{ $p->{package_list} } ) {
+            my $pkg_info = $repository->fetch_pacakge_by_name({ name => $pkg_name });
+            push @{ $packages }, $pkg_info  if ( $pkg_info );
+        }
     }
-  }
-  else {
-    $packages = $repository->fetch_all_packages();
-  }
-
-  # We keep track of the package names currently installed and use them
-  # elsewhere in the system
-
-  $C->{package_list} = [ map { $_->{name} } @{ $packages } ];
-  my %require_class = ();
-  foreach my $pkg_info ( @{ $packages } ) {
-    my $pkg_require_list = $class->process_package( $pkg_info, $C );
-    foreach my $pkg_require_class ( @{ $pkg_require_list } ) {
-      $require_class{ $pkg_require_class } = $pkg_info->{name};
+    else {
+        $packages = $repository->fetch_all_packages();
     }
-  }
 
-  my $successful = $class->require_module({ 
+    # We keep track of the package names currently installed and use them
+    # elsewhere in the system
+
+    $C->{package_list} = [ map { $_->{name} } @{ $packages } ];
+    my %require_class = ();
+    foreach my $pkg_info ( @{ $packages } ) {
+        my $pkg_require_list = $class->process_package( $pkg_info, $C );
+        foreach my $pkg_require_class ( @{ $pkg_require_list } ) {
+            $require_class{ $pkg_require_class } = $pkg_info->{name};
+        }
+    }
+
+    my $successful = $class->require_module({ 
                                class    => [ keys %require_class ],
 					           pkg_link => \%require_class });
-  if ( scalar @{ $successful } != scalar keys %require_class ) {
-    warn " (Startup/main_initialize): Some classes were not required!\n";
-  }
+    if ( scalar @{ $successful } != scalar keys %require_class ) {
+        _w( 0, "Some classes were not required!" );
+    }
 
-  # The config object should now have all actions and SPOPS definitions 
-  # read in, so run any necessary configuration options
+    # The config object should now have all actions and SPOPS definitions 
+    # read in, so run any necessary configuration options
   
-  my $init_class = $class->finalize_configuration({ config => $C });
+    my $init_class = $class->finalize_configuration({ config => $C });
 
-  # Store the configuration for later use
+    # Store the configuration for later use
   
-  my $stash_class = $bc->{stash_class};
-  $stash_class->set_stash( 'config', $C );
+    my $stash_class = $bc->{stash_class};
+    $stash_class->set_stash( 'config', $C );
 
-  # Tell OpenInteract::Request to setup aliases if they haven't already
+    # Tell OpenInteract::Request to setup aliases if they haven't already
 
-  my $request_class = $bc->{request_class};
-  if ( $p->{alias_init} ) { 
-    $request_class->setup_aliases;
-  }
+    if ( $p->{alias_init} ) { 
+        my $request_class = $bc->{request_class};
+        $request_class->setup_aliases;
+    }
 
- # Initialize all the SPOPS object classes
+    # Initialize all the SPOPS object classes
 
-  if ( $p->{spops_init} ) { 
-    $class->initialize_spops({ config => $C, class => $init_class });
-  }
+    if ( $p->{spops_init} ) { 
+        $class->initialize_spops({ config => $C, class => $init_class });
+    }
 
- _w( 2, "Contents of INC: @INC" );
+    DEBUG && _w( 2, "Contents of INC: @INC" );
 
-  # All done! Return the configuration object so the user can
-  # do whatever else is necessary
+    # All done! Return the configuration object so the user can
+    # do whatever else is necessary
 
-  return ( $init_class, $C );
+    return ( $init_class, $C );
 }
+
+
+sub setup_static_environment_options {
+    my ( $class, $usage, $options ) = @_;
+    $options ||= {};
+    my ( $OPT_website_dir );
+    $options->{'website_dir=s'} = \$OPT_website_dir;
+
+    # Get the options
+
+    GetOptions( %{ $options } );
+
+    if ( ! $OPT_website_dir and $ENV{OIWEBSITE} ) {
+        warn "Using ($ENV{OIWEBSITE}) for 'website_dir'.\n";
+        $OPT_website_dir = $ENV{OIWEBSITE};
+    }
+
+    unless ( -d $OPT_website_dir ) {
+        die "$usage\n Parameter 'website_dir' must refer to an OpenInteract website directory!\n";
+    }
+    return $class->setup_static_environment( $OPT_website_dir );
+}
+
 
 # Use this if you want to setup the OpenInteract environment outside
 # of the web application server -- just pass in the website directory!
 
 sub setup_static_environment {
-  my ( $class, $website_dir ) = @_;
-  die "Directory ($website_dir) is not a valid directory!\n" unless ( -d $website_dir );
+    my ( $class, $website_dir, $su_passwd ) = @_;
+    die "Directory ($website_dir) is not a valid directory!\n" unless ( -d $website_dir );
 
-  my $bc = $class->read_base_config({ dir => $website_dir });
+    my $bc = $class->read_base_config({ dir => $website_dir });
+    unless ( $bc and ref $bc eq 'HASH' ) {
+        die "No base configuration file found in website directory ($website_dir)" ;
+    }
 
-  unshift @INC, $website_dir;
-  my ( $init, $C ) = $class->main_initialize({ 
-                                 base_config => $bc,
-                                 alias_init => 1,
-                                 spops_init => 1 });
+    unshift @INC, $website_dir;
+    my ( $init, $C ) = $class->main_initialize({ base_config => $bc,
+                                                 alias_init  => 1,
+                                                 spops_init  => 1 });
+    my $REQUEST_CLASS = $C->{request_class};
+    my $R = $REQUEST_CLASS->instance;
 
-  my $REQUEST_CLASS = $C->{request_class};
-  my $R = $REQUEST_CLASS->instance;
+    $R->{stash_class} = $C->{stash_class};
+    $R->stash( 'config', $C );
 
-  $R->{stash_class} = $C->{stash_class};
-  $R->stash( 'config', $C );
+    my $dbh = OpenInteract::DBI->connect( $C->{db_info} );
+    $R->stash( 'db', $dbh );
 
-  my $dbh = OpenInteract::DBI->connect( $C->{db_info} );
-  $R->stash( 'db', $dbh );
+    # If we were given the superuser password, retrieve the user and
+    # check the password
 
-  return $R;
+    if ( $su_passwd ) {
+        my $user = $R->user->fetch( 1, { skip_security => 1 });
+        die "Cannot create superuser!" unless ( $user );
+        unless ( $user->check_password( $su_passwd ) ) {
+            die "Password for superuser does not match!\n";
+        }
+        $R->{auth}->{user} = $user;    
+    }
+
+    return $R;
 }
 
 
@@ -140,51 +178,51 @@ sub setup_static_environment {
 # necessary to read the config and set various values there
 
 sub create_config {
-  my ( $class, $p ) = @_;
-  return undef unless ( $p->{base_config} or $p->{base_config_file} );
-  my $bc = $p->{base_config} || 
-           $class->read_base_config({ filename => $p->{base_config_file} });
+    my ( $class, $p ) = @_;
+    return undef unless ( $p->{base_config} or $p->{base_config_file} );
+    my $bc = $p->{base_config} || 
+             $class->read_base_config({ filename => $p->{base_config_file} });
 
-  # Create the configuration file and set the base directory as configured;
-  # also set other important classes from the config
+    # Create the configuration file and set the base directory as configured;
+    # also set other important classes from the config
 
-  my $config_file  = join( '/', $bc->{website_dir}, $bc->{config_dir}, $bc->{config_file} );
-  my $C = eval { OpenInteract::Config->instance( $bc->{config_type}, $config_file ) };
-  if ( $@ ) {
-    die "Cannot read configuration file! Error: $@\n";
-  }
+    my $config_file  = join( '/', $bc->{website_dir}, $bc->{config_dir}, $bc->{config_file} );
+    my $C = eval { OpenInteract::Config->instance( $bc->{config_type}, $config_file ) };
+    if ( $@ ) {
+        die "Cannot read configuration file! Error: $@\n";
+    }
 
-  # This information will be set for the life of the config object,
-  # which should be as long as the apache child is alive if we're using
-  # mod_perl, and will be set in the returned config object in any case
+    # This information will be set for the life of the config object,
+    # which should be as long as the apache child is alive if we're using
+    # mod_perl, and will be set in the returned config object in any case
 
-  $C->{dir}->{base}      = $bc->{website_dir};
-  $C->{dir}->{interact}  = $bc->{base_dir};
-  $C->{request_class}    = $bc->{request_class};
-  $C->{stash_class}      = $bc->{stash_class};
-  $C->{website_name}     = $bc->{website_name};
-  return $C;
+    $C->{dir}->{base}      = $bc->{website_dir};
+    $C->{dir}->{interact}  = $bc->{base_dir};
+    $C->{request_class}    = $bc->{request_class};
+    $C->{stash_class}      = $bc->{stash_class};
+    $C->{website_name}     = $bc->{website_name};
+    return $C;
 }
 
 
 
 sub read_package_list {
-  my ( $class, $p ) = @_;
-  return [] unless ( $p->{filename} or $p->{config} );
-  my $filename = $p->{filename} || 
-                 join( '/', $p->{config}->get_dir( 'config' ), $p->{config}->{package_list} );
-  open( PKG, $filename ) || die "Cannot open package list ($filename): $!"; 
-  my @packages = ();
-  while ( <PKG> ) {
-    chomp;
-    next if /^\s*\#/;
-    next if /^\s*$/;
-    s/^\s*//; 
-    s/\s*$//; 
-    push @packages, $_;   
-  }
-  close( PKG );
-  return \@packages;
+    my ( $class, $p ) = @_;
+    return [] unless ( $p->{filename} or $p->{config} );
+    my $filename = $p->{filename} || 
+                   join( '/', $p->{config}->get_dir( 'config' ), $p->{config}->{package_list} );
+    open( PKG, $filename ) || die "Cannot open package list ($filename): $!"; 
+    my @packages = ();
+    while ( <PKG> ) {
+        chomp;
+        next if /^\s*\#/;
+        next if /^\s*$/;
+        s/^\s*//; 
+        s/\s*$//; 
+        push @packages, $_;   
+    }
+    close( PKG );
+    return \@packages;
 }
 
 
@@ -192,31 +230,31 @@ sub read_package_list {
 # simple key-value config file
 
 sub read_base_config {
-  my ( $class, $p ) = @_;
-  unless ( $p->{filename} ) {
-    if ( $p->{dir} ) {
-      $p->{filename} = $class->create_base_config_filename( $p->{dir} );
+    my ( $class, $p ) = @_;
+    unless ( $p->{filename} ) {
+        if ( $p->{dir} ) {
+            $p->{filename} = $class->create_base_config_filename( $p->{dir} );
+        }
     }
-  }
-  return undef   unless ( -f $p->{filename} );
-  open( CONF, $p->{filename} ) || die "$!\n";
-  my $vars = {};
-  while ( <CONF> ) {
-    chomp;
-    _w( 1, "Config line read: $_" );
-    next if ( /^\s*\#/ );
-    next if ( /^\s*$/ );
-    s/^\s*//;
-    s/\s*$//;
-    my ( $var, $value ) = split /\s+/, $_, 2;
-    $vars->{ $var } = $value;
-  }
-  return $vars;
+    return undef   unless ( -f $p->{filename} );
+    open( CONF, $p->{filename} ) || die "$!\n";
+    my $vars = {};
+    while ( <CONF> ) {
+        chomp;
+        DEBUG && _w( 1, "Config line read: $_" );
+        next if ( /^\s*\#/ );
+        next if ( /^\s*$/ );
+        s/^\s*//;
+        s/\s*$//;
+        my ( $var, $value ) = split /\s+/, $_, 2;
+        $vars->{ $var } = $value;
+    }
+    return $vars;
 }
 
 sub create_base_config_filename {
- my ( $class, $dir ) = @_;
- return join( '/', $dir, 'conf', 'base.conf' );
+    my ( $class, $dir ) = @_;
+    return join( '/', $dir, 'conf', 'base.conf' );
 }
 
 # Params:
@@ -225,33 +263,33 @@ sub create_base_config_filename {
 # (pick one)
 
 sub require_module {
-  my ( $class, $p ) = @_;
-  my @success = ();
-  if ( $p->{filename} ) {
-    _w( 1, "Trying to open file $p->{filename}" );
-    return [] unless ( -f $p->{filename} );
-    open( MOD, $p->{filename} ) || die "Cannot open $p->{filename}: $!";
-    while ( <MOD> ) {
-      next if ( /^\s*$/ );
-      next if ( /^\s*\#/ );
-      chomp;
-      _w( 1, "Trying to require $_" );
-      eval "require $_";
-      if ( $@ ) { _w( 0, sprintf( " --require error: %-40s: %s", $_, $@ ) )  }
-      else      { push @success, $_ }
+    my ( $class, $p ) = @_;
+    my @success = ();
+    if ( $p->{filename} ) {
+        DEBUG && _w( 1, "Trying to open file $p->{filename}" );
+        return [] unless ( -f $p->{filename} );
+        open( MOD, $p->{filename} ) || die "Cannot open $p->{filename}: $!";
+        while ( <MOD> ) {
+            next if ( /^\s*$/ );
+            next if ( /^\s*\#/ );
+            chomp;
+            DEBUG && _w( 1, "Trying to require $_" );
+            eval "require $_";
+            if ( $@ ) { _w( 0, sprintf( " --require error: %-40s: %s", $_, $@ ) )  }
+            else      { push @success, $_ }
+        }
+        close( MOD );
     }
-    close( MOD );
-  }
-  elsif ( $p->{class} ) {
-    $p->{class} = [ $p->{class} ] unless ( ref $p->{class} eq 'ARRAY' );
-    foreach ( @{ $p->{class} } ) {
-      _w( 1, "Trying to require class ($_)" );
-      eval "require $_";
-      if ( $@ ) { _w( 0, sprintf( " --require error%-40s (from %s): %s", $_, $p->{pkg_link}->{$_}, $@ ) ) }
-      else      { push @success, $_ }
+    elsif ( $p->{class} ) {
+        $p->{class} = [ $p->{class} ] unless ( ref $p->{class} eq 'ARRAY' );
+        foreach ( @{ $p->{class} } ) {
+            DEBUG && _w( 1, "Trying to require class ($_)" );
+            eval "require $_";
+            if ( $@ ) { _w( 0, sprintf( " --require error%-40s (from %s): %s", $_, $p->{pkg_link}->{$_}, $@ ) ) }
+            else      { push @success, $_ }
+        }
     }
-  }
-  return \@success;
+    return \@success;
 }
 
 
@@ -262,91 +300,91 @@ sub require_module {
 #  package_dir = arrayref of base package directories (optional, read from config if not passed)
 
 sub process_package {
-  my ( $class, $pkg_info, $CONF ) = @_;
-  return undef unless ( $pkg_info );
-  return undef unless ( $CONF );
+    my ( $class, $pkg_info, $CONF ) = @_;
+    return undef unless ( $pkg_info );
+    return undef unless ( $CONF );
 
-  my $pkg_name = join( '-', $pkg_info->{name}, $pkg_info->{version} );
-  _w( 1, "Trying to process package ($pkg_name)" );
+    my $pkg_name = join( '-', $pkg_info->{name}, $pkg_info->{version} );
+    DEBUG && _w( 1, "Trying to process package ($pkg_name)" );
 
-  # Note that app dir should be set earlier in the @INC list then the
-  # base dir, since the app can override base
+    # Note that app dir should be set earlier in the @INC list then the
+    # base dir, since the app can override base
 
-  my @package_dir_list = $PKG_CLASS->add_to_inc( $pkg_info );
-  _w( 1, "Included @package_dir_list for $pkg_name" );
+    my @package_dir_list = $PKG_CLASS->add_to_inc( $pkg_info );
+    DEBUG && _w( 1, "Included @package_dir_list for $pkg_name" );
 
-  # If we cannot find even one package directory, bail
+    # If we cannot find even one package directory, bail
 
-  unless ( scalar @package_dir_list ) {
-    _w( 0, "No package directories found for $pkg_name: was it installed correctly?" ); 
-    return undef;
-  }
+    unless ( scalar @package_dir_list ) {
+        _w( 0, "No package directories found for $pkg_name: was it installed correctly?" ); 
+        return undef;
+    }
 
-  # Now we want the app dir to be *last*, so reverse the order
+    # Now we want the app dir to be *last*, so reverse the order
 
-  @package_dir_list = reverse @package_dir_list;
+    @package_dir_list = reverse @package_dir_list;
 
-  # Plow through the directories and find the module listings (to
-  # include), action config (to parse and set) and the SPOPS config (to
-  # parse and set)
+    # Plow through the directories and find the module listings (to
+    # include), action config (to parse and set) and the SPOPS config (to
+    # parse and set)
 
-  my ( %spops, %action );
-  foreach my $package_dir ( @package_dir_list ) {
-    my $conf_pkg_dir = "$package_dir/conf";
+    my ( %spops, %action );
+    foreach my $package_dir ( @package_dir_list ) {
+        my $conf_pkg_dir = "$package_dir/conf";
     
-    # If the package does not have a 'list_module.dat', that's ok and the
-    # 'require_module' class method will simply return an empty list.
+        # If the package does not have a 'list_module.dat', that's ok and the
+        # 'require_module' class method will simply return an empty list.
     
-    $class->require_module({ filename => "$conf_pkg_dir/list_module.dat" });
+        $class->require_module({ filename => "$conf_pkg_dir/list_module.dat" });
 
-    # Read in the 'action' information and set in the config object
+        # Read in the 'action' information and set in the config object
     
-    my @action_tag_list = $class->read_action_definition({ 
+        my @action_tag_list = $class->read_action_definition({ 
                                        filename => "$conf_pkg_dir/action.perl",
                                        config => $CONF,
                                        package => $pkg_info });
-    foreach my $action_tag ( @action_tag_list ) {
-      $action{ $action_tag }++  if ( $action_tag );
-    }
+        foreach my $action_tag ( @action_tag_list ) {
+            $action{ $action_tag }++  if ( $action_tag );
+        }
 
-    # Read in the SPOPS information and set in the config object; note
-    # that we cannot *process* the SPOPS config yet because we must be
-    # able to relate SPOPS objects, which cannot be done until all the
-    # definitions are read in. (Yes, we could use 'map' here and above,
-    # but it's confusing to people first reading the code)
+        # Read in the SPOPS information and set in the config object; note
+        # that we cannot *process* the SPOPS config yet because we must be
+        # able to relate SPOPS objects, which cannot be done until all the
+        # definitions are read in. (Yes, we could use 'map' here and above,
+        # but it's confusing to people first reading the code)
     
-    my @spops_tag_list = $class->read_spops_definition({
+        my @spops_tag_list = $class->read_spops_definition({
                                       filename => "$conf_pkg_dir/spops.perl",
                                       config => $CONF,
                                       package => $pkg_info });
-    foreach my $spops_tag ( @spops_tag_list ) {
-      $spops{ $spops_tag }++  if ( $spops_tag );
+        foreach my $spops_tag ( @spops_tag_list ) {
+            $spops{ $spops_tag }++  if ( $spops_tag );
+        }
     }
-  }
 
-  # Now find all the classes (from both the action list and the spops
-  # list) required for this package and return them to the caller
+    # Now find all the classes (from both the action list and the spops
+    # list) required for this package and return them to the caller
 
-  my ( @class_list );
-  foreach my $action_key ( keys %action ) {
-    next unless ( $action_key );
-    my $action_info = $CONF->{action}->{ $action_key };
-    if ( $action_info->{class} ) {
-      push @class_list, $action_info->{class};
+    my ( @class_list );
+    foreach my $action_key ( keys %action ) {
+        next unless ( $action_key );
+        my $action_info = $CONF->{action}->{ $action_key };
+        if ( $action_info->{class} ) {
+            push @class_list, $action_info->{class};
+        }
+        if ( ref $action_info->{error} eq 'ARRAY' ) {
+            push @class_list, @{ $action_info->{error} };
+        }   
     }
-    if ( ref $action_info->{error} eq 'ARRAY' ) {
-      push @class_list, @{ $action_info->{error} };
-    }   
-  }
 
-  foreach my $spops_key ( keys %spops ) {
-    next unless ( $spops_key );
-    my $spops_info = $CONF->{SPOPS}->{ $spops_key };
-    if ( ref $spops_info->{isa} eq 'ARRAY' ) {
-      push @class_list, @{ $spops_info->{isa} };
+    foreach my $spops_key ( keys %spops ) {
+        next unless ( $spops_key );
+        my $spops_info = $CONF->{SPOPS}->{ $spops_key };
+        if ( ref $spops_info->{isa} eq 'ARRAY' ) {
+            push @class_list, @{ $spops_info->{isa} };
+        }
     }
-  }
-  return \@class_list;
+    return \@class_list;
 }
 
 
@@ -358,25 +396,25 @@ sub process_package {
 # override what it needs.
 
 sub read_action_definition {
-  my ( $class, $p ) = @_;
-  _w( 1, "Reading action definitions from ($p->{filename})" );
+    my ( $class, $p ) = @_;
+    DEBUG && _w( 1, "Reading action definitions from ($p->{filename})" );
 
-  # $CONF is easier to read and more consistent
-  my $CONF = $p->{config}; 
-  my $action_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
-  return undef  unless ( $action_info );
-  my @class_list = ();
-  foreach my $action_key ( keys %{ $action_info } ) {
-    foreach my $action_conf ( keys %{ $action_info->{ $action_key } } ) {
-      $CONF->{action}->{ $action_key }->{ $action_conf } =
+    # $CONF is easier to read and more consistent
+    my $CONF = $p->{config}; 
+    my $action_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
+    return undef  unless ( $action_info );
+    my @class_list = ();
+    foreach my $action_key ( keys %{ $action_info } ) {
+        foreach my $action_conf ( keys %{ $action_info->{ $action_key } } ) {
+            $CONF->{action}->{ $action_key }->{ $action_conf } =
                                    $action_info->{ $action_key }->{ $action_conf };
+        }
+        if ( ref $p->{package} ) {
+            $CONF->{action}->{ $action_key }->{package_name}    = $p->{package}->{name};
+            $CONF->{action}->{ $action_key }->{package_version} = $p->{package}->{version};
+        }
     }
-    if ( ref $p->{package} ) {
-      $CONF->{action}->{ $action_key }->{package_name}    = $p->{package}->{name};
-      $CONF->{action}->{ $action_key }->{package_version} = $p->{package}->{version};
-    }
-  }
-  return keys %{ $action_info };
+    return keys %{ $action_info };
 }
 
 
@@ -384,25 +422,25 @@ sub read_action_definition {
 # See comments in read_action_definition
 
 sub read_spops_definition {
-  my ( $class, $p ) = @_;
-  _w( 1, "Reading SPOPS definitions from ($p->{filename})" );
+    my ( $class, $p ) = @_;
+    DEBUG && _w( 1, "Reading SPOPS definitions from ($p->{filename})" );
 
-  # $CONF is easier to read and more consistent
-  my $CONF = $p->{config}; 
-  my $spops_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
-  return undef unless ( $spops_info );
-  my @class_list = ();
-  foreach my $spops_key ( keys %{ $spops_info } ) {
-    foreach my $spops_conf ( keys %{ $spops_info->{ $spops_key } } ) {
-      $CONF->{SPOPS}->{ $spops_key }->{ $spops_conf } =
+    # $CONF is easier to read and more consistent
+    my $CONF = $p->{config}; 
+    my $spops_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
+    return undef unless ( $spops_info );
+    my @class_list = ();
+    foreach my $spops_key ( keys %{ $spops_info } ) {
+        foreach my $spops_conf ( keys %{ $spops_info->{ $spops_key } } ) {
+            $CONF->{SPOPS}->{ $spops_key }->{ $spops_conf } =
                                    $spops_info->{ $spops_key }->{ $spops_conf };
+        }
+        if ( ref $p->{package} ) {
+            $CONF->{SPOPS}->{ $spops_key }->{package_name}    = $p->{package}->{name};
+            $CONF->{SPOPS}->{ $spops_key }->{package_version} = $p->{package}->{version};
+        }
     }
-    if ( ref $p->{package} ) {
-      $CONF->{SPOPS}->{ $spops_key }->{package_name}    = $p->{package}->{name};
-      $CONF->{SPOPS}->{ $spops_key }->{package_version} = $p->{package}->{version};
-    }
-  }
-  return keys %{ $spops_info };
+    return keys %{ $spops_info };
 }
 
 
@@ -411,75 +449,75 @@ sub read_spops_definition {
 # SPOPS::HashFile for this for consistency...
 
 sub read_perl_file {
-  my ( $class, $p ) = @_;
-  return undef unless ( -f $p->{filename} );
-  eval { open( INFO, $p->{filename} ) || die $! };
-  if ( $@ ) {
-    warn "Cannot open config file for evaluation ($p->{filename}): $@ ";
-    return undef;
-  }
-  local $/ = undef;
-  no strict;
-  my $info = <INFO>;
-  close( INFO );
-  my $data = eval $info;
-  if ( $@ ) {
-    die "Cannot read data structure! from $p->{filename}\nError: $@";
-  }
-  return $data;
+    my ( $class, $p ) = @_;
+    return undef unless ( -f $p->{filename} );
+    eval { open( INFO, $p->{filename} ) || die $! };
+    if ( $@ ) {
+        warn "Cannot open config file for evaluation ($p->{filename}): $@ ";
+        return undef;
+    }
+    local $/ = undef;
+    no strict;
+    my $info = <INFO>;
+    close( INFO );
+    my $data = eval $info;
+    if ( $@ ) {
+        die "Cannot read data structure! from $p->{filename}\nError: $@";
+    }
+    return $data;
 }
 
 
 # Everything has been read in, now just finalize aliases and so on
 
 sub finalize_configuration {
-  my ( $class, $p ) = @_;
-  my $CONF = $p->{config};
-  my $SPOPS_CONFIG_CLASS = $CONF->{SPOPS_config_class};
-  my $REQUEST_CLASS      = $CONF->{request_class};
-  my $STASH_CLASS        = $CONF->{stash_class};
+    my ( $class, $p ) = @_;
+    my $CONF = $p->{config};
+    my $SPOPS_CONFIG_CLASS = $CONF->{SPOPS_config_class};
+    my $REQUEST_CLASS      = $CONF->{request_class};
+    my $STASH_CLASS        = $CONF->{stash_class};
 
-  # Create all the packages and subroutines on the fly as necessary
+    # Create all the packages and subroutines on the fly as necessary
 
-  _w( 1, "Trying to parse with $SPOPS_CONFIG_CLASS" );
-  my $init_class = $SPOPS_CONFIG_CLASS->process_config({ config => $CONF->{SPOPS} });
+    DEBUG && _w( 1, "Trying to parse with $SPOPS_CONFIG_CLASS" );
+    my $init_class = $SPOPS_CONFIG_CLASS->process_config({ config => $CONF->{SPOPS} });
 
-  # Setup the default responses, template classes, etc. for all
-  # the actions read in.
+    # Setup the default responses, template classes, etc. for all the
+    # actions read in.
 
-  $CONF->flatten_action_config;
-  _w( 2, "Config: \n", Dumper( $CONF ) );
-  _w( 1, "Configuration read into Request ok." );
+    $CONF->flatten_action_config;
+    DEBUG && _w( 2, "Config: \n", Dumper( $CONF ) );
+    DEBUG && _w( 1, "Configuration read into Request ok." );
 
-  # We also want to go through each alias in the 'SPOPS' config key
-  # and setup aliases to the proper class within our Request class; so
-  # $request_alias is just a reference to where we'll actually be storing
-  # this stuff
+    # We also want to go through each alias in the 'SPOPS' config key
+    # and setup aliases to the proper class within our Request class; so
+    # $request_alias is just a reference to where we'll actually be storing
+    # this stuff
 
-  my $request_alias = $REQUEST_CLASS->ALIAS;
-  _w( 1, "Setting up SPOPS aliases" );
-  foreach my $init_alias ( keys %{ $CONF->{SPOPS} } ) {
-    next if ( $init_alias =~ /^_/ );
-    my $info        = $CONF->{SPOPS}->{ $init_alias };
-    my $class_alias = $info->{class};
-    my @alias_list  = ( $init_alias );
-    push @alias_list, @{ $info->{alias} } if ( $info->{alias} );
-    foreach my $alias ( @alias_list ) {
-      _w( 1, "Tag $alias in $STASH_CLASS to be $class_alias" );
-      $request_alias->{ $alias }->{ $STASH_CLASS } = $class_alias;
+    my $request_alias = $REQUEST_CLASS->ALIAS;
+    DEBUG && _w( 1, "Setting up SPOPS aliases" );
+    foreach my $init_alias ( keys %{ $CONF->{SPOPS} } ) {
+        next if ( $init_alias =~ /^_/ );
+        my $info        = $CONF->{SPOPS}->{ $init_alias };
+        my $class_alias = $info->{class};
+        my @alias_list  = ( $init_alias );
+        push @alias_list, @{ $info->{alias} } if ( $info->{alias} );
+        foreach my $alias ( @alias_list ) {
+            DEBUG && _w( 1, "Tag $alias in $STASH_CLASS to be $class_alias" );
+            $request_alias->{ $alias }->{ $STASH_CLASS } = $class_alias;
+        }
     }
-  }
  
-  _w( 1, "Setting up System aliases" );
-  foreach my $sys_class ( keys %{ $CONF->{system_alias} } ) {
-    next if ( $sys_class =~ /^_/ );
-    foreach my $alias ( @{ $CONF->{system_alias}->{ $sys_class } } ) {
-      _w( 1, "Tagging $alias in $STASH_CLASS to be $sys_class" );
-      $request_alias->{ $alias }->{ $STASH_CLASS } = $sys_class;
+    DEBUG && _w( 1, "Setting up System aliases" );
+    foreach my $sys_class ( keys %{ $CONF->{system_alias} } ) {
+        next if ( $sys_class =~ /^_/ );
+        foreach my $alias ( @{ $CONF->{system_alias}->{ $sys_class } } ) {
+            DEBUG && _w( 1, "Tagging $alias in $STASH_CLASS to be $sys_class" );
+            $request_alias->{ $alias }->{ $STASH_CLASS } = $sys_class;
+        }
     }
-  }
-  _w( 1, "Setup object and system aliases ok" );
-  return $init_class;
+    DEBUG && _w( 1, "Setup object and system aliases ok" );
+    return $init_class;
 }
 
 
@@ -488,19 +526,19 @@ sub finalize_configuration {
 # from the mod_perl child init handler
 
 sub initialize_spops {
-  my ( $class, $p ) = @_;
-  return undef unless ( ref $p->{class} );
-  return undef unless ( ref $p->{config} );
-  my @success = ();
+    my ( $class, $p ) = @_;
+    return undef unless ( ref $p->{class} );
+    return undef unless ( ref $p->{config} );
+    my @success = ();
 
  # Just cycle through and initialize each
 
-  foreach my $spops_class ( @{ $p->{class} } ) {
-    eval { $spops_class->class_initialize( $p->{config} ); };
-    push @success, $spops_class unless ( $@ );
-    _w( 1, sprintf( "%-40s: %-30s","init: $spops_class", ( $@ ) ? $@ : 'ok' ) );
-  }
-  return \@success;
+    foreach my $spops_class ( @{ $p->{class} } ) {
+        eval { $spops_class->class_initialize( $p->{config} ); };
+        push @success, $spops_class unless ( $@ );
+        DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: $spops_class", ( $@ ) ? $@ : 'ok' ) );
+    }
+    return \@success;
 }
 
 
@@ -648,7 +686,7 @@ if there is a need...
 
 =back
 
-B<setup_static_environment( $website_dir )>
+B<setup_static_environment( $website_dir, [ $superuser_password ] )>
 
 Sometimes you want to setup OI even when you are not in a web
 environment -- for instance, you might need to do data reporting, data
@@ -678,10 +716,14 @@ Creating a database handle
 
 =back
 
-The only thing it does not do is setup an authentication environment
-for you -- to get around this (right now), you need to pass in a true
-value for 'skip_log' and 'skip_security' whenever you modify and/or
-retrieve objects.
+If you pass in as the second argument a superuser password, it will
+create the user and check the password. If the password matches, you
+(and OpenInteract) will have access to the superuser object in the
+normal place (C<$R-E<gt>{auth}-E<gt>{user}>).
+
+If you do not wish to do this, you need to pass in a true value for
+'skip_log' and 'skip_security' whenever you modify and/or retrieve
+objects.
 
 Returns: A "fully-stocked" C<OpenInteract::Request> object.
 
@@ -694,10 +736,9 @@ Example:
 
  my $R = OpenInteract::Startup->setup_static_environment( '/home/httpd/my' );
 
- my $news_list = eval { $R->news->fetch_group({ 
-                               where => 'title like ?',
-                               value => [ '%iraq%' ],
-                               skip_security => 1 }) };
+ my $news_list = eval { $R->news->fetch_group({ where => 'title like ?',
+                                                value => [ '%iraq%' ],
+                                                skip_security => 1 }) };
  foreach my $news ( @{ $news_list } ) {
    print "Date:  $news->{posted_on}\n",
          "Title: $news->{title}\n"
@@ -705,6 +746,43 @@ Example:
  }
 
 Easy!
+
+B<setup_static_environment_options( $usage, [ \%options ] )>
+
+Same as C<setup_static_environment()>, but this method will try to
+pull the 'website_dir' parameter from the command line (using the long
+option '--website_dir') or if not found there the environment variable
+'OIWEBSITE'.
+
+The parameter C<$usage> is for displaying if the 'website_dir'
+parameter can be found in neither. 
+
+The optional parameter C<\%options> is for parsing additional
+commandline options. The keys of the hashref should be formatted in
+the manner L<Getopt::Long> expects, and the values should be some type
+of reference (depending on the key and your intentions).
+
+Example:
+
+ #!/usr/bin/perl
+
+ use strict;
+ use OpenInteract::Startup;
+
+ my $usage = "$0 --website_dir=/path/to/site --title=title";
+ my ( $OPT_title );
+ my %options = ( 'title=s' => \$OPT_title );
+ my $R = OpenInteract::Startup->setup_static_environment_options( 
+                                                      $usage, \%options );
+
+ my $news_iter = eval { $R->news->fetch_iterator({ where => 'title like ?',
+                                                   value => [ "%$OPT_title%" ],
+                                                   skip_security => 1 }) };
+ while ( my $news = $news_iter->get_next ) {
+   print "Date:  $news->{posted_on}\n",
+         "Title: $news->{title}\n"
+         "Story: $news->{news_item}\n";
+ }
 
 B<read_package_list( \%params )>
 

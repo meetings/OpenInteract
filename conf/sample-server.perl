@@ -182,9 +182,8 @@ $data = {
        'config'   => '$BASE/conf',
        'data'     => '$BASE/data',
        'mail'     => '$BASE/mail',
-       'template' => '$BASE/templates',
        'help'     => '$HTML/help',
-       'overflow' => '$HTML/overflow',
+       'overflow' => '$BASE/overflow',
        'download' => '$HTML/downloads',
        'upload'   => '$BASE/uploads',
      },
@@ -213,7 +212,7 @@ $data = {
 
      # Class used to configure SPOPS object (shouldn't need to change)
 
-     'SPOPS_config_class'    => 'SPOPS::Configure::DBI',
+     'SPOPS_config_class'    => 'SPOPS::Configure',
 
      # Class of error object (shouldn't need to change)
 
@@ -278,6 +277,6 @@ $data = {
 
      # Used for testing purposes only
 
-     'ConfigurationRevision' => '$Revision: 1.8 $',
+     'ConfigurationRevision' => '$Revision: 1.10 $',
 
 };

@@ -1,13 +1,13 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.4 2001/06/06 19:43:27 lachoy Exp $
+# $Id: Request.pm,v 1.5 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 use Class::Singleton  ();
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -18,11 +18,11 @@ $OpenInteract::Request::DEBUG = 0;
 # careful!
 
 sub _new_instance {
- my ( $pkg, %p ) = @_;
- my $class = ref( $pkg ) || $pkg;
- my $self = bless( {}, $pkg );
- $self->initialize();
- return $self;
+    my ( $pkg, %p ) = @_;
+    my $class = ref( $pkg ) || $pkg;
+    my $self = bless( {}, $pkg );
+    $self->initialize();
+    return $self;
 }
 
 
@@ -48,25 +48,31 @@ sub template_object { return $_[0]->get_stash( 'template_object' ) }
 # thrown doesn't appear to be coming from this location :)
 
 sub throw  { 
-  my ( $self, $p ) = @_; 
-  ( $p->{package}, $p->{filename}, $p->{line} ) = caller;
-  $p->{action} = $self->{current_context}->{action};
-  return $self->error->throw( $p );
+    my ( $self, $p ) = @_; 
+    ( $p->{package}, $p->{filename}, $p->{line} ) = caller;
+    $p->{action} = $self->{current_context}->{action};
+    return $self->error->throw( $p );
 }
+
+
+# Put an object in the stash
 
 sub stash {
-  my ( $self, $name, $obj ) = @_;
-  return {} unless ( ref $self );
-  my $stash_class = $self->{stash_class};
-  return $stash_class->set_stash( $name, $obj ) if ( $stash_class );
+    my ( $self, $name, $obj ) = @_;
+    return {} unless ( ref $self );
+    my $stash_class = $self->{stash_class};
+    return $stash_class->set_stash( $name, $obj ) if ( $stash_class );
 }
 
+
+# Get an object from the stash
+
 sub get_stash {
-  my ( $self, $item ) = @_;
-  return {} unless ( ref $self );
-  my $stash_class = $self->{stash_class};
-  return $stash_class->get_stash( $item ) if ( $stash_class );
-  return {};
+    my ( $self, $item ) = @_;
+    return {} unless ( ref $self );
+    my $stash_class = $self->{stash_class};
+    return $stash_class->get_stash( $item ) if ( $stash_class );
+    return {};
 }
 
 
@@ -88,16 +94,16 @@ sub lookup_alias    { return $ALIAS{ $_[1] }->{ $_[0]->{stash_class} } }
 # be a bunch of 'subroutine xxx redefined blah blah blah' messages...
 
 sub setup_aliases {
-  my ( $class ) = @_;
-  no strict 'refs';
-  return if ( $ALIASES_SETUP ); 
-  foreach my $alias ( keys %ALIAS ) {
-    *{ $class . '::' . $alias } = sub { 
-       my $self = shift; $self = $self->instance unless ( ref $self );
-       return $ALIAS{ $alias }->{ $self->{stash_class} } 
-    };
-  }
-  $ALIASES_SETUP++;
+    my ( $class ) = @_;
+    no strict 'refs';
+    return if ( $ALIASES_SETUP ); 
+    foreach my $alias ( keys %ALIAS ) {
+        *{ $class . '::' . $alias } = sub { 
+            my $self = shift; $self = $self->instance unless ( ref $self );
+            return $ALIAS{ $alias }->{ $self->{stash_class} } 
+        };
+    }
+    $ALIASES_SETUP++;
 }
 
 
@@ -114,12 +120,13 @@ sub setup_aliases {
 #   -- msg sent to STDERR with "package::sub ($line) >> $msg"
 
 sub scrib {
-  my ( $self, $level, @msg ) = @_;
-  return undef if ( $self->DEBUG < $level );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @msg ), "\n";
+    my ( $self, $level, @msg ) = @_;
+    return undef if ( $self->DEBUG < $level );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @msg ), "\n";
 }
+
 
 # The last (?) piece to the debugging puzzle. You should now always
 # call:
@@ -130,10 +137,11 @@ sub scrib {
 # scrib() method even if we're not debugging.
 
 sub DEBUG {
-  my ( $self ) = @_;
-  my $app_debug = ( ref $self ) ? $self->CONFIG->{DEBUG} : 0;
-  return $app_debug || $OpenInteract::Request::DEBUG;
+    my ( $self ) = @_;
+    my $app_debug = ( ref $self ) ? $self->CONFIG->{DEBUG} : 0;
+    return $app_debug || $OpenInteract::Request::DEBUG;
 }
+
 
 # Do some stuff with the configuration -- set defaults, etc.
 #
@@ -141,19 +149,19 @@ sub DEBUG {
 # Determine that the conductor is for a particular module
 
 sub lookup_conductor {
-  my ( $self, $action ) = @_;
-  $action ||= shift @{ $self->{path}->{current} };
-  $self->scrib( 1, "Find conductor for action <<$action>>" );
-  my ( $action_info, $action_method ) = $self->lookup_action( $action, { return => 'info' } );
-  $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
-  my $conductor      = $action_info->{conductor};
+    my ( $self, $action ) = @_;
+    $action ||= shift @{ $self->{path}->{current} };
+    $self->scrib( 1, "Find conductor for action <<$action>>" );
+    my ( $action_info, $action_method ) = $self->lookup_action( $action, { return => 'info' } );
+    $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
+    my $conductor      = $action_info->{conductor};
+    
+    # skip conductor for component-only actions
 
- # skip conductor for component-only actions
-
-  return undef  if ( $conductor eq 'null' ); 
-  my $conductor_info = $self->CONFIG->{conductor}->{ lc $conductor };
-  my $method         = $conductor_info->{method};
-  return ( $conductor_info->{class}, $method );
+    return undef  if ( $conductor eq 'null' ); 
+    my $conductor_info = $self->CONFIG->{conductor}->{ lc $conductor };
+    my $method         = $conductor_info->{method};
+    return ( $conductor_info->{class}, $method );
 }
 
 
@@ -165,57 +173,57 @@ sub lookup_conductor {
 #   skip_default => bool = if there is no action under $action_name, don't substitute the default
 
 sub lookup_action {
-  my ( $self, $action_name, $opt ) = @_;
-  $action_name ||= shift @{ $self->{path}->{current} };
-  my $action_list = ( ref $action_name eq 'ARRAY' ) ? $action_name : [ $action_name ];
+    my ( $self, $action_name, $opt ) = @_;
+    $action_name ||= shift @{ $self->{path}->{current} };
+    my $action_list = ( ref $action_name eq 'ARRAY' ) ? $action_name : [ $action_name ];
 
 ACTION:
-  foreach my $action ( @{ $action_list } ) {
-    $self->scrib( 1, "Find action corresponding to ($action)" );
-    my $action_info = $self->CONFIG->{action}->{ lc $action };
-    $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
+    foreach my $action ( @{ $action_list } ) {
+        $self->scrib( 1, "Find action corresponding to ($action)" );
+        my $action_info = $self->CONFIG->{action}->{ lc $action };
+        $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
 
-    # If we don't find a action, then we use the action from
-    # '_notfound_'; since we put this before the looping to find
-    # 'action' references, this can simply be a pointer
+        # If we don't find a action, then we use the action from
+        # '_notfound_'; since we put this before the looping to find
+        # 'action' references, this can simply be a pointer
 
-    unless ( $opt->{skip_default} or $action_info ) {
-      $action_info = $self->CONFIG->{action}->{ '_notfound_' };
-      $self->scrib( 1, "Using 'notfound' action" );
-    }
+        unless ( $opt->{skip_default} or $action_info ) {
+            $action_info = $self->CONFIG->{action}->{ '_notfound_' };
+            $self->scrib( 1, "Using 'notfound' action" );
+        }
 
-    # Allow as many redirects as we need
+        # Allow as many redirects as we need
     
-    while ( my $action_redir = $action_info->{redir} ) {
-      $action_info = $self->CONFIG->{action}->{ lc $action_redir };
-      $self->scrib( 3, "Info within redir ($action_redir):\n", Dumper( $action_info ) );
+        while ( my $action_redir = $action_info->{redir} ) {
+            $action_info = $self->CONFIG->{action}->{ lc $action_redir };
+            $self->scrib( 3, "Info within redir ($action_redir):\n", Dumper( $action_info ) );
+        }
+        next ACTION unless ( $action_info );
+        $self->scrib( 1, "Found action info for ($action)" );
+        $self->{current_context} = $action_info;
+        return \%{ $action_info } if ( $opt->{return} eq 'info' );
+        my $method = $action_info->{method};
+        return ( $action_info->{class}, $action_info->{method} );
     }
-    next ACTION unless ( $action_info );
-    $self->scrib( 1, "Found action info for ($action)" );
-    $self->{current_context} = $action_info;
-    return \%{ $action_info } if ( $opt->{return} eq 'info' );
-    my $method = $action_info->{method};
-    return ( $action_info->{class}, $action_info->{method} );
-  }
-  return undef;
+    return undef;
 }
 
 
 # Clear out everything that shouldn't be around
 
 sub finish_request {
-  my ( $self ) = @_;
+    my ( $self ) = @_;
 
-  # Ask the stash to clean itself up
+    # Ask the stash to clean itself up
   
-  my $stash_class = $self->{stash_class};
-  $stash_class->clean_stash;
+    my $stash_class = $self->{stash_class};
+    $stash_class->clean_stash;
 
-  # Clear out all the content
+    # Clear out all the content
   
-  foreach my $key ( keys %{ $self } ) {
-    delete $self->{ $key };
-  }
+    foreach my $key ( keys %{ $self } ) {
+        delete $self->{ $key };
+    }
 }
 
 1;

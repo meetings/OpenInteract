@@ -1,5 +1,137 @@
 Revision history for Perl extension OpenInteract.
 
+1.1  Fri Jul 20 07:00:48 EDT 2001
+
+ * Shuffled lots of modules out of the 'base' package and into the
+   core distribution:
+
+          OpenInteract.pm
+          OpenInteract/Auth.pm
+          OpenInteract/Cache.pm
+          OpenInteract/Cache/File.pm
+          OpenInteract/Cache/IPC.pm
+          OpenInteract/Cookies.pm
+          OpenInteract/Cookies/CGI.pm
+          OpenInteract/Cookies/Apache.pm
+          OpenInteract/Error/Main.pm
+          OpenInteract/Error/System.pm
+          OpenInteract/Handler/GenericDispatcher.pm
+          OpenInteract/Session.pm
+          OpenInteract/Session/DBI.pm
+          OpenInteract/Session/MySQL.pm
+          OpenInteract/Template.pm
+          OpenInteract/Template/Toolkit.pm
+          OpenInteract/UI/Main.pm
+          OpenInteract/Utility.pm
+
+   As a result, also moved OpenInteract.pod to OpenInteract/Intro.pod
+   since 'perldoc OpenInteract' will bring up the Apache content
+   handler class now.
+
+ * New package: 'results_manage'
+
+   - A new package 'results_manage' has been added to the
+   distribution. This package makes it simple to persist different
+   types of search results from request to request to produce paged
+   output, exportable output, etc. The package is still quite young,
+   so if you have feedback please email
+   openinteract-dev@lists.sourceforge.net.
+
+ * doc/*:
+
+   - Updated all docs -- mostly small changes, but added patch from
+   Christian Lemburg (lemburg@aixonix.de) to doc/developer.html
+   specifying the recommended method of package development.
+
+ * OpenInteract/ApacheStartup.pm:
+
+  - Added a debugging line so we can know when a PerlChildInitHandler
+  is getting run (and for what child).
+
+ * OpenInteract/Package.pm:
+
+   - Thanks to a spot by Reinier Post <rp@win.tue.nl>, you can now
+   have multilevel handlers (e.g.,
+   'OpenInteract::Handler::Entity1::Handler1') in a package --
+   modified the _copy_handler_files() subroutine to use the new
+   _create_full_path() subroutine.
+
+   - Create a _clean_package_name() subroutine that ensures a package
+   name can be used as a Perl namespace.
+
+ * OpenInteract/SPOPS.pm:
+
+   - Added two methods and ruleset to accommodate new way of referring
+   to objects. The new method uses a table 'object_keys' (found in the
+   'base' package) and associates a 32-character key with an object
+   and class.
+
+   Currently this is only used in the modified 'full_text' package,
+   but we expect to change other modules that use a class and object
+   ID (object tracking, object security, etc.) to use this scheme
+   simply because it saves space and should speed up searches.
+
+ * OpenInteract/Startup.pm:
+
+   - die in setup_static_environment() if we cannot read the base
+   configuration information properly. (Generally indicates that the
+   directory given wasn't a valid website directory.)
+
+   - add functionality to setup_static_environment() to create the
+   superuser if given the password to check against.
+
+   - add method 'setup_static_environment_options()' to check for log
+   option '--website_dir' and environment variable OIWEBSITE to pass
+   to 'setup_static_environment()', thus saving lots of copy-n-paste
+   operations around the globe.
+
+ * OpenInteract/Template.pm:
+
+   - Fixed Sourceforge bug 406291, enabling templates to be read from
+   the filesystem. (Paper bag fix -- just made the wrong call to fetch
+   the package information from the repository, and it was never
+   tested. Doh!)
+
+ * script/oi_manage:
+
+   - Check the return value from $PACKAGE->create_skeleton() to see
+   whether the name of the package created differs from the name we
+   wanted to create, and let the user know if they're different.
+
+   - Add the directory 'overflow' to that created by the
+   'create_website' process.
+
+   - Add the package 'results_manage' to the list of core packages
+
+ * Packages
+
+   Many packages have changed. One of the common additions has been
+   the use of the SPOPS::Iterator (or subclass) object to display
+   results, as opposed to retrieving a (potentially long) list of
+   objects to pass to the template. See the 'Changes' file of each
+   package for change details.
+
+   Here are the different versions:
+
+   OpenInteract    1.07 -> 1.1
+   ----------------------------
+   base:           1.42 -> 1.52
+   base_box:       0.20 -> 0.23
+   base_component: 1.18 -> 1.23
+   base_error:     1.21 -> 1.22
+   base_group:     1.16 -> 1.16
+   base_security:  1.30 -> 1.33
+   base_template:  1.17 -> 1.18
+   base_theme:     1.17 -> 1.18
+   base_user:      1.21 -> 1.23
+   results_manage:  n/a -> 0.02
+   static_page:    1.36 -> 1.40
+   system_doc:     1.19 -> 1.19
+   classified:     1.18 -> 1.19
+   full_text:      1.16 -> 1.25
+   news:           1.26 -> 1.27
+
+
 1.07  Sun Jun 10 14:31:36 EDT 2001
 
  * Overall
@@ -365,6 +497,7 @@ Revision history for Perl extension OpenInteract.
   new package to the core OpenInteract family: base_box. Let's give
   him a big hand!
 
+
 1.04  Thu Dec 21 01:01:14 EST 2000
 
   Modified OpenInteract/Package.pm to accommodate earlier versions of
@@ -388,6 +521,7 @@ Revision history for Perl extension OpenInteract.
   'base', 'base_security', 'base_theme', 'static_page' and several
   others.
 
+
 1.03  Nov 30 2000
 
   Added some modifications to when you install OpenInteract and when
@@ -409,6 +543,7 @@ Revision history for Perl extension OpenInteract.
   'cwinters@intes.net' to 'chris@cwinters.com'. Also changed all RCS
   '$Header' tags to '$Id'.
 
+
 1.02  Nov 10 2000
 
   Package management and oi_manage routines are pretty much rock-solid
@@ -429,6 +564,7 @@ Revision history for Perl extension OpenInteract.
   packages, namespace, etc. The definition for 'package' hasn't really
   changed, but we've made a package kindasorta synonymous with 'tool',
   even though a package can contain more than one tool. 
+
 
 1.01  Nov 3 2000
 
@@ -469,6 +605,7 @@ Revision history for Perl extension OpenInteract.
   data to its format. (This was much more work than it sounds like :)
 
   Numerous other small-to-medium fixes here and there.
+
 
 1.00  Sep 28 2000
 

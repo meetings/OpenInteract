@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.9 2001/06/01 01:31:31 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.10 2001/07/11 12:26:27 lachoy Exp $
 
 use strict;
 use Data::Dumper           qw( Dumper );
@@ -8,7 +8,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -17,18 +17,18 @@ use constant DEBUG => 0;
 # into @INC and read the class name from the package itself.
 
 sub require_package_installer {
-  my ( $class, $pkg_info ) = @_;
+    my ( $class, $pkg_info ) = @_;
 
- # Ensure that the necessary directories from the package are in @INC
+    # Ensure that the necessary directories from the package are in @INC
 
-  OpenInteract::Package->add_to_inc( $pkg_info );
-  my $installer_class = $pkg_info->{sql_installer};
-  return undef unless ( $installer_class );
+    OpenInteract::Package->add_to_inc( $pkg_info );
+    my $installer_class = $pkg_info->{sql_installer};
+    return undef unless ( $installer_class );
 
-  _w( 1, "Trying to require ($installer_class) from ($class) for ($pkg_info->{name})" );
-  eval "require $installer_class";
-  die "Cannot include installer ($installer_class) to system. Error: $@\n" if ( $@ );
-  return $installer_class;
+    DEBUG && _w( 1, "Trying to require ($installer_class) from ($class) for ($pkg_info->{name})" );
+    eval "require $installer_class";
+    die "Cannot include installer ($installer_class) to system. Error: $@\n" if ( $@ );
+    return $installer_class;
 }
 
 
@@ -43,53 +43,53 @@ sub require_package_installer {
 #   status:  'raw' (get back arrayref of raw status items) (optional)
 
 sub apply {
-  my ( $class, $p ) = @_;
-  my $driver_name = $class->find_database_driver( $p->{config} );
-  my $action = $p->{action_code};
-  unless ( $action ) {
-    _w( 1, "Finding coderef for $p->{action}" );
-    my $handlers = $class->read_db_handlers( $driver_name );
-    $action = $handlers->{ $p->{action} };
-  }
-  unless ( $action ) {
-    my $msg = "$p->{action} for $driver_name: no action taken";
-    return ( $p->{status} eq 'raw' ) 
-            ? [ { ok => 1, msg => $msg } ] 
-            : $msg;
-  }
+    my ( $class, $p ) = @_;
+    my $driver_name = $class->find_database_driver( $p->{config} );
+    my $action = $p->{action_code};
+    unless ( $action ) {
+        DEBUG && _w( 1, "Finding coderef for $p->{action}" );
+        my $handlers = $class->read_db_handlers( $driver_name );
+        $action = $handlers->{ $p->{action} };
+    }
+    unless ( $action ) {
+        my $msg = "$p->{action} for $driver_name: no action taken";
+        return ( $p->{status} eq 'raw' ) 
+                 ? [ { ok => 1, msg => $msg } ] 
+                 : $msg;
+    }
 
-  my $status = []; 
+    my $status = []; 
 
-  # Do this when the first item in the handler definition is the
-  # subroutine, next is the hashref of arguments
+    # Do this when the first item in the handler definition is the
+    # subroutine, next is the hashref of arguments
 
-  if ( ref $action eq 'ARRAY' ) {
-    my $routine = shift @{ $action };
-    my $extra_args = ( ref $action->[0] eq 'HASH' ) ? $action->[0] : {};
-    my $args = { package => $p->{package},
-                 db      => $p->{db}, 
-                 config  => $p->{config},
-                 %{ $extra_args } };
-    $status = $class->$routine( $args );
-  }
- 
-  # Do this when there is actual code to run
+    if ( ref $action eq 'ARRAY' ) {
+        my $routine = shift @{ $action };
+        my $extra_args = ( ref $action->[0] eq 'HASH' ) ? $action->[0] : {};
+        my $args = { package => $p->{package},
+                     db      => $p->{db}, 
+                     config  => $p->{config},
+                     %{ $extra_args } };
+        $status = $class->$routine( $args );
+    }
 
-  elsif ( ref $action eq 'CODE' ) {
-    $status = $action->( $class, { package => $p->{package},
-                                   db      => $p->{db},
-                                   config  => $p->{config} } );
-  }
-  else {
-    my $msg = 'Action is not of expected type, so nothing run.';
-    return ( $p->{status} eq 'raw' ) 
-            ? [ { ok => 1, msg => $msg } ] 
-            : $msg;
-  }
-  return $status if ( $p->{status} eq 'raw' );
-  return $class->format_status( { action      => $p->{action},
-                                  driver_name => $driver_name },
-                                $status );
+    # Do this when there is actual code to run
+
+    elsif ( ref $action eq 'CODE' ) {
+        $status = $action->( $class, { package => $p->{package},
+                                       db      => $p->{db},
+                                       config  => $p->{config} } );
+    }
+    else {
+        my $msg = 'Action is not of expected type, so nothing run.';
+        return ( $p->{status} eq 'raw' ) 
+                 ? [ { ok => 1, msg => $msg } ] 
+                 : $msg;
+    }
+    return $status if ( $p->{status} eq 'raw' );
+    return $class->format_status( { action      => $p->{action},
+                                    driver_name => $driver_name },
+                                  $status );
 }
 
 
@@ -98,42 +98,42 @@ sub apply {
 # replacements before doing so; returns an arrayref of status hashrefs
 
 sub create_structure {
-  my ( $class, $p ) = @_;
-  unless ( ref $p->{table_file_list} eq 'ARRAY' ) {
-    return [ { type => 'structure',
-               ok   => 0,
-               msg  => 'No files given from which to read structures!' } ];
-  }
+    my ( $class, $p ) = @_;
+    unless ( ref $p->{table_file_list} eq 'ARRAY' ) {
+        return [ { type => 'structure',
+                   ok   => 0,
+                   msg  => 'No files given from which to read structures!' } ];
+    }
 
-  my $pkg_info = $p->{package};
-  my $driver_name = $class->find_database_driver( $p->{config} );
-  my $struct_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'struct' );
-  my @status = ();
-  foreach my $table_file ( @{ $p->{table_file_list} } ) {
-    my $this_status = { type => 'structure', name => $table_file, ok => 1 };
-    my $table_sql = eval { $class->read_file( "$struct_dir/$table_file" ) };
-    if ( $@ ) {
-      $this_status->{ok} = 0;
-      $this_status->{msg} = "Cannot open/read file for table SQL ($struct_dir/$table_file): $@";
-      _w( 1, " -- $this_status->{msg}" );
+    my $pkg_info = $p->{package};
+    my $driver_name = $class->find_database_driver( $p->{config} );
+    my $struct_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'struct' );
+    my @status = ();
+    foreach my $table_file ( @{ $p->{table_file_list} } ) {
+        my $this_status = { type => 'structure', name => $table_file, ok => 1 };
+        my $table_sql = eval { $class->read_file( "$struct_dir/$table_file" ) };
+        if ( $@ ) {
+            $this_status->{ok} = 0;
+            $this_status->{msg} = "Cannot open/read file for table SQL ($struct_dir/$table_file): $@";
+            DEBUG && _w( 1, " -- $this_status->{msg}" );
+        }
+        else {
+            $table_sql = $class->sql_modify_increment( $driver_name, $table_sql );
+            $table_sql = $class->sql_increment_type( $driver_name, $table_sql );
+            eval { $p->{db}->do( $table_sql ) };
+            if ( $@ ) {
+                $this_status->{ok} = 0;
+                $this_status->{msg} = "Cannot execute table SQL\n$table_sql\nError: $@";
+                DEBUG && _w( 1, " -- $this_status->{msg}" );
+            }
+            else {
+                $this_status->{msg} = "Created table from ($table_file): ok";
+                DEBUG && _w( 1, "Structure (from $table_file) ok!" );
+            }
+        }
+        push @status, $this_status;
     }
-    else {
-      $table_sql = $class->sql_modify_increment( $driver_name, $table_sql );
-      $table_sql = $class->sql_increment_type( $driver_name, $table_sql );
-      eval { $p->{db}->do( $table_sql ) };
-      if ( $@ ) {
-        $this_status->{ok} = 0;
-        $this_status->{msg} = "Cannot execute table SQL\n$table_sql\nError: $@";
-        _w( 1, " -- $this_status->{msg}" );
-      }
-      else {
-        $this_status->{msg} = "Created table from ($table_file): ok";
-        _w( 1, "Structure (from $table_file) ok!" );
-      }
-    }
-    push @status, $this_status;
-  }
-  return \@status;
+    return \@status;
 }
 
 
@@ -142,31 +142,31 @@ sub create_structure {
 # an arrayref of status hashrefs
 
 sub install_data {
-  my ( $class, $p ) = @_;
-  unless ( ref $p->{data_file_list} eq 'ARRAY' ) {
-    return [ { type => $p->{type}, ok => 0, 
-               msg => 'No files given from which to read data!' } ];
-  }
+    my ( $class, $p ) = @_;
+    unless ( ref $p->{data_file_list} eq 'ARRAY' ) {
+        return [ { type => $p->{type}, ok => 0, 
+                   msg => 'No files given from which to read data!' } ];
+    }
 
-  my $pkg_info = $p->{package};
-  my $data_dir = $p->{data_dir} || join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'data' );
-  my @status = ();
-  my %args = ( db => $p->{db}, config => $p->{config} );
-  foreach my $data_file ( @{ $p->{data_file_list} } ) {
-    my $this_status = { type => $p->{type}, name => $data_file, ok => 1 };
-    my $process_status = eval { $class->process_data_file( { %args, filename => "$data_dir/$data_file" } ) };
-    if ( $@ ) {
-      $this_status->{ok}  = 0;
-      $this_status->{msg} = "Error: $@";
+    my $pkg_info = $p->{package};
+    my $data_dir = $p->{data_dir} || join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'data' );
+    my @status = ();
+    my %args = ( db => $p->{db}, config => $p->{config} );
+    foreach my $data_file ( @{ $p->{data_file_list} } ) {
+        my $this_status = { type => $p->{type}, name => $data_file, ok => 1 };
+        my $process_status = eval { $class->process_data_file( { %args, filename => "$data_dir/$data_file" } ) };
+        if ( $@ ) {
+            $this_status->{ok}  = 0;
+            $this_status->{msg} = "Error: $@";
+        }
+        else {
+            $this_status->{msg} = ( $process_status->{msg} ) 
+                                    ? "$process_status->{msg} (from $data_file): ok"
+                                    : "Processed data (from $data_file): ok";
+        }
+        push @status, $this_status;
     }
-    else {
-      $this_status->{msg} = ( $process_status->{msg} ) 
-                             ? "$process_status->{msg} (from $data_file): ok"
-                             : "Processed data (from $data_file): ok";
-    }
-    push @status, $this_status;
-  }
-  return \@status;
+    return \@status;
 }
 
 
@@ -174,98 +174,101 @@ sub install_data {
 # Processes a single .dat data file
 
 sub process_data_file {
-  my ( $class, $p ) = @_;
-  unless ( -f $p->{filename} ) {
-    die "Cannot process data file without valid filename! ",
-        "(Filename given: <$p->{filename}>)\n";
-  }
-  my $info = $class->read_perl_file( $p->{filename} );
-  return {} unless ( ref $info eq 'ARRAY' and ref $info->[0] eq 'HASH' );
-  my $action = shift @{ $info };
+    my ( $class, $p ) = @_;
+    unless ( -f $p->{filename} ) {
+        die "Cannot process data file without valid filename! ",
+            "(Filename given: <$p->{filename}>)\n";
+    }
+    my $info = $class->read_perl_file( $p->{filename} );
+    return {} unless ( ref $info eq 'ARRAY' and ref $info->[0] eq 'HASH' );
+    my $action = shift @{ $info };
   
-  # Transform all the data at once
+    # Transform all the data at once
 
-  my $trans_data = $class->transform_data( $action, $info, $p );
+    my $trans_data = $class->transform_data( $action, $info, $p );
 
-  # Something defined in 'sql_type' signifies that we're going to
-  # process a given SQL statement for as many data entries as there
-  # are
+    # Something defined in 'sql_type' signifies that we're going to
+    # process a given SQL statement for as many data entries as there
+    # are
 
-  my ( $process_sql, $save_object );
-  if ( my $sql_type = $action->{sql_type} ) {
-    _w( 1, "Reading data for prepared SQL statements" );
-    my $types = undef;
-    foreach my $data ( @{ $trans_data } ) {
-      eval {
-        if ( $sql_type eq 'insert' ) {
-          SPOPS::SQLInterface->db_insert({ 
+    my ( $process_sql, $save_object );
+    if ( my $sql_type = $action->{sql_type} ) {
+        DEBUG && _w( 1, "Reading data for prepared SQL statements" );
+        my $types = undef;
+        foreach my $data ( @{ $trans_data } ) {
+            eval {
+                if ( $sql_type eq 'insert' ) {
+                    SPOPS::SQLInterface->db_insert({ 
                          db => $p->{db}, 
                          table => $action->{sql_table},
                          field => $action->{field_order},
                          value => $data,
                          dbi_type_info => $action->{field_type} });
-          $process_sql++;
-        }
-        if ( $sql_type eq 'update' ) {
-          SPOPS::SQLInterface->db_update({ 
+                    $process_sql++;
+                }
+                if ( $sql_type eq 'update' ) {
+                    SPOPS::SQLInterface->db_update({ 
                          db => $p->{db}, 
                          table => $action->{sql_table},
                          where => $action->{sql_where},
                          value => $data,
                          dbi_type_info => $action->{field_type} });
-          $process_sql++;
-        }
-        if ( $sql_type eq 'delete' ) {
-          SPOPS::SQLInterface->db_delete({ 
+                    $process_sql++;
+                }
+                if ( $sql_type eq 'delete' ) {
+                    SPOPS::SQLInterface->db_delete({ 
                          db => $p->{db}, 
                          table => $action->{sql_table},
                          where => $action->{sql_where},
                          value => $data,
                          dbi_type_info => $action->{field_type} });
-          $process_sql++;
-        }
+                    $process_sql++;
+                }
         
-      };
-     if ( $@ ) {
-       die "Error executing SQL statement type $sql_type\n", 
-           "Data: ((", join( ', ', @{ $data } ), "))\nError: $@\n";
-     }
-   }
- }
-
- # If a 'spops_class' exists, we want to create an object for each
- # item of data
-
-  elsif ( my $object_class = $action->{spops_class} ) {
-    $object_class = $class->sql_class_to_website( $p->{config}->{website_name}, $object_class );
-    _w( 1, "Reading data for class $object_class" );
-    my $fields = $action->{field_order};
-    my $num_fields = scalar @{ $fields };
-    foreach my $data ( @{ $trans_data } ) {
-      my $obj = $object_class->new;
-      foreach my $i ( 0 .. ( $num_fields - 1 ) ) {
-        $obj->{ $fields->[ $i ] } = $data->[ $i ];
-      }
-      eval { $obj->save({ db => $p->{db}, is_add => 1, 
-                          skip_log => 1, skip_security => 1, 
-                          skip_cache => 1, DEBUG => DEBUG }) };      
-      if ( $@ ) {
-        my $ei = SPOPS::Error->get;
-        die "Cannot create SPOPS object!\nBasic: $@\n",  
-            "Error: $ei->{system_msg}\n";
-      }
-      else {
-        $save_object++;
-      }
+            };
+            if ( $@ ) {
+                die "Error executing SQL statement type $sql_type\n", 
+                    "Data: ((", join( ', ', @{ $data } ), "))\nError: $@\n";
+            }
+        }
     }
-  }
-  if ( $process_sql ) {
-    return { ok => 1, msg => "Processed ($process_sql) SQL statements." };
-  }
-  elsif ( $save_object ) {
-    return { ok => 1, msg => "Created ($save_object) SPOPS objects" };
-  }
-  return { ok => 1 };
+
+    # If a 'spops_class' exists, we want to create an object for each
+    # item of data
+
+    elsif ( my $object_class = $action->{spops_class} ) {
+        $object_class = $class->sql_class_to_website( $p->{config}->{website_name}, $object_class );
+        DEBUG && _w( 1, "Reading data for class $object_class" );
+        my $fields = $action->{field_order};
+        my $num_fields = scalar @{ $fields };
+        foreach my $data ( @{ $trans_data } ) {
+            my $obj = $object_class->new;
+            foreach my $i ( 0 .. ( $num_fields - 1 ) ) {
+                $obj->{ $fields->[ $i ] } = $data->[ $i ];
+            }
+            eval { $obj->save({ db            => $p->{db}, 
+                                is_add        => 1, 
+                                skip_log      => 1, 
+                                skip_security => 1, 
+                                skip_cache    => 1, 
+                                DEBUG         => DEBUG }) };      
+            if ( $@ ) {
+                my $ei = SPOPS::Error->get;
+                die "Cannot create SPOPS object!\nBasic: $@\n",  
+                    "Error: $ei->{system_msg}\n";
+            }
+            else {
+                $save_object++;
+            }
+        }
+    }
+    if ( $process_sql ) {
+        return { ok => 1, msg => "Processed ($process_sql) SQL statements." };
+    }
+    elsif ( $save_object ) {
+        return { ok => 1, msg => "Created ($save_object) SPOPS objects" };
+    }
+    return { ok => 1 };
 }
 
 
@@ -273,76 +276,77 @@ sub process_data_file {
 # Transform all of the data from whatever source
 
 sub transform_data {
-  my ( $class, $action, $data_list, $p ) = @_;
+    my ( $class, $action, $data_list, $p ) = @_;
 
-  # Setup the field order as a hash for the implementors
+    # Setup the field order as a hash for the implementors
 
-  for ( my $i = 0; $i < scalar @{ $action->{field_order} }; $i++ ) {
-    $p->{field_order}->{ $action->{field_order}->[ $i ] } = $i;
-  }
+    for ( my $i = 0; $i < scalar @{ $action->{field_order} }; $i++ ) {
+        $p->{field_order}->{ $action->{field_order}->[ $i ] } = $i;
+    }
 
-  # If an action specifies to change a field TO a particular website
+    # If an action specifies to change a field TO a particular website
 
-  if ( ref $action->{transform_class_to_website} eq 'ARRAY' ) {
-    $data_list = $class->_transform_class_to_website( $action, $data_list, $p );
-  }
+    if ( ref $action->{transform_class_to_website} eq 'ARRAY' ) {
+        $data_list = $class->_transform_class_to_website( $action, $data_list, $p );
+    }
 
-  # If an action specifies to change a field FROM a particular website
+    # If an action specifies to change a field FROM a particular website
 
-  if ( ref $action->{transform_class_to_oi} eq 'ARRAY' ) {
-    $data_list = $class->_transform_class_to_oi( $action, $data_list, $p );
-  }
+    if ( ref $action->{transform_class_to_oi} eq 'ARRAY' ) {
+        $data_list = $class->_transform_class_to_oi( $action, $data_list, $p );
+    }
 
- return $data_list;
+    return $data_list;
 }
 
 
 
 sub _transform_class_to_website {
-  my ( $class, $action, $data_list, $p ) = @_;
-  my $website_name = $p->{config}->{website_name};
-  foreach my $data ( @{ $data_list } ) {
-    foreach my $website_field ( @{ $action->{transform_class_to_website} } ) {
-      my $idx = $p->{field_order}->{ $website_field };
-      $data->[ $idx ] =  $class->sql_class_to_website( $website_name, $data->[ $idx ] );
+    my ( $class, $action, $data_list, $p ) = @_;
+    my $website_name = $p->{config}->{website_name};
+    foreach my $data ( @{ $data_list } ) {
+        foreach my $website_field ( @{ $action->{transform_class_to_website} } ) {
+            my $idx = $p->{field_order}->{ $website_field };
+            $data->[ $idx ] =  $class->sql_class_to_website( $website_name, $data->[ $idx ] );
+        }
     }
-  }
-  return $data_list;
+    return $data_list;
 }
 
 
 
 sub _transform_class_to_oi {
-  my ( $class, $action, $data_list, $p ) = @_;
-  my $website_name = $p->{config}->{website_name};
-  foreach my $data ( @{ $data_list } ) {
-    foreach my $website_field ( @{ $action->{transform_class_to_oi} } ) {
-      my $idx = $p->{field_order}->{ $website_field };
-      $data->[ $idx ] = $class->sql_class_to_oi( $website_name, $data->[ $idx ] );
+    my ( $class, $action, $data_list, $p ) = @_;
+    my $website_name = $p->{config}->{website_name};
+    foreach my $data ( @{ $data_list } ) {
+        foreach my $website_field ( @{ $action->{transform_class_to_oi} } ) {
+            my $idx = $p->{field_order}->{ $website_field };
+            $data->[ $idx ] = $class->sql_class_to_oi( $website_name, $data->[ $idx ] );
+        }
     }
-  }
-  return $data_list;
+    return $data_list;
 }
 
 
 sub find_database_driver {
-  my ( $class, $config ) = @_;
-  return $config->{db_info}->{sql_install} ||
-         $config->{db_info}->{driver_name};
+    my ( $class, $config ) = @_;
+    return $config->{db_info}->{sql_install} ||
+           $config->{db_info}->{driver_name};
 }
 
 
 # Get the hash of handlers from an installer class
 
 sub read_db_handlers {
-  my ( $class, $driver_name ) = @_;
-  no strict 'refs';
-  my %handlers = %{ $class . '::HANDLERS' };
-  my $db_handlers = {};
-  foreach my $action ( keys %handlers ) {
-    $db_handlers->{ $action } = $handlers{ $action }->{ $driver_name } || $handlers{ $action }->{'_default_'};
-  }
-  return $db_handlers;
+    my ( $class, $driver_name ) = @_;
+    no strict 'refs';
+    my %handlers = %{ $class . '::HANDLERS' };
+    my $db_handlers = {};
+    foreach my $action ( keys %handlers ) {
+        $db_handlers->{ $action } = $handlers{ $action }->{ $driver_name } || 
+                                    $handlers{ $action }->{'_default_'};
+    }
+    return $db_handlers;
 }
 
 
@@ -350,11 +354,11 @@ sub read_db_handlers {
 # Translate OpenInteract::Blah::Blah -> MyWebsite::Blah::Blah
 
 sub sql_class_to_website {
-  my ( $class, $website, @text ) = @_;
-  foreach ( @text ) {
-    s/OpenInteract/$website/g;
-  }
-  return wantarray ? @text : $text[0];
+    my ( $class, $website, @text ) = @_;
+    foreach ( @text ) {
+        s/OpenInteract/$website/g;
+    }
+    return wantarray ? @text : $text[0];
 }
 
 
@@ -362,11 +366,11 @@ sub sql_class_to_website {
 # Translate MyWebsite::Blah::Blah -> OpenInteract::Blah::Blah
 
 sub sql_class_to_oi {
-  my ( $class, $website, @text ) = @_;
-  foreach ( @text ) {
-    s/$website/OpenInteract/g;
-  }
-  return wantarray ? @text : $text[0];
+    my ( $class, $website, @text ) = @_;
+    foreach ( @text ) {
+        s/$website/OpenInteract/g;
+    }
+    return wantarray ? @text : $text[0];
 }
 
 
@@ -376,19 +380,19 @@ sub sql_class_to_oi {
 # assigning every other db driver to 'int not null'...
 
 sub sql_modify_increment {
-  my ( $class, $driver_name, @sql ) = @_;
-  foreach ( @sql ) {
-    if ( $driver_name eq 'mysql' ) {
-      s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
+    my ( $class, $driver_name, @sql ) = @_;
+    foreach ( @sql ) {
+        if ( $driver_name eq 'mysql' ) {
+            s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
+        }
+        elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
+            s/%%INCREMENT%%/NUMERIC( 10, 0 ) IDENTITY NOT NULL/g;
+        }
+        elsif ( $driver_name eq 'Pg' ) { 
+            s/%%INCREMENT%%/SERIAL/g; 
+        } 
     }
-    elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
-      s/%%INCREMENT%%/NUMERIC( 10, 0 ) IDENTITY NOT NULL/g;
-    }
-    elsif ( $driver_name eq 'Pg' ) { 
-      s/%%INCREMENT%%/SERIAL/g; 
-    } 
-  }
-  return wantarray ? @sql : $sql[0];
+    return wantarray ? @sql : $sql[0];
 }
 
 
@@ -396,74 +400,76 @@ sub sql_modify_increment {
 # NULL/NOT NULL are not handled here
 
 sub sql_increment_type {
-  my ( $class, $driver_name, @to_change ) = @_;
-  foreach ( @to_change ) {
-    if ( $driver_name eq 'mysql' ) {
-      s/%%INCREMENT_TYPE%%/INT/g;
+    my ( $class, $driver_name, @to_change ) = @_;
+    foreach ( @to_change ) {
+        if ( $driver_name eq 'mysql' ) {
+            s/%%INCREMENT_TYPE%%/INT/g;
+        }
+        elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
+            s/%%INCREMENT_TYPE%%/NUMERIC( 10, 0 )/g;
+        }
+        elsif ( $driver_name eq 'Pg' ) { 
+            s/%%INCREMENT_TYPE%%/INT/g; 
+        } 
     }
-    elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
-      s/%%INCREMENT_TYPE%%/NUMERIC( 10, 0 )/g;
-    }
-    elsif ( $driver_name eq 'Pg' ) { 
-      s/%%INCREMENT_TYPE%%/INT/g; 
-    } 
-  }
-  return wantarray ? @to_change : $to_change[0];
+    return wantarray ? @to_change : $to_change[0];
 }
+
 
 # This is pretty generic
 
 sub sql_default {
-  my ( $class, @to_change ) = @_;
-  foreach ( @to_change ) {
-    if ( /%%DEFAULT=(.*)%%/ ) {
-      my $default_value = $1;
-      s/%%DEFAULT.*%%/NOT NULL DEFAULT $default_value/;
+    my ( $class, @to_change ) = @_;
+    foreach ( @to_change ) {
+        if ( /%%DEFAULT=(.*)%%/ ) {
+            my $default_value = $1;
+            s/%%DEFAULT.*%%/NOT NULL DEFAULT $default_value/;
+        }
     }
-  }
-  return wantarray ? @to_change : $to_change[0];
+    return wantarray ? @to_change : $to_change[0];
 }
 
 
 # This is pretty generic
 
 sub sql_primary_key {
-  my ( $class, @to_change ) = @_;
-  foreach ( @to_change ) {
-    if ( /%%PRIMARY_KEY=(.*)%%/ ) {
-      my $key_specify = join( ', ', split /\s*,\s*/, $1 );
-      s/%%PRIMARY KEY=.*%%/PRIMARY KEY( $key_specify )/;
+    my ( $class, @to_change ) = @_;
+    foreach ( @to_change ) {
+        if ( /%%PRIMARY_KEY=(.*)%%/ ) {
+            my $key_specify = join( ', ', split /\s*,\s*/, $1 );
+            s/%%PRIMARY KEY=.*%%/PRIMARY KEY( $key_specify )/;
+        }
     }
-  }
-  return wantarray ? @to_change : $to_change[0];
+    return wantarray ? @to_change : $to_change[0];
 }
 
 
 # This is pretty generic
 
 sub sql_unique {
-  my ( $class, @to_change ) = @_;
-  foreach ( @to_change ) {
-    if (/%%UNIQUE=(.*)%%/ ) {
-      my $key_specify = join( ', ', split /\s*,\s*/, $1 );
-      s/%%UNIQUE=.*%%/UNIQUE( $key_specify )/;
+    my ( $class, @to_change ) = @_;
+    foreach ( @to_change ) {
+        if (/%%UNIQUE=(.*)%%/ ) {
+            my $key_specify = join( ', ', split /\s*,\s*/, $1 );
+            s/%%UNIQUE=.*%%/UNIQUE( $key_specify )/;
+        }
     }
-  }
-  return wantarray ? @to_change : $to_change[0];
+    return wantarray ? @to_change : $to_change[0];
 }
+
 
 # Read in a file and evaluate it as perl.
 
 sub read_perl_file {
-  my ( $class, $filename ) = @_;
-  my $raw = $class->read_file( $filename );
-  my $data = undef;
-  {
-    no strict 'vars';
-    $data = eval $raw;
-  }
-  die "Cannot parse data file ($filename): $@\n"  if ( $@ );
-  return $data;
+    my ( $class, $filename ) = @_;
+    my $raw = $class->read_file( $filename );
+    my $data = undef;
+    {
+        no strict 'vars';
+        $data = eval $raw;
+    }
+    die "Cannot parse data file ($filename): $@\n"  if ( $@ );
+    return $data;
 }
 
 
@@ -471,14 +477,14 @@ sub read_perl_file {
 # Read in a file and return the contents
 
 sub read_file {
-  my ( $class, $filename ) = @_;
-  die "Cannot read data file: ($filename) does not exist!\n"   unless ( -f $filename );
-  _w( 1, "Reading file $filename" );
-  open( DF, $filename ) || die "Cannot read data file: $!\n";
-  local $/ = undef;
-  my $raw = <DF>;
-  close( DF );
-  return $raw;
+    my ( $class, $filename ) = @_;
+    die "Cannot read data file: ($filename) does not exist!\n"   unless ( -f $filename );
+    DEBUG && _w( 1, "Reading file $filename" );
+    open( DF, $filename ) || die "Cannot read data file: $!\n";
+    local $/ = undef;
+    my $raw = <DF>;
+    close( DF );
+    return $raw;
 }
 
 
@@ -491,23 +497,23 @@ sub read_file {
 #  msg  => Description of how ok everything is (optional) or description of error
 
 sub format_status {
-  my ( $class, $info, $status_list ) = @_;
-  my $output = "$info->{action} for $info->{driver_name}\n";
-  foreach my $status ( @{ $status_list } ) {
-    $output .= qq(  Name: $status->{name} -- );
-    $output .= 'ok'    if ( $status->{ok} );
-    $output .= 'error' if ( ! $status->{ok} );
-    $output .= "\n  -- $status->{msg}" if ( $status->{msg} );
-    $output .= "\n";
-  }
-  return $output;
+    my ( $class, $info, $status_list ) = @_;
+    my $output = "$info->{action} for $info->{driver_name}\n";
+    foreach my $status ( @{ $status_list } ) {
+        $output .= qq(  Name: $status->{name} -- );
+        $output .= 'ok'    if ( $status->{ok} );
+        $output .= 'error' if ( ! $status->{ok} );
+        $output .= "\n  -- $status->{msg}" if ( $status->{msg} );
+        $output .= "\n";
+    }
+    return $output;
 }
 
 sub _w {
-  return unless ( DEBUG >= shift );
-  my ( $pkg, $file, $line ) = caller;
-  my @ci = caller(1);
-  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
+    return unless ( DEBUG >= shift );
+    my ( $pkg, $file, $line ) = caller;
+    my @ci = caller(1);
+    warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;
@@ -1015,7 +1021,7 @@ it under the same terms as Perl itself.
 
 Chris Winters <chris@cwinters.com>
 
-Christian Lemburg <clemburg@aixonix.de> provided the initial idea and
+Christian Lemburg <lemburg@aixonix.de> provided the initial idea and
 helped steer the module away from potentially rocky shoals.
 
 =cut

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.21 2001/06/10 18:04:29 lachoy Exp $
+# $Id: oi_manage,v 1.24 2001/07/13 15:56:06 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -19,7 +19,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60; 
 
@@ -53,13 +53,13 @@ my %ALIASES           = (
 
 # Subdirectories used when creating a website
 
-my @WEBSITE_SUBDIR    = qw( conf data doc email error html html/images logs pkg test );
+my @WEBSITE_SUBDIR    = qw( conf data doc email error html html/images logs pkg test overflow );
 
 # Packages shipped with OI -- the 'base' packages necessary to run the system
 
 my @WEBSITE_BASE_PKG  = qw( 
    base  base_box  base_component  base_error  base_group  base_security  
-   base_template  base_theme  base_user  static_page  system_doc 
+   base_template  base_theme  base_user  results_manage  static_page  system_doc 
 );
 
 # Extra packages shipped with OI -- small applications that show how things work
@@ -234,9 +234,12 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
     print "Creating package skeleton in current directory.\n$SEP\n\n";
     foreach my $package_name ( @OPT_package ) {
       my $repository = $REPOS_CLASS->fetch( undef, { directory => $OPT_base_dir } );
-      eval { $PKG_CLASS->create_skeleton( $repository, $package_name ) };
+      my $package_name_new = eval { $PKG_CLASS->create_skeleton( $repository, $package_name ) };
       my $status = $@ || 'ok';
-      printf( "Package %-15s: %s\n", $package_name, $status );
+      if ( $status eq 'ok' and $package_name ne $package_name_new ) {
+        $status .= " -- package <$package_name> renamed to <$package_name_new>";
+      }
+      printf( "Package %-15s: %s\n", $package_name_new, $status );
     }
     print "\n$SEP\nFinished with create_skeleton!\n";
     exit(0);
@@ -2268,35 +2271,35 @@ For more information, run 'oi_manage --man'
 
 Commands by the Administrator:
 
- install            - Install OpenInteract to base directory
- upgrade            - Upgrade core OpenInteract packages
- install_package    - Install package to the base
+ install             - Install OpenInteract to base directory
+ upgrade             - Upgrade core OpenInteract packages
+ install_package     - Install package to the base
 
 Commands by the Package Developer:
 
- create_skeleton    - Create a skeleton package for development
- export_package     - Export package(s) to distribution file(s)
- check_package      - Ensure that package passes initial inspection
+ create_skeleton     - Create a skeleton package for development
+ export_package      - Export package(s) to distribution file(s)
+ check_package       - Ensure that package passes initial inspection
 
 Commands by the Website Creator:
 
- create_website     - Create a new website
- apply_package      - Install a package from base to website
- upgrade_package    - Upgrade a website package
- remove_package     - Remove a package from a website
- install_sql        - Install the SQL for packages
- install_template   - Install package templates to the database
- dump_template      - Dump package templates to the filesystem
- remove_template    - Remove package templates from the database
- refresh_doc        - Sync website docs to base installation docs
- test_db            - Test database settings in 'server.perl'
- change_spops_driver- Change the SPOPS driver for your objects
+ create_website      - Create a new website
+ apply_package       - Install a package from base to website
+ upgrade_package     - Upgrade a website package
+ remove_package      - Remove a package from a website
+ install_sql         - Install the SQL for packages
+ install_template    - Install package templates to the database
+ dump_template       - Dump package templates to the filesystem
+ remove_template     - Remove package templates from the database
+ refresh_doc         - Sync website docs to base installation docs
+ test_db             - Test database settings in 'server.perl'
+ change_spops_driver - Change the SPOPS driver for your objects
 
 Other commands:
 
- initial_packages   - List packages marked as 'initial'
- list_packages      - List packages installed to app or base
- list_actions       - List actions currently implemented in website
+ initial_packages    - List packages marked as 'initial'
+ list_packages       - List packages installed to app or base
+ list_actions        - List actions currently implemented in website
 
 =head1 COMMON OPTIONS
 
@@ -2396,12 +2399,12 @@ B<Environment Variables>
 
 =over 4
 
-=item 1
+=item 1.
 
 Set the 'OPENINTERACT' environment variable and never type
 '--base_dir=/blah' again.
 
-=item 2
+=item 2.
 
 Set the 'OIWEBSITE' environment variable and never type
 '--website_dir=/blah' again.
@@ -2436,7 +2439,7 @@ the operation.
 
 You can see the list of initial packages by running:
 
- oi_manage initial_packages
+ $ oi_manage initial_packages
 
 B<Package Names: External File>
 
@@ -3360,6 +3363,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.21 $
+Revision: $Revision: 1.24 $
 
 =cut
