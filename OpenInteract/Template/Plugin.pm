@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.10 2001/08/28 22:23:52 lachoy Exp $
+# $Id: Plugin.pm,v 1.13 2001/09/21 17:19:49 lachoy Exp $
 
 use strict;
 use Class::Date     qw( -DateParse );
@@ -13,7 +13,7 @@ use Text::Sentence;
 
 @OpenInteract::Template::Plugin::ISA     = qw( Template::Plugin );
 $OpenInteract::Template::Plugin::VERSION  = '1.2';
-$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 
 my %SECURITY_CONSTANTS  = (
@@ -25,6 +25,11 @@ my %SECURITY_CONSTANTS  = (
   },
 );
 
+
+########################################
+# PLUGIN IMPLEMENTATION
+########################################
+
 # Simple stub to load/create the plugin object. Since it's really just
 # a way to call subroutines and doesn't maintain any state within the
 # request, we can just return the same one again and again
@@ -33,6 +38,7 @@ sub load {
     my ( $class, $context ) = @_;
     return bless( { _CONTEXT => $context }, $class );
 }
+
 
 sub new {
     my ( $self, $context, @params ) = @_;
@@ -116,7 +122,7 @@ sub object_description {
     return $obj->object_description;
 }
 
-# Compatibility
+# Backward compatibility
 sub object_info { return object_description( @_ ); }
 
 
@@ -260,8 +266,8 @@ sub make_url {
     my $url_base = $p->{base} || '/';
     delete $p->{base};
     my $R = OpenInteract::Request->instance;
-    if ( $R->{path}->{location} ) {
-        $url_base = "$R->{path}->{location}$url_base";
+    if ( $R->{path}{location} ) {
+        $url_base = "$R->{path}{location}$url_base";
     }
 	my $query = join( '&',
                       map  { "$_=" . _url_escape( $p->{ $_ } ) }
@@ -274,13 +280,13 @@ sub make_url {
 sub _url_escape {
     my ( $to_encode ) = shift;
     return undef unless defined( $to_encode );
-    $to_encode=~s/([^a-zA-Z0-9_.-])/uc sprintf("%%%02x",ord($1))/eg;
+    $to_encode =~ s/([^a-zA-Z0-9_.-])/uc sprintf("%%%02x",ord($1))/eg;
     return $to_encode;
 }
 
 
 ########################################
-# HTML GENERATION
+# HTML GENERATION (this will probably be bagged)
 ########################################
 
 sub form_text {
@@ -298,6 +304,22 @@ ROW
 
 
 ########################################
+# OI DISPLAY
+########################################
+
+# Tell OI (from a page) you want to use a different 'main' template
+
+sub use_main_template {
+    my ( $self, $template_name ) = @_;
+    my $R = OpenInteract::Request->instance;
+    $R->{page}{_template_name_} = $template_name;
+    $R->DEBUG && $R->scrib( 1, "Set main template to: ", $template_name );
+    return undef;
+}
+
+
+
+########################################
 # PLUGIN PROPERTIES
 ########################################
 
@@ -312,23 +334,23 @@ sub security_scope {
 
 
 sub login {
-    return OpenInteract::Request->instance->{auth}->{user};
+    return OpenInteract::Request->instance->{auth}{user};
 }
 
 
 sub logged_in {
-    return OpenInteract::Request->instance->{auth}->{logged_in}
+    return OpenInteract::Request->instance->{auth}{logged_in}
 }
 
 
 sub login_group {
-    return OpenInteract::Request->instance->{auth}->{group};
+    return OpenInteract::Request->instance->{auth}{group};
 }
 
 
 sub return_url {
     my $R = OpenInteract::Request->instance;
-    return $R->{page}->{return_url} ||  $R->{path}->{original};
+    return $R->{page}{return_url} ||  $R->{path}{original};
 }
 
 
@@ -580,6 +602,47 @@ displays:
 
   Today is day number 206 of the year.
 
+For reference, here are C<strftime> formatting sequences (cribbed from
+L<Date::Format|Date::Format>):
+
+  %%      PERCENT
+  %a      day of the week abbr
+  %A      day of the week
+  %b      month abbr
+  %B      month
+  %c      MM/DD/YY HH:MM:SS
+  %C      ctime format: Sat Nov 19 21:05:57 1994
+  %d      numeric day of the month, with leading zeros (eg 01..31)
+  %e      numeric day of the month, without leading zeros (eg 1..31)
+  %D      MM/DD/YY
+  %h      month abbr
+  %H      hour, 24 hour clock, leading 0)
+  %I      hour, 12 hour clock, leading 0)
+  %j      day of the year
+  %k      hour
+  %l      hour, 12 hour clock
+  %m      month number, starting with 1
+  %M      minute, leading 0
+  %n      NEWLINE
+  %o      ornate day of month -- "1st", "2nd", "25th", etc.
+  %p      AM or PM 
+  %q      Quarter number, starting with 1
+  %r      time format: 09:05:57 PM
+  %R      time format: 21:05
+  %s      seconds since the Epoch, UCT
+  %S      seconds, leading 0
+  %t      TAB
+  %T      time format: 21:05:57
+  %U      week number, Sunday as first day of week
+  %w      day of the week, numerically, Sunday == 0
+  %W      week number, Monday as first day of week
+  %x      date format: 11/19/94
+  %X      time format: 21:05:57
+  %y      year (2 digits)
+  %Y      year (4 digits)
+  %Z      timezone in ascii. eg: PST
+  %z      timezone in format -/+0000
+
 B<date_into_object( $date_string )>
 
 Takes apart C<$date_string> and returns a L<Class::Date> object. You
@@ -773,6 +836,15 @@ displays (when under the normal location of '/'):
 displays (when under a different location '/oi'):
 
  <a href="/oi/User/show/?user_id=5">blah</a>
+
+B<use_main_template( $template_name )>
+
+Tell OpenInteract to use a particular main template. The
+C<$template_name> should be in 'package::name' format.
+
+Example:
+
+  [% OI.use_main_template( 'mypkg::main' ) -%]
 
 =head2 PROPERTIES
 

@@ -1,19 +1,19 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.3 2001/08/13 05:05:00 lachoy Exp $
+# $Id: Session.pm,v 1.4 2001/10/01 22:08:40 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
 sub parse { 
     my ( $class, $session_id ) = @_;
     my $R     = OpenInteract::Request->instance;
-    $session_id ||= $R->{cookie}->{in}->{ $OpenInteract::Session::COOKIE_NAME };
+    $session_id ||= $R->{cookie}{in}{ $OpenInteract::Session::COOKIE_NAME };
 
     # If no session id, just create an empty hashref; when we go to 
     # save it, we check to see if the hashref is tied and if not,
@@ -38,7 +38,7 @@ sub save {
     my ( $class ) = @_;
     my $R     = OpenInteract::Request->instance;
     if ( tied %{ $R->{session} } ) {
-        $R->{session}->{timestamp} = $R->{time};
+        $R->{session}{timestamp} = $R->{time};
         $R->DEBUG && $R->scrib( 2, "Saving tied session\n", Dumper( $R->{session} ) );
         untie %{ $R->{session} };
     }
@@ -58,20 +58,20 @@ sub save {
             # OpenInteract::Auth).
 
             my ( $expiration );
-            if ( exists $R->{session}->{expiration} ) {
-                $expiration = $R->{session}->{expiration};
+            if ( exists $R->{session}{expiration} ) {
+                $expiration = $R->{session}{expiration};
                 $R->DEBUG && $R->scrib( 1, "Expiration for new session manually set to ($expiration)" );
-                delete $R->{session}->{expiration};
+                delete $R->{session}{expiration};
             }
             else {
-                $expiration = $R->CONFIG->{session_info}->{expiration};
+                $expiration = $R->CONFIG->{session_info}{expiration};
                 $R->DEBUG && $R->scrib( 1, "Expiration for new session set to default from config ($expiration)" );
             }
 
             # Set the session values
 
             foreach my $key ( keys %{ $R->{session} } ) {
-                $session->{ $key } = $R->{session}->{ $key };
+                $session->{ $key } = $R->{session}{ $key };
             }
             $R->cookies->create_cookie({ name    => $OpenInteract::Session::COOKIE_NAME,
                                          value   => $session->{_session_id},
@@ -108,8 +108,8 @@ OpenInteract::Session - Implement session handling in the framework
 
  # Access the data the session from any handler
 
- $R->{session}->{my_stateful_data} = "oogle boogle";
- $R->{session}->{favorite_colors}->{red} += 5;
+ $R->{session}{my_stateful_data} = "oogle boogle";
+ $R->{session}{favorite_colors}{red} += 5;
 
  # And from any template
 

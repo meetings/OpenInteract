@@ -25,6 +25,7 @@ my %opts = (
       'Apache::Request'  => 0.31,
       'Class::Date'      => 1.00,
       'Pod::POM'         => undef,
+      'MIME::Lite'       => 2.00,
     },
 );
 

@@ -1,0 +1,12 @@
+[%########################################
+  label_form_date_row( label, count, name, value, field_label )
+     Display a row to input a date: label on left, date input on right.
+  ########################################-%]
+
+[%- DEFAULT colspan = 2; -%]  
+[%- INCLUDE label_row_begin( colspan = 1 ) -%]
+[%- INCLUDE data_cell_begin -%]
+[%- PROCESS date_select( object = OI.date_info_object( value ),
+                         blank = 1, field_prefix = name ) -%]
+[% field_label -%]
+</td></tr>

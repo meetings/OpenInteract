@@ -1,0 +1,30 @@
+[%- IF status_msg -%]
+
+[%- DEFAULT theme        = OI.theme_properties;
+    DEFAULT width        = '50%';
+    DEFAULT bgcolor      = theme.even_color;
+    DEFAULT border_color = theme.border_color;
+    DEFAULT font_color   = '#000000'; -%]
+
+<!-- BEGIN status display -->
+
+<div align="center">
+
+[%- PROCESS table_bordered_begin( table_width  = width, 
+                                  bgcolor      = theme.even_color,
+                                  border_color = border_color ) -%]
+
+  <tr><td align="center">
+    <font color="[% font_color %]" size="+1"><b>Status</b></font>
+  </td></tr>
+  <tr><td>
+    <font color="[% font_color %]">[% status_msg %]</font>
+  </td></tr>
+
+[%- PROCESS table_bordered_end() -%]
+
+</div>
+
+<!-- END status display -->
+
+[%- END -%]

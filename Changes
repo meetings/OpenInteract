@@ -1,6 +1,283 @@
 Revision history for Perl extension OpenInteract.
 
-1.21
+1.30  Mon Oct 15 01:35:03 EDT 2001
+
+Overall:
+
+ * New Class: OpenInteract::CommonHandler
+
+   - Common web apps (search form, search, display, edit, remove) can
+   now be reduced to a series of configuration steps and templates
+   while still allowing for custom behavior. This makes for very
+   maintainable code and rapid development. See the 'classified'
+   package for an example that uses it.
+
+ * Custom template behaviors:
+
+   - It's now simple to define custom template behaviors across all
+   templates in a website. A package can define plugins or blocks via
+   its configuration. And a website can also step in make variables
+   available to every template.
+
+ * Template performace:
+
+   - Templates are now cached properly, and by default they're
+   compiled as well. This can provide a dramatic performance
+   boost. Also, OpenInteract works flawlessly with the new
+   Template::Stash::XS module, which itself makes templates run up to
+   twice as fast. (Be sure to use version 2.05b or higher of TT.)
+
+ * Template widgets:
+
+   - You can now use common simple widgets to represent display
+   elements. They are entirely optional and use the existing Template
+   Toolkit framework (e.g., 'PROCESS form_text( ... )') for
+   implementation, including being compiled and cached. See
+   'doc/template_widgets.html' for initial documentation on this.
+
+ * New Package: lookup
+
+   - New package 'lookup' allows you to specify parameters for a
+   particular object in your action table and have that object be
+   editable in a table format. This is intended for easily editing
+   lookup tables, since you normally want to be able to edit many
+   values at one time.
+
+Individual:
+
+ * conf/sample-server.perl:
+
+   - Added 'no_promotion' -- if you set it to true we don't send a
+   'X-Powered-By' header.
+
+   - Added 'content_email' - address for a content administrator
+
+   - Added 'template_info'->'custom_variable_class' and
+   'template_info'->'custom_variable_method'. Allows each website to
+   define a handler that can step in just before every template is
+   processed and modify the variables sent to the template. (See
+   OI/Template/Process.pm)
+
+   - Added 'template_info'->'custom_init_class' and
+   'template_info'->'custom_init_method'. Allows each website to
+   define a handler that can step in just before the template object
+   is initialized and modify its configuration.(See
+   OI/Template/Process.pm)
+
+   - Added 'dir'->'cache_tt' key (Template Toolkit caching directory)
+
+   - Added 'template_info'->'compile_cleanup' -- set to true if you want
+   the compile directory cleaned up on server restart
+
+   - Added 'template_info'->'compile_ext' -- set the extension for
+   compiled TT files -- only real propeller-heads might want to do
+   this :-)
+
+   - Added a three fields ('login'->'custom_login_method',
+   'box'->'system_box_method', 'box'->'custom_box_method') so you can
+   control the method used with
+   a custom class; this is completely backward compatible, since the
+   default is always 'handler'
+
+ * conf/sample-spops.perl:
+
+   - updated sample to use 'OpenInteract::SPOPS::DBI' instead of
+   'OpenInteract::SPOPS'
+
+ * conf/sample-Handler.pm:
+
+   - updated sample handler with slightly modified comments; modified
+   how the template is called
+
+ * OpenInteract.pm:
+
+   - Added self-promoting 'X-Powered-By' header. Set 'no_promotion' in
+   server configuration file to true value to override.
+
+   - Changed content handler to an object handler (with '($$)'
+   declaration), changed all methods to class methods (with
+   non-private names) and added documentation about the method names
+   used in case anyone wants to subclass the handler with their own
+   behaviors.
+
+ * OpenInteract/ApacheStartup.pm:
+
+    - Jochen Lillich <geewiz@linuxde.org> noticed that we weren't
+    making the first connection (in ApacheStartup) properly; it didn't
+    really hurt anything, but it left a nasty warning message. Fixed.
+
+    - Cleanup the Template Toolkit compile directory on server restart
+    if new configration key 'template_info'->'compile_cleanup' is true
+
+ * OpenInteract/Auth.pm:
+
+    - Fixed subtle bug when using CGI::Cookie -- setting a cookie
+    expiration to the empty string ('') results in CGI::Cookie issuing
+    an expired cookie; setting it to undef results in a transient
+    (browser-session-based) cookie.
+
+    - Added a 'not-logged-in' user -- it's created automatically when
+    there's no user saved via the session and no login information
+    found. It's a transient rather than saved user and has no access
+    rights.
+
+    - Custom login handler can now have a custom method, so you don't
+    have to use 'handler' (see config addition for this as well).
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Created base handler for most tasks (search form, search,
+   display, edit, remove) so that many actual handlers will just need
+   to specify configuration options. This is extremely cool -- see
+   docs for implementation.
+
+ * OpenInteract/DBI.pm:
+
+   - Option 'trace_level' now avaialble to initialize the database
+    handle using the 'trace()' method.
+
+    - Updated docs to include all options that are processed.
+
+ * OpenInteract/Package.pm:
+
+   - You can now specify 'template_plugin', 'module' and (to be used
+   soon) 'filter' in the package.conf file; 'module' will be checked
+   when the package is installed to the base installation directory --
+   if you do not have a module the package won't get installed;
+   'template_plugin' and 'filter' are (or will be) used later in OI
+   process (see OI/Template/Process.pm)
+
+   - In 'check()', TT complains (rightly) if we do a syntax check and
+   a particular plugin isn't loaded; capture these errors and don't
+   complain if they pop up.
+
+   - In 'check()', TT complains (rightly) if we do a syntax check and
+   a particular file isn't accessible when you have an INCLUDE or
+   PROCESS; since these are frequently used with the new widgets,
+   capture these errors and don't complain if they pop up.
+
+   - In 'check()', perform syntax check on all files in 'widget/'
+   directory
+
+   - When creating an archive with 'export()', die if the archive
+   already exists.
+
+   - In 'install_to_website()', install all the 'widget/*' files to
+   the $WEBSITE_DIR/template directory
+
+   - In '_copy_spops_config_file()' (called when you apply or upgrade a
+   package), check the website configuration when copying over the
+   'creation_security' hashref for each SPOPS object so we can modify
+   the public and site admin group IDs used. (Thanks to Andreas Nolte
+   <andreas.nolte@bertelsmann.de> for pointing this out and putting it
+   higher on the TODO list...)
+
+   - Files copied during package-to-website should not be read-only
+
+ * OpenInteract/SQLInstall.pm:
+
+   - Added new transformation activated by 'transform_to_now' in your
+   data file. (Thanks to Jochen Lillich <jl@teamlinux.de> for
+   prompting.)
+
+ * OpenInteract/Startup.pm:
+
+   - Create $R during main_initialize() and put the stash class in
+   there so we have normal access to the datasource during SPOPS
+   configuration, which is needed if you're using the 'DiscoverField'
+   behavior. (Hopefully it won't screw anything up with parent/child
+   sharing issues, particular wrt DBI handles.)
+
+   - Modify create_config() and read_base_config() so that we can just
+   pass in a website_dir and get back a configuration.
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - Added strftime reference for date_format() template behavior
+
+   - Added 'use_main_template()' so that templates can modify the main
+   template used
+
+ * OpenInteract/Template/Process.pm:
+
+   - initialize() (called from OpenInteract::Request on the first
+   request for the template object) now asks each package in the
+   website if it has any template plugins (specified in
+   'template_plugin' of each 'package.conf' file) and installs them.
+
+   - initialize() also asks each package if it has any BLOCKs to be
+   defined (specified in 'template_block' of each 'package.conf' file)
+   and installs them.
+
+   - You can define a handler in your server configuration which sets
+   options passed to 'Template->new()'. This allows you to define a
+   global set of BLOCKs and have them always be available.
+
+   - In addition you can define custom behavior that can be called
+   just before a template is processed. This includes adding
+   behaviors, plugins, or whatnot to the variables available to a
+   template.
+
+   - Fixed OpenInteract::Template::Provider initialization so it's
+   actually getting the right values. (Duh!) This means caching
+   works now.
+
+   - Use $CONFIG->get_dir( 'cache_tt' ) for the default Template
+   Toolkit compiling directory.
+
+ * OpenInteract/Template/Provider.pm:
+
+   - Process file globs properly; clean up the code a bit to make more
+   understandable.
+
+   - Clean up the compiled filename a little to not have odd ('::')
+   characters.
+
+ * OpenInteract/Utility.pm:
+
+   - Enable 'send_mail()' to take and process attachments that are
+   located underneath the website directory; add documentation for
+   this option as well as more examples of usage.
+
+ * script/oi_manage:
+
+  - Add 'template', 'mail' and 'uploads' to list of directories
+  created when you run 'create_website'; removed 'email'
+
+  - Add 'cache' and 'cache/tt' to list of directories created when
+  you run 'create_website'
+
+  - Modify how/when install_sql creates database handles. (This still
+  needs some work, but it should be ok for now.)
+
+  - Create a $CONFIG object when doing apply_package or
+  upgrade_package and pass it to the install_to_website() method of
+  OpenInteract::Package.
+
+
+Packages changed:
+
+   OpenInteract    1.21 -> 1.30
+   ----------------------------
+   base:           1.60 -> 1.62
+   base_box:       0.30 -> 0.33
+   base_component: 1.25 -> 1.30
+   base_error:     1.30 -> 1.32
+   base_group:     1.25 -> 1.26
+   base_security:  1.46 -> 1.51
+   base_template:  1.27 -> 1.27
+   base_theme:     1.26 -> 1.27
+   base_user:      1.34 -> 1.37
+   lookup:          n/a -> 0.15
+   results_manage: 0.02 -> 0.05
+   static_page:    1.49 -> 1.51
+   system_doc:     1.24 -> 1.25
+   classified:     1.28 -> 1.28
+   full_text:      1.26 -> 1.27
+   news:           1.33 -> 1.33
+
+
+1.21  Wed Aug 29 15:10:27 EDT 2001
 
 Overall:
 
@@ -118,7 +395,7 @@ Individual:
  * OpenInteract/Auth.pm:
 
    - Set the result of $user->id rather than $user->{user_id} into the
-   session after a successful login. (Thanks to Andreas Nolte.)
+   session after a successful login. (Thanks to Andreas Nolte <andreas.nolte@bertelsmann.de>)
 
  * OpenInteract/Error/System.pm:
 

@@ -1,13 +1,14 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.7 2001/08/13 05:10:47 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.13 2001/10/08 20:55:56 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
 use Data::Dumper      qw( Dumper );
 
-@OpenInteract::ISA     = ();
-$OpenInteract::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::ISA      = ();
+$OpenInteract::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DIST_VERSION = '1.28';
 
 # Generic separator used in display
 
@@ -18,15 +19,15 @@ my $SEP = '=' x 30;
 my %REQ = ();
 
 
-sub handler {
-    my ( $apache ) = @_;
+sub handler ($$) {
+    my ( $class, $apache ) = @_;
 
     # Create the big cheese object (aka, "Big R") and populate with some
     # basic info
 
-    my $R = eval { _setup_request( $apache ) };
+    my $R = eval { $class->setup_request( $apache ) };
     if ( $@ ) {
-        _send_html( $apache, $@ );
+        $class->send_html( $apache, $@ );
         return OK;
     }
     $R->DEBUG && $R->scrib( 1, "\n\n$SEP\nRequest started:", scalar localtime( $R->{time} ), "\n",
@@ -42,30 +43,30 @@ sub handler {
 
     my ( $page );
     eval {
-        _setup_apache( $R, $apache );
-        _setup_cache( $R );
-        _parse_uri( $R );
-        _find_action_handler( $R );
-        _setup_cookies_and_session( $R );
-        _setup_authentication( $R );
-        _setup_theme( $R );
-        $page = _run_content_handler( $R );
-        _finish_cookies_and_session( $R );
-    }; 
+        $class->setup_apache( $R, $apache );
+        $class->setup_cache( $R );
+        $class->parse_uri( $R );
+        $class->find_action_handler( $R );
+        $class->setup_cookies_and_session( $R );
+        $class->setup_authentication( $R );
+        $class->setup_theme( $R );
+        $page = $class->run_content_handler( $R );
+        $class->finish_cookies_and_session( $R );
+    };
     if ( $@ ) {
         warn " --EXITED WITH ERROR from main handler eval block\nError: $@\n";
-        return _bail( $@ );
+        return $class->bail( $@ );
     }
 
-    if ( $R->{page}->{send_file} ) { _send_static_file( $R ) }
-    else                           { _send_html( $apache, $page, $R ) }
+    if ( $R->{page}{send_file} ) { $class->send_static_file( $R ) }
+    else                         { $class->send_html( $apache, $page, $R ) }
 
-    _cleanup( $R );
+    $class->cleanup( $R );
     return OK;
 }
 
-sub _bail {
-    my ( $msg ) = @_;
+sub bail {
+    my ( $class, $msg ) = @_;
     $msg = $msg + 0;
     return $msg;
 }
@@ -73,8 +74,8 @@ sub _bail {
 
 # Setup the OpenInteract::Request object
 
-sub _setup_request {
-    my ( $apache ) = @_;
+sub setup_request {
+    my ( $class, $apache ) = @_;
 
     # Read the stash class from our httpd.conf and grab the config
     # object
@@ -113,8 +114,8 @@ sub _setup_request {
 # address -- if you're using a proxy, be sure that this has been
 # passed from the front end server using mod_proxy_add_forward
 
-sub _setup_apache {
-    my ( $R, $apache ) = @_;
+sub setup_apache {
+    my ( $class, $R, $apache ) = @_;
     my $apr = Apache::Request->new( $apache );
     $R->stash( 'apache', $apr );
 
@@ -130,13 +131,13 @@ sub _setup_apache {
 
 # Create the cache object if we're supposed to
 
-sub _setup_cache {
-    my ( $R ) = @_;
+sub setup_cache {
+    my ( $class, $R ) = @_;
     my $C = $R->CONFIG;
-    if ( ! $R->cache and $C->{cache_info}->{data}->{use} ) {   
-        my $cache_class = $C->{cache_info}->{data}->{class};
+    if ( ! $R->cache and $C->{cache_info}{data}{use} ) {
+        my $cache_class = $C->{cache_info}{data}{class};
         $R->DEBUG && $R->scrib( 1, "Using cache and setting up with ($cache_class)" );
-        my $cache = $cache_class->new( { config => $C } );
+        my $cache = $cache_class->new({ config => $C });
         $R->stash( 'cache', $cache );
     }
     return undef;
@@ -147,14 +148,14 @@ sub _setup_cache {
 # $R->{path}. Also find the 'action' specified in the URL -- we use
 # this to find a handler in the action table. Note that if the first
 # item is actually a directive (such as 'Popup'), then we shift it off
-# and it in $R->{ui}->{directive} so the UI handler knows it's
-# around. After we do this the $R->{path}->{current} should be
+# and it in $R->{ui}{directive} so the UI handler knows it's
+# around. After we do this the $R->{path}{current} should be
 # consistent, with the action as the first member.
 
-sub _parse_uri {
-    my ( $R ) = @_;
+sub parse_uri {
+    my ( $class, $R ) = @_;
 
-    # Get the Apache::URI object and put it in $R 
+    # Get the Apache::URI object and put it in $R
 
     # TODO: Do we EVER retrieve the URI object from the stash? Why put it there?
 
@@ -171,32 +172,32 @@ sub _parse_uri {
     $R->DEBUG && $R->scrib( 1, "Original path: ($path)" );
     if ( $location ne '/' ) {
         $path =~ s/^$location//;
-        $R->{path}->{location} = $location;
+        $R->{path}{location} = $location;
         $R->DEBUG && $R->scrib( 1, "Modified path by removing ($location): ($path)" );
     }
     my @choices = split /\//, $path;
     shift @choices;
     $R->DEBUG && $R->scrib( 1, "Items in the path: ", join( " // ", @choices ) );
     my @full_choices       = @choices;
-    $R->{path}->{current}  = \@choices;
-    $R->{path}->{full}     = \@full_choices;
+    $R->{path}{current}  = \@choices;
+    $R->{path}{full}     = \@full_choices;
 
     # If the first item is a directive, remove it and save it for the ui
     # handler; otherwise it's as if it never existed
 
-    if ( $R->CONFIG->{page_directives}->{ $R->{path}->{current}->[0] } ) {
-        $R->{ui}->{directive} = shift @{ $R->{path}->{current} };   
-        $path = '/' . join( '/', @{ $R->{path}->{current} } );
+    if ( $R->CONFIG->{page_directives}{ $R->{path}{current}->[0] } ) {
+        $R->{ui}{directive} = shift @{ $R->{path}{current} };
+        $path = '/' . join( '/', @{ $R->{path}{current} } );
     }
-    $R->{ui}->{action} = $R->{path}->{current}->[0];
-    $R->DEBUG && $R->scrib( 1, "Action found from URL: $R->{ui}->{action}" );
+    $R->{ui}{action} = $R->{path}{current}->[0];
+    $R->DEBUG && $R->scrib( 1, "Action found from URL: $R->{ui}{action}" );
 
     # Note that $path might have been modified if the first item was a
     # directive
 
-    $R->{path}->{original} = $path;
-    $R->{path}->{original} .=  '?' . $u->query  if ( $u->query );
-    $R->DEBUG && $R->scrib( 1, "Original path/query string set to: $R->{path}->{original}" );
+    $R->{path}{original} = $path;
+    $R->{path}{original} .=  '?' . $u->query  if ( $u->query );
+    $R->DEBUG && $R->scrib( 1, "Original path/query string set to: $R->{path}{original}" );
     return undef;
 }
 
@@ -204,55 +205,54 @@ sub _parse_uri {
 # Match up the URL path to the UI action (Conductor) and store the
 # relevant information in $R
 
-sub _find_action_handler {
-    my ( $R ) = @_;
-    ( $R->{ui}->{class}, $R->{ui}->{method} ) = $R->lookup_conductor( $R->{ui}->{action} ); 
-    unless ( $R->{ui}->{class} ) {
+sub find_action_handler {
+    my ( $class, $R ) = @_;
+    ( $R->{ui}{class}, $R->{ui}{method} ) = $R->lookup_conductor( $R->{ui}{action} );
+    unless ( $R->{ui}{class} ) {
         $R->scrib( 0, " Conductor not found; displaying oops page." );
         eval { $R->throw({ code       => 301,
                            type       => 'file',
                            user_msg   => "Bad URL",
-                           system_msg => "Cannot find conductor for $R->{ui}->{action}",
-                           extra      => { url => $R->{path}->{original} } }) };
+                           system_msg => "Cannot find conductor for $R->{ui}{action}",
+                           extra      => { url => $R->{path}{original} } }) };
         if ( $@ ) {
-            _send_html( $R->apache, $@, $R );
+            $R->send_html( $R->apache, $@, $R );
             die OK . "\n";
         }
     }
-    $R->DEBUG && $R->scrib( 1, "Found $R->{ui}->{class} // $R->{ui}->{method} for conductor" );
+    $R->DEBUG && $R->scrib( 1, "Found $R->{ui}{class} // $R->{ui}{method} for conductor" );
     return undef;
 }
 
 
-sub _setup_cookies_and_session {
-    my ( $R ) = @_;
-    warn "trying to setup cookies/session\n";
+sub setup_cookies_and_session {
+    my ( $class, $R ) = @_;
     eval {
         $R->DEBUG && $R->scrib( 2, "Trying to use cookie class: ", $R->cookies );
         $R->cookies->parse;
-        $R->DEBUG && $R->scrib( 2, "Cookies in:", Dumper( $R->{cookie}->{in} ) );
+        $R->DEBUG && $R->scrib( 2, "Cookies in:", Dumper( $R->{cookie}{in} ) );
         $R->DEBUG && $R->scrib( 2, "Trying to use session class: ", $R->session );
         $R->session->parse;
     };
-    if ( $@ ) { 
-        _send_html( $R->apache, $@, $R );
+    if ( $@ ) {
+        $R->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
     return undef;
 }
 
 
-sub _finish_cookies_and_session {
-    my ( $R ) = @_;
+sub finish_cookies_and_session {
+    my ( $class, $R ) = @_;
     eval {
         $R->session->save;
         $R->cookies->bake;
-        $R->DEBUG && $R->scrib( 2, "Cookies out:", 
-                                   join(" // ", map { $_->name . ' = ' . $_->value } 
-                                                    values %{ $R->{cookie}->{out} } ) );
+        $R->DEBUG && $R->scrib( 2, "Cookies out:",
+                                   join(" // ", map { $_->name . ' = ' . $_->value }
+                                                    values %{ $R->{cookie}{out} } ) );
     };
     if ( $@ ) {
-        _send_html( $R->apache, $@, $R );
+        $R->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
     return undef;
@@ -261,12 +261,12 @@ sub _finish_cookies_and_session {
 
 # Call the various user/group authentication routines
 
-sub _setup_authentication {
-    my ( $R ) = @_;
+sub setup_authentication {
+    my ( $class, $R ) = @_;
     unless ( $R->auth ) {
         my $error_msg = "Authentication cannot be setup! Please ensure 'auth' is setup in your " .
                         "server configuration under 'system_alias'";
-        _send_html( $R->apache, $error_msg, $R );
+        $R->send_html( $R->apache, $error_msg, $R );
         die OK . "\n";
     }
     eval {
@@ -274,24 +274,24 @@ sub _setup_authentication {
         $R->auth->group;
     };
     if ( $@ ) {
-        _send_html( $R->apache, $@, $R );
+        $R->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
     return undef;
 }
 
 
-# Create the theme used; note that logged-in users can choose 
+# Create the theme used; note that logged-in users can choose
 # their own, but anonymous users have to stick with 'main'. Each
 # UI handler (conductor) can decide what to do with the object, but
 # for now we won't try to fetch all the properties or anything
 
-sub _setup_theme {
-    my ( $R ) = @_;
+sub setup_theme {
+    my ( $class, $R ) = @_;
     my $C = $R->CONFIG;
-    $R->{theme} = ( $R->{auth}->{user} and $R->{auth}->{user}->{theme_id} )
-                    ? eval { $R->{auth}->{user}->theme }
-                    : eval { $R->theme->fetch( $C->{default_objects}->{theme} ) };
+    $R->{theme} = ( $R->{auth}{user} and $R->{auth}{user}{theme_id} )
+                    ? eval { $R->{auth}{user}->theme }
+                    : eval { $R->theme->fetch( $C->{default_objects}{theme} ) };
     if ( $@ ) {
         my $ei = SPOPS::Error->get;
         OpenInteract::Error->set( $ei );
@@ -302,7 +302,7 @@ sub _setup_theme {
 Fundamental part of OpenInteract (themes) not functioning; please contact the
 system administrator (<a href="mailto:$C->{admin_email}">$C->{admin_email}</a>).
 THEMERR
-        _send_html( $R->apache, $error_msg, $R );
+        $R->send_html( $R->apache, $error_msg, $R );
         die OK . "\n";
     }
     return undef;
@@ -313,9 +313,9 @@ THEMERR
 # ready for display or put the information into $R necessary to send a
 # static (non-HTML) file
 
-sub _run_content_handler {
-    my ( $R ) = @_;
-    my ( $ui_class, $ui_method ) = ( $R->{ui}->{class}, $R->{ui}->{method} );
+sub run_content_handler {
+    my ( $class, $R ) = @_;
+    my ( $ui_class, $ui_method ) = ( $R->{ui}{class}, $R->{ui}{method} );
     $R->DEBUG && $R->scrib( 1, "Trying the conductor: <<$ui_class/$ui_method>>" );
     return $ui_class->$ui_method();
 }
@@ -326,16 +326,16 @@ sub _run_content_handler {
 # automatically by Apache, particularly if the URL ends with a known
 # filetype
 
-sub _send_static_file {
-    my ( $R ) = @_;
-    my $static_file = $R->{page}->{send_file};
+sub send_static_file {
+    my ( $class, $R ) = @_;
+    my $static_file = $R->{page}{send_file};
     my $fh = Apache->gensym;
     eval { open( $fh, $static_file ) || die $!; };
     if ( $@ ) {
         $R->scrib( 0, "Cannot open static file from filesystem ($static_file): $@" );
         return NOT_FOUND;
     }
-    $R->apache->send_http_header( $R->{page}->{content_type} );
+    $R->apache->send_http_header( $R->{page}{content_type} );
     $R->apache->send_fd( $fh );
     close( $fh );
 }
@@ -343,11 +343,14 @@ sub _send_static_file {
 
 # Send plain html (or text) to the browser
 
-sub _send_html {
-    my ( $apache, $content, $R ) = @_;
+sub send_html {
+    my ( $class, $apache, $content, $R ) = @_;
     $R ||= {};
-    my $content_type = $R->{page}->{content_type} || $apache->content_type || 'text/html';
+    my $content_type = $R->{page}{content_type} || $apache->content_type || 'text/html';
     $content_type = ( $content_type eq 'httpd/unix-directory' ) ? 'text/html' : $content_type;
+    unless ( $R->CONFIG->{no_promotion} ) {
+        $apache->headers_out->{'X-Powered-By'} = "OpenInteract $OpenInteract::DIST_VERSION";
+    }
     $apache->send_http_header( $content_type );
     $apache->print( $content );
 }
@@ -355,15 +358,14 @@ sub _send_html {
 
 # Do any necessary cleanup -- logging, remove stash entries, etc.
 
-sub _cleanup {
-    my ( $R ) = @_;
+sub cleanup {
+    my ( $class, $R ) = @_;
     $R->DEBUG && $R->scrib( 2, "\n\nErrors: ", Dumper( $R->error_object->report ), "\n\n" );
     $R->error->clear;
     $R->error_object->clear_listing;
-    $R->DEBUG && $R->scrib( 1, "Request done at", scalar localtime , "from $R->{remote_host}\n$SEP\n" );
-
-    # Ask the Request object to cleanup all its objects and finish
-
+    $R->DEBUG && $R->scrib( 1, "\nRequest done:", scalar localtime, "\n",
+                               "path: ($R->{path}{original}) PID: ($$)\n",
+                               "from: ($R->{remote_host})\n$SEP\n" );
     $R->finish_request;
     return undef;
 }
@@ -381,91 +383,132 @@ OpenInteract - mod_perl handler to process all OpenInteract requests
 =head1 DESCRIPTION
 
 This documentation is for the OpenInteract Apache content handler. For
-general information about OpenInteract, see L<OpenInteract::Intro>.
+general information about OpenInteract, see
+L<OpenInteract::Intro|OpenInteract::Intro>.
 
-This content handler creates the L<OpenInteract::Request> object and
-farms requests out to all the relevant handlers -- cookies, session,
+This content handler creates the
+L<OpenInteract::Request|OpenInteract::Request> object and farms
+requests out to all the relevant handlers -- cookies, session,
 authentication, themes, etc.
 
-We walk through a number of steps here. They are probably self-evident
-by checking out the code, but just to be on the safe side:
+We walk through a number of class methods here. They are probably
+self-evident by checking out the code, but just to be on the safe
+side.
 
 =over 4
 
 =item *
 
-Retrieve the StashClass from the Apache config
+B<setup_request( $apache )>: Retrieve the StashClass from the Apache
+config, grab the Config object from the StashClass, and
+create/retrieve the L<OpenInteract::Request|OpenInteract::Request>
+object.
+
+Return: C<$R> (an L<OpenInteract::Request|OpenInteract::Request>)
+
+On error: C<die> with error message.
 
 =item *
 
-Grab the Config object from the StashClass
+B<setup_apache( $R, $apache )>: Create the
+L<Apache::Request|Apache::Request> object and store it in C<$R>. We
+reuse this object throughout the request so we should not have any
+issues with POST values being empty on a second read.
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Create/retrieve the request object.
+B<setup_cache( $R )>: Create the cache object if we are supposed to
+use it
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Create the C<Apache::Request> object
+B<parse_uri( $R )>: Parse the URL and decide which conductor (UI)
+should take care of the request
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Create the config (if it is not already around)
+B<setup_cookies_and_session( $R )>: Get the cookies and retrieve a
+session if it exists.
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Create the cache object if we are supposed to use it
+B<setup_authentication( $R )>: Authenticate the user and get the
+groups the user belongs to.
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Parse the URL and decide which conductor (UI) should take care of the
-request
+B<setup_theme( $R )>: Create the theme that is used throughout the
+request and stored in C<$R-E<gt>{theme}>.
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Get the cookies
+B<run_content_handler( $R )>: Run the content handler which generates
+the full page.
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Recreate the session if possible
+B<finish_cookies_and_session( $R )>: Save the session and bake the
+cookies (put them into outgoing headers).
+
+Return: nothing
+
+On error: Send error information to user via C<send_html()> then
+C<die> with Apache return code (e.g., 'OK' )
 
 =item *
 
-Authenticate the user
+B<send_html( $apache, $page, $R )>: Send the http header(s) and HTML
+for the page content.
 
 =item *
 
-Get the groups the user belongs to
+B<send_static_file( $R )>: If a static file is specified (if a person
+requests a PDF file), then send it.
 
 =item *
 
-Create the theme
-
-=item *
-
-Retrieve the page from the conductor
-
-=item *
-
-Save the session
-
-=item *
-
-Bake the cookies (put them into outgoing headers)
-
-=item *
-
-Send the http header(s)
-
-=item *
-
-Send the content
-
-=item *
-
-Cleanup
+B<cleanup( $R )>: Cleanup the request object and stash class.
 
 =back
+
+Since all of the above are class methods, you can subclass
+L<OpenInteract|OpenInteract> so you override one or more of the above
+methods.
 
 =head1 NOTES
 

@@ -1,12 +1,12 @@
 package OpenInteract::Cookies::Apache;
 
-# $Id: Apache.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Apache.pm,v 1.2 2001/10/01 22:08:52 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Cookies::Apache::ISA     = ();
-$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 
 # Retrieve the cookies using Apache::Request
@@ -18,9 +18,9 @@ sub parse {
     foreach my $name ( keys %{ $cookie_info } ) {
         my $value = $cookie_info->{ $name }->value;
         $R->DEBUG && $R->scrib( 2, "Getting cookie $name to $value" );
-        $R->{cookie}->{in}->{ $name } = $value;
+        $R->{cookie}{in}{ $name } = $value;
     }
-    return $R->{cookie}->{in};
+    return $R->{cookie}{in};
 }
 
 
@@ -31,9 +31,9 @@ sub parse {
 sub bake {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    foreach my $name ( keys %{ $R->{cookie}->{out} } ) {
-        $R->DEBUG && $R->scrib( 2, "Setting $name to value ", $R->{cookie}->{out}->{ $name }->value );
-        $R->{cookie}->{out}->{ $name }->bake;
+    foreach my $name ( keys %{ $R->{cookie}{out} } ) {
+        $R->DEBUG && $R->scrib( 2, "Setting $name to value ", $R->{cookie}{out}{ $name }->value );
+        $R->{cookie}{out}{ $name }->bake;
     }
     return 1;
 }
@@ -44,7 +44,7 @@ sub bake {
 sub create_cookie {
     my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
-    return $R->{cookie}->{out}->{ $p->{name} } = 
+    return $R->{cookie}{out}{ $p->{name} } = 
                     Apache::Cookie->new( $R->apache, 
                                          -name => $p->{name}, 
                                          -value => $p->{value},
@@ -83,7 +83,7 @@ OpenInteract::Cookies::Apache - handler to parse/output cookies from/to the clie
 
  # Retrieve a cookie value in an OpenInteract content handler
 
- $params->{search} = $R->{cookie}->{in}->{search_value};
+ $params->{search} = $R->{cookie}{in}{search_value};
  
  # Create a new cookie
 
@@ -170,7 +170,7 @@ B<parse()>
 Read in the cookies passed to this request and file them into the
 hashref:
 
- $R->{cookie}->{in}
+ $R->{cookie}{in}
 
 with the key as the cookie name.
 

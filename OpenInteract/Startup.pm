@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.20 2001/08/27 15:05:38 lachoy Exp $
+# $Id: Startup.pm,v 1.22 2001/10/01 17:11:28 lachoy Exp $
 
 use strict;
 use Data::Dumper  qw( Dumper );
@@ -12,7 +12,7 @@ use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -79,20 +79,28 @@ sub main_initialize {
         _w( 0, "Some classes were not required!" );
     }
 
-    # The config object should now have all actions and SPOPS definitions
-    # read in, so run any necessary configuration options
-
-    my $init_class = $class->finalize_configuration({ config => $C });
-
     # Store the configuration for later use
 
     my $stash_class = $bc->{stash_class};
     $stash_class->set_stash( 'config', $C );
 
+    # Create an instance of $R since later steps might need it --
+    # particularly SPOPS initialization which may want a connection to
+    # the datasource during setup. (Crossing fingers this doesn't mess
+    # something up, particularly w/ parent/child sharing issues...)
+
+    my $request_class = $bc->{request_class};
+    my $R = $request_class->instance;
+    $R->{stash_class} = $stash_class;
+
+    # The config object should now have all actions and SPOPS definitions
+    # read in, so run any necessary configuration options
+
+    my $init_class = $class->finalize_configuration({ config => $C });
+
     # Tell OpenInteract::Request to setup aliases if they haven't already
 
     if ( $p->{alias_init} ) {
-        my $request_class = $bc->{request_class};
         $request_class->setup_aliases;
     }
 
@@ -193,9 +201,10 @@ sub setup_static_environment {
 
 sub create_config {
     my ( $class, $p ) = @_;
-    return undef unless ( $p->{base_config} or $p->{base_config_file} );
     my $bc = $p->{base_config} ||
-             $class->read_base_config({ filename => $p->{base_config_file} });
+             $class->read_base_config({ filename    => $p->{base_config_file},
+                                        website_dir => $p->{website_dir} });
+    return undef unless ( $bc );
 
     # Create the configuration file and set the base directory as configured;
     # also set other important classes from the config
@@ -246,8 +255,9 @@ sub read_package_list {
 sub read_base_config {
     my ( $class, $p ) = @_;
     unless ( $p->{filename} ) {
-        if ( $p->{dir} ) {
-            $p->{filename} = $class->create_base_config_filename( $p->{dir} );
+        my $dir = $p->{dir} || $p->{website_dir};
+        if ( $dir ) {
+            $p->{filename} = $class->create_base_config_filename( $dir );
         }
     }
     return undef   unless ( -f $p->{filename} );

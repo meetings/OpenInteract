@@ -1,6 +1,6 @@
 package OpenInteract::Error::Main;
 
-# $Id: Main.pm,v 1.3 2001/08/27 05:19:30 lachoy Exp $
+# $Id: Main.pm,v 1.5 2001/10/04 13:21:35 lachoy Exp $
 
 use strict;
 require Exporter;
@@ -11,7 +11,7 @@ use Data::Dumper qw( Dumper );
 $ERROR_HOLD = 'error_hold';
 
 @OpenInteract::Error::Main::ISA       = qw( Exporter );
-$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Error::Main::EXPORT_OK = qw( $ERROR_HOLD );
 
 
@@ -19,7 +19,7 @@ sub catch {
     my ( $class, $err ) = @_;
     my $R = OpenInteract::Request->instance;
 
-    # Find the action and its error handlers 
+    # Find the action and its error handlers
 
     my $action = lc $err->{action};
     $R->DEBUG && $R->scrib( 1, "Action where the error was thrown from: <<$action>>" );
@@ -65,6 +65,7 @@ sub require_error_handlers {
     foreach my $h ( values %{ $handlers } ) {
         my $handler_list = ( ref $h ) ? $h : [ $h ];
         foreach my $error_handler ( @{ $handler_list } ) {
+            next unless ( $error_handler );
             eval "require $error_handler";
         }
     }
@@ -92,7 +93,7 @@ OpenInteract::Error::Main - Catches all errors and dispatches to proper handler
 =head1 SYNOPSIS
 
  $R->throw( { code => 412, type => 'db' } );
- 
+
 =head1 DESCRIPTION
 
 This class catches all errors thrown by the framework. It then 

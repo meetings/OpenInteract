@@ -11,15 +11,19 @@ $data = {
 
      ########################################
      # Hosts/Email Addresses
-
-     # CHANGE THIS (SMTP host we use for sending email)
+     #
+     # CHANGE THESE
+     #
+     #   smtp_host
+     #     host we use for sending email (can be IP address or hostname)
+     #   admin_email
+     #     sysadmin address; all system emails come to/from this address
+     #   content_email
+     #     notification of changed content, where appropriate
 
      'smtp_host'     => '127.0.0.1',       
-
-     # CHANGE THIS (email address for administrator; all emails
-     # from the system will come from this address)
-
      'admin_email'   => 'admin@mycompany.com',
+     'content_email' => 'content@mycompany.com',
 
      ########################################
      # Session Configuration
@@ -177,7 +181,9 @@ $data = {
        default_separator  => undef,
        default_method     => undef,
        system_box_handler => '%%WEBSITE_NAME%%::Handler::SystemBoxes',
+       system_box_method  => '',
        custom_box_handler => '',
+       custom_box_method  => '',
      },
 
      ########################################
@@ -208,6 +214,7 @@ $data = {
        # logs in.
 
        custom_login_handler => '',
+       custom_login_method  => '',
      },
 
      ########################################
@@ -255,17 +262,51 @@ $data = {
      ########################################
      # Template Processing
      #
-     # Define information used by the template processing modules. For
-     # now, this is just whether to look into the database or the
-     # filesystem first when checking templates. The default is
-     # filesystem, but if you make changes to templates via
-     # the browser you'll want to change this to 'database'. Otherwise
-     # your changes will never be seen.
-     #
-     # Options for 'source' are: 'database', 'filesystem'
+     # Define information used by the template processing modules. 
 
      'template_info' => {
+
+       # Whether to look into the database or the filesystem first
+       # when checking templates. The default is filesystem, but if
+       # you make changes to templates via the browser you'll want to
+       # change this to 'database'. Otherwise your changes will never
+       # be seen. Options are: 'database', 'filesystem'
+
        'source' => 'filesystem',
+
+       # Custom handler that's called before the template object is
+       # initialized. Here you can define a PRE_PROCESS template (for
+       # instance, with BLOCKs having all your common widgets) or set
+       # any of the other configuration information specified in
+       # 'perldoc Template::Manual::Config'. If you use this, set
+       # 'custom_init_class' to a class that has a method specified in
+       # 'custom_init_method' or use the default ('handler')
+
+       'custom_init_class'      => '',
+       'custom_init_method'     => '',
+
+       # Custom handler that's called before every template is
+       # processed. If you have common BLOCKs, formatting elements or
+       # other items that are not full-blown OI components, you can
+       # add them to the template variable hash. If you use this, set
+       # 'custom_variable_class' to a class that has a method
+       # specified in 'custom_variable_method' or use the default
+       # ('handler').
+
+       'custom_variable_class'  => '',
+       'custom_variable_method' => '',
+
+       # If true, will remove all compiled files on server restart
+       # (production boxes can set this to false so that startup costs
+       # aren't so heavy)
+
+       'compile_cleanup' => 1,
+
+       # Extension for compiled TT files. Most people won't (or
+       # shouldn't) care about this.
+
+       'compile_ext' => '.ttc',
+
      },
 
      ########################################
@@ -321,6 +362,7 @@ $data = {
        'html'     => '$BASE/html',
        'log'      => '$BASE/logs',
        'cache'    => '$BASE/cache',
+       'cache_tt' => '$BASE/cache/tt',
        'config'   => '$BASE/conf',
        'data'     => '$BASE/data',
        'mail'     => '$BASE/mail',
@@ -429,9 +471,15 @@ $data = {
        },
      },
 
+     ########################################
+     # Misc
+
+     'no_promotion' => 0,
+
+
      # Don't change this value -- if you have problems it helps the
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.21 $',
+     'ConfigurationRevision' => '$Revision: 1.26 $',
 };

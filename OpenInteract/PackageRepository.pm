@@ -1,6 +1,6 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.4 2001/07/11 12:26:27 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.5 2001/10/11 15:39:26 lachoy Exp $
 
 use strict;
 use vars qw( $PKG_DB_FILE );
@@ -12,7 +12,7 @@ use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
 
 @OpenInteract::PackageRepository::ISA       = qw( Exporter  SPOPS::Utility  SPOPS::HashFile );
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -43,7 +43,7 @@ sub _class_initialize {
     my $C = $class->CONFIG;
     $C->{field} = {};
     foreach my $field ( @{ $C->{field_list} } ) {
-        $C->{field}->{ $field } = $count;
+        $C->{field}{ $field } = $count;
         $count++;
     }
 }
@@ -69,6 +69,15 @@ sub initialize {
 }
 
 
+# Backup the repository
+
+sub backup {
+    my ( $self, $p ) = @_;
+    my $extension = $p->{extension} || 'backup';
+    $extension = ".$extension" unless ( $extension =~ /^\./ );
+}
+
+
 # Ensure that the base_dir, name and version properties are defined
 # for every package in the repository. Also remove each package's
 # reference to the repository object before we serialize.
@@ -77,17 +86,17 @@ sub pre_save_action {
     my ( $self, $p ) = @_;
     foreach my $pkg_key ( keys %{ $self } ) {
         next if ( $pkg_key eq META_KEY );
-        unless ( -d $self->{ $pkg_key }->{base_dir} ) {
+        unless ( -d $self->{ $pkg_key }{base_dir} ) {
             warn( "Cannot save package repository: the OpenInteract base installation ",
                   "directory for package ($pkg_key) is not specified or does not exist!" );
             return undef;
         }
-        unless ( $self->{ $pkg_key }->{name} and $self->{ $pkg_key }->{version} ) {
+        unless ( $self->{ $pkg_key }{name} and $self->{ $pkg_key }{version} ) {
             warn( "Cannot save package repository: both the package 'name' and 'version' ",
                   "must be specified for package ($pkg_key) before saving.\n" );
             return undef;
         }
-        delete $self->{ $pkg_key }->{repository};
+        delete $self->{ $pkg_key }{repository};
     }
     return 1;
 }
@@ -119,7 +128,7 @@ sub _set_repository {
     foreach my $pkg_key ( keys %{ $self } ) {
         next if ( $pkg_key eq META_KEY );
         DEBUG && _w( 1, "Setting repository in package key $pkg_key" );
-        $self->{ $pkg_key }->{repository} = $self;
+        $self->{ $pkg_key }{repository} = $self;
     }
 }
 
@@ -189,7 +198,7 @@ sub fetch_package_by_name {
     my @match = ();
     foreach my $pkg_key ( keys %{ $self } ) {
         next unless ( ref $self->{ $pkg_key } eq 'HASH' );
-        if ( $self->{ $pkg_key }->{name} eq $name ) {
+        if ( $self->{ $pkg_key }{name} eq $name ) {
             push @match, $self->{ $pkg_key };
             DEBUG && _w( 1, "Found package $pkg_key; try to match up with package $name" );
         }

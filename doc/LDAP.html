@@ -3,6 +3,7 @@
       <title>OpenInteract and LDAP: Setting it Up</title>
     </head>
     <body>
+<!-- <template_status>no_parse</template_status> -->
       <h1>OpenInteract and LDAP</h1>
       
       <p>With <tt>OpenInteract</tt> 1.2 and <tt>SPOPS</tt> 0.50, you
@@ -92,6 +93,17 @@
 
 <pre>
   'has_a' => {},
+</pre>
+
+        This is to get around the information being inherited by the
+        parent configuration and will be fixed in a later version.</li>
+
+        <li>(slight hack) Create an empty hashref in your
+        <tt>base_group-x.xx/conf/spops.perl</tt> file for the key
+        'links_to'. It should look like this:
+
+<pre>
+  'links_to' => {},
 </pre>
 
         This is to get around the information being inherited by the

@@ -1,6 +1,6 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.3 2001/08/10 12:57:25 lachoy Exp $
+# $Id: Main.pm,v 1.4 2001/09/21 17:10:44 lachoy Exp $
 
 use strict;
 
@@ -15,14 +15,14 @@ sub handler {
     # information which is used below. More information about directives
     # in the POD.
 
-    if ( my $directive = $R->{ui}->{directive} ) { 
+    if ( my $directive = $R->{ui}{directive} ) { 
         if ( $directive =~ /^(NoTmpl|NoTemplate)$/ ) {
-            $R->{page}->{_no_template_}++;
+            $R->{page}{_no_template_}++;
             $R->DEBUG && $R->scrib( 1, "Using NO window template" );
         }
         else {
-            $R->{page}->{_template_key_} = $R->CONFIG->{page_directives}->{ $directive };
-            $R->DEBUG && $R->scrib( 1, "Using template key from directive: ($R->{page}->{_template_key_})" );
+            $R->{page}{_template_key_} = $R->CONFIG->{page_directives}{ $directive };
+            $R->DEBUG && $R->scrib( 1, "Using template key from directive: ($R->{page}{_template_key_})" );
         }
     }
 
@@ -35,25 +35,25 @@ sub handler {
     # throws a die() needs to also return content to display; otherwise
     # it will be a pretty boring (empty) page :)
 
-    $R->{page}->{content} = eval { $action_class->$action_method({ 
-                                        path => $R->{path}->{current} }) };
+    $R->{page}{content} = eval { $action_class->$action_method({
+                                        path => $R->{path}{current} }) };
     if ( $@ ) {
-        $R->{page}->{content} = $@;
+        $R->{page}{content} = $@;
         $R->scrib( 0, "Action died. Here is what it left: $@" );
     }
 
     # Do our special content cases
 
-    return undef                 if ( $R->{page}->{send_file} );
-    return $R->{page}->{content} if ( $R->{page}->{_no_template_} );
+    return undef                 if ( $R->{page}{send_file} );
+    return $R->{page}{content} if ( $R->{page}{_no_template_} );
 
     # $template_key here is being used to lookup a template name within a
     # theme
 
-    my $template_key  = $R->{page}->{_template_key_};
-    $template_key   ||= 'simple_template' if ( $R->{page}->{_simple_} );
+    my $template_key  = $R->{page}{_template_key_};
+    $template_key   ||= 'simple_template' if ( $R->{page}{_simple_} );
     $template_key   ||= 'main_template';
-    my $db_template_name = $R->{page}->{_template_name_} || 
+    my $db_template_name = $R->{page}{_template_name_} || 
                            $R->{theme}->property_value( $template_key );
     my ( $template_pkg, $template_name ) = $R->site_template->parse_name( $db_template_name );
     unless ( $template_pkg and $template_name ) {
@@ -65,9 +65,9 @@ sub handler {
     $R->{main_template_vars} ||= {};
 
     return $R->template->handler( {}, 
-                                  { %{ $R->{main_template_vars} }, 
-                                    page => $R->{page} }, 
-                                  { db      => $template_name, 
+                                  { %{ $R->{main_template_vars} },
+                                    page => $R->{page} },
+                                  { db      => $template_name,
                                     package => $template_pkg } );
 }
 
@@ -106,7 +106,7 @@ B<complete filename> in the $R-E<gt>{page}-E<gt>{send_file} key.
 A content author can set a main template to use for the generated
 content by setting:
 
- $R->{page}->{_template_name_}
+ $R->{page}{_template_name_}
 
 to the name of the template to use. (This, and all templates named
 here, should be found in the 'base_theme' package.)
@@ -118,11 +118,11 @@ created a 'spooky_template' and implemented it in multiple
 themes. Even though you as an author do not know what theme will be
 used, you can still pick the right template by setting:
 
- $R->{page}->{_template_key_}
+ $R->{page}{_template_key_}
 
 And to use the 'simple' template, the author should set:
 
- $R->{page}->{_simple_}
+ $R->{page}{_simple_}
 
 to a true value. The default 'simple' template is 'base_simple',
 although you can set its name under the C<template_names> key of your
@@ -130,7 +130,7 @@ server configuration.
 
 Finally, the author can also set:
 
- $R->{page}->{_no_template_}
+ $R->{page}{_no_template_}
 
 to display the content without a template at all.
 
@@ -140,12 +140,12 @@ Any content handler can send information to be placed directly onto
 the main template by setting information using the
 $R-E<gt>{main_template_vars} hashref. For instance:
 
- $R->{main_template_vars}->{current_weather} = 'Rainy and cold';
+ $R->{main_template_vars}{current_weather} = 'Rainy and cold';
 
 would set the 'current_weather' template variable for display on the
 main template and B<not> on any of the content handlers.
 
-Note that while this sounds useful (and it can be), you'll probably
+Note that while this sounds useful (and it can be), you will probably
 use it only very rarely. The 'boxes' concept is more comprehensive and
 full-featured and will almost certainly do what you need.
 

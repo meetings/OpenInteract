@@ -1,15 +1,16 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.9 2001/08/28 22:32:54 lachoy Exp $
+# $Id: Provider.pm,v 1.16 2001/10/08 20:39:04 lachoy Exp $
 
 use strict;
 use Data::Dumper       qw( Dumper );
 use Digest::MD5        qw();
+use File::Spec         qw();
 use Template::Provider;
 
 @OpenInteract::Template::Provider::ISA      = qw( Template::Provider );
 $OpenInteract::Template::Provider::VERSION  = '1.2';
-$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
@@ -34,20 +35,24 @@ use constant STAT   => 5;
 # This should return a two-item list: the first is the template to be
 # processed, the second is an error (if any). $name is a simple name
 # of a template, which in our case is often of the form
-# 'package::template_name'. 
+# 'package::template_name'.
 
 sub fetch {
 	my ( $self, $text ) = @_;
     my $R = OpenInteract::Request->instance;
 
-	my ( $name, $compile_name );
+	my ( $name );
 
-	# if reference, then get a unique name to cache by
+	# if scalar or glob reference, then get a unique name to cache by
 
 	if ( ref( $text ) eq 'SCALAR' ) {
-		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "anonymous template passed in:\n$text" );
+		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "anonymous template passed in" );
 		$name = $self->_get_anon_name( $text );
 	}
+    elsif ( ref( $text ) eq 'GLOB' ) {
+		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "GLOB passed in to fetch" );
+        $name = $self->_get_anon_name( $text );
+    }
 
     # Otherwise, it's a 'package::template' name or a unique filename
     # found in '$WEBSITE_DIR/template', both of which are handled in
@@ -55,7 +60,8 @@ sub fetch {
     # any invalid characters (e.g., '../../../etc/passwd')
 
     else {
-        $R->DEBUG && $R->scrib( DEBUG_LEVEL," info passed in is scalar; will check file system or database for ($text)" );
+        $R->DEBUG && $R->scrib( DEBUG_LEVEL, "info passed in is site filename or package::template;",
+                                             "will check file system or database for ($text)" );
         $name = $text;
         undef $text;
         eval { $self->_validate_template_name( $name ) };
@@ -66,16 +72,17 @@ sub fetch {
     # unique filename for this template
 
     # Generally we keep the compile name the same as the name passed
-    # in, although if necessary we might prepend the server name so we
-    # can keep these unique among different sites running in the same
-    # modperl process
+    # in, (replacing '::' with '-') although if necessary we might
+    # prepend the server name so we can keep these unique among
+    # different sites running in the same modperl process.
 
     my ( $compile_file );
 
 	if ( $self->{COMPILE_DIR} ) {
-        $compile_name ||= $name;
 		my $ext = $self->{COMPILE_EXT} || '.ttc';
-		$compile_file = catfile( $self->{COMPILE_DIR}, $compile_name . $ext );
+        my $compile_name = $name;
+        $compile_name =~ s/::/-/g;
+		$compile_file = File::Spec->catfile( $self->{COMPILE_DIR}, $compile_name . $ext );
         $R->DEBUG && $R->scrib( DEBUG_LEVEL, "compiled output filename: ($compile_file)" );
 	}
 
@@ -83,8 +90,8 @@ sub fetch {
 
 	# caching disabled (cache size is 0) so load and compile but don't cache
 
-	if ( defined $self->{SIZE} and ! $self->{SIZE} ) {
-		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [nocache]" );
+	if ( $self->{SIZE} == 0 ) {
+		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [caching disabled]" );
 		( $data, $error ) = $self->_load( $name, $text );
 		( $data, $error ) = $self->_compile( $data, $compile_file ) unless ( $error );
 		$data = $data->{data}                                       unless ( $error );
@@ -93,7 +100,7 @@ sub fetch {
 	# cached entry exists, so refresh slot and extract data
 
     elsif ( $name and ( my $cache_slot = $self->{LOOKUP}{ $name } ) ) {
-		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [cached: $self->{SIZE}]" );
+		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [cached (limit: $self->{SIZE})]" );
 		( $data, $error ) = $self->_refresh( $cache_slot );
 		$data = $cache_slot->[ DATA ] unless ( $error );
 	}
@@ -101,7 +108,7 @@ sub fetch {
 	# nothing in cache so try to load, compile and cache
 
     else {
-		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [uncached: $self->{SIZE}]" );
+		$R->DEBUG && $R->scrib( DEBUG_LEVEL, "fetch( $name ) [uncached (limit: $self->{SIZE})]" );
 		( $data, $error ) = $self->_load( $name, $text );
 		( $data, $error ) = $self->_compile( $data, $compile_file ) unless ( $error );
 		$data = $self->_store( $name, $data )                       unless ( $error );
@@ -116,20 +123,18 @@ sub fetch {
 
 # From Template::Provider -- here's what the hashref includes:
 #
-#   name    filename or $extra, if provided, or 'input text', etc.
+#   name    filename or $content, if provided, or 'input text', etc.
 #   text    template text
 #   time    modification time of file, or current time for handles/strings
 #           (we also use this for the 'last_update' field of an SPOPS object)
-#   load    time file/object was loaded (now!)  
+#   load    time file/object was loaded (now!)
 #
 # And we add (for our files/SPOPS objects):
 #
 #   oi_type The type of template in OpenInteract (see the 'OI_TYPE' constants)
 
-# TODO: Set all scrib levels to '2' after testing done
-
 sub _load {
-    my ( $self, $name, $extra ) = @_;
+    my ( $self, $name, $content ) = @_;
 
     my $R = OpenInteract::Request->instance;
 	$R->DEBUG && $R->scrib( DEBUG_LEVEL, "_load(@_[1 .. $#_])\n" );
@@ -138,7 +143,8 @@ sub _load {
     # safely. Otherwise return an error. We might modify this in the
     # future to not even check TOLERANT -- if it's not defined we
     # don't want anything to do with it, and nobody else should either
-    # (NYAH!)
+    # (NYAH!). Note that $name should be defined even if we're doing a
+    # scalar ref or glob template
 
     unless ( defined $name ) {
         if ( $self->{TOLERANT} ) {
@@ -155,14 +161,22 @@ sub _load {
     # passed to and have it deal with references properly, and then
     # propogate that reference through to processing, etc.
 
-    if ( ref( $extra ) eq 'SCALAR' ) {
+    if ( ref( $content ) eq 'SCALAR' ) {
         $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Nothing to load since template is scalar ref." );
         return ({ 'name' => $name,
-                  'text' => $$extra,
+                  'text' => $$content,
                   'time' => time,
                   'load' => 0 }, undef );
     }
 
+    if ( ref( $content ) eq 'GLOB' ) {
+        $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Template is glob (file) ref, so read in" );
+        local $/ = undef;
+        return ({ 'name' => 'file handle',
+                  'text' => <$content>,
+                  'time' => time,
+                  'load' => 0 }, undef );
+    }
     my ( $tmpl_package, $tmpl_name ) = $R->site_template->parse_name( $name );
 
     # If this isn't a 'package::name' name, see if it's a template in
@@ -172,13 +186,18 @@ sub _load {
     unless ( $tmpl_package and $tmpl_name ) {
         my $website_dir = $R->CONFIG->get_dir( 'template' );
         my $tmpl_ext    = ( defined $R->CONFIG->{template_ext} )
-                            ? $R->CONFIG->{template_ext} 
+                            ? $R->CONFIG->{template_ext}
                             : DEFAULT_TEMPLATE_EXTENSION;
-        my $common_template_name = "$website_dir/$name.$tmpl_ext";
-        $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Test common name: ($common_template_name)" );
-        if ( -f $common_template_name ) {
+        my $common_template_name     = "$website_dir/$name";
+        my $common_template_name_ext = "$common_template_name.$tmpl_ext";
+        $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Test filenames: ($common_template_name)",
+                                             "($common_template_name_ext)" );
+        my ( $use_filename );
+        $use_filename   = $common_template_name     if ( -f $common_template_name );
+        $use_filename ||= $common_template_name_ext if ( -f $common_template_name_ext );
+        if ( $use_filename ) {
             $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Template ($name) is a common template in the website." );
-            my $data = eval { $self->_fetch_oi_file( $common_template_name ) };
+            my $data = eval { $self->_fetch_oi_file( $use_filename ) };
             if ( $@ ) { return ( $@, Template::Constants::STATUS_ERROR ) }
             $data->{oi_type} = OI_TYPE_COMMON_FILE;
             return ( $data, undef );
@@ -286,7 +305,7 @@ sub _refresh {
     # will be reloaded.
 
     my $do_reload = 0;
-    my $max_cache_time = $R->CONFIG->{cache}->{template}->{expire} 
+    my $max_cache_time = $R->CONFIG->{cache}{template}{expire}
                          || DEFAULT_MAX_CACHE_TIME;
 	if ( ( $slot->[ DATA ]->{'time'} - time ) > $max_cache_time ) {
         my $template_type = $slot->[ DATA ]->{oi_type};
@@ -355,6 +374,7 @@ sub _validate_template_name {
     return 1;
 }
 
+
 # The name should be package::template
 
 sub _fetch_spops_template {
@@ -365,7 +385,7 @@ sub _fetch_spops_template {
 
   unless ( $tmpl_package and $tmpl_name ) {
       $R->error->set({ user_msg   => "Cannot retrieve template due to improper name",
-                       system_msg => "Bad name: ($tmpl_package) ($tmpl_name)" });
+                       system_msg => "Bad name: (Package: $tmpl_package) (Name: $tmpl_name)" });
       die $OpenInteract::Error::user_msg;
   }
 
@@ -380,6 +400,7 @@ sub _fetch_spops_template {
   $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Template retrieved: ", Dumper( $tmpl_obj ) );
   return $tmpl_obj;
 }
+
 
 sub _fetch_spops_update_time {
     my ( $self, $full_template_name ) = @_;
@@ -427,7 +448,7 @@ sub _find_package_template_filename {
                                "($template_name) from package ($package)" );
 
     my $repository = $R->repository->fetch(
-                                undef, { directory => $R->CONFIG->{dir}->{base} } );
+                                undef, { directory => $R->CONFIG->{dir}{base} } );
     my $info = $repository->fetch_package_by_name({ name => $package });
     if ( $info ) {
         my $template_ext = $R->CONFIG->{template_ext} || DEFAULT_TEMPLATE_EXTENSION;
@@ -513,7 +534,7 @@ Returns a two-element list: the first is a compiled template, the
 second is an error message. (Of course, if there is no error the
 second item will be undefined.)
 
-B<_load( $name, $extra )>
+B<_load( $name, $content )>
 
 Loads the template content, returning a two-element list. The first
 item in the list is the TT hashref, the second is an error message.
@@ -525,10 +546,16 @@ We try four ways to retrieve a template, in this order:
 =item 1.
 
 B<scalar reference>: If the template is a scalar reference it does not
-need to be retrieved, so we just put C<$extra> in the TT hashref
+need to be retrieved, so we just put C<$content> in the TT hashref
 structure as the data to process and return it.
 
 =item 2.
+
+B<glob reference>: If the template is a glob reference we treat it as
+a filehandle and read all data from C<$content> in the TT hashref
+structure as the data to process as return it.
+
+=item 3.
 
 B<generic website template>: A website can store 'generic' templates,
 which means they are not part of any package. These are stored in the
@@ -545,22 +572,22 @@ C<$template_name> since C<$name> is in the format
 
 =over 4
 
-=item 3.
+=item 4.
 
 B<filesystem package template>: Templates can be stored in the
 filesystem under C<$package>. This checks to see if the template name
 in the package using C<$template_name>. (See
 C<_find_package_template_filename()> for how this is done.)
 
-=item 4.
+=item 5.
 
 B<database package template>: Try to fetch the SPOPS object with
 C<$package> and C<$template_name>
 
 =back
 
-Note that the order of B<3> and B<4> above might be configurable in
-the future.
+Note that the order of B<4> and B<5> above are configurable from the
+server configuration, using the C<{template_info}{source}> key.
 
 B<_refresh( $cache_slot )>
 
@@ -640,5 +667,7 @@ it under the same terms as Perl itself.
 Chris Winters <chris@cwinters.com>
 
 Robert McArthur <mcarthur@dstc.edu.au>
+
+Authors of Slashcode <http://www.slashcode.com/>
 
 =cut

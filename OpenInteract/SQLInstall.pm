@@ -1,14 +1,15 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.14 2001/08/21 12:41:23 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.16 2001/10/05 12:52:17 lachoy Exp $
 
 use strict;
+use Class::Date;
 use Data::Dumper           qw( Dumper );
 use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -84,7 +85,7 @@ sub apply {
     elsif ( ref $action eq 'CODE' ) {
         $status = $action->( $class, { package => $p->{package},
                                        db      => $p->{db},
-                                       config  => $p->{config} } );
+                                       config  => $p->{config} });
     }
     else {
         my $msg = 'Action is not of expected type, so nothing run.';
@@ -106,9 +107,9 @@ sub apply {
 sub create_structure {
     my ( $class, $p ) = @_;
     unless ( ref $p->{table_file_list} eq 'ARRAY' ) {
-        return [ { type => 'structure',
-                   ok   => 0,
-                   msg  => 'No files given from which to read structures!' } ];
+        return [{ type => 'structure',
+                  ok   => 0,
+                  msg  => 'No files given from which to read structures!' }];
     }
 
     my $pkg_info = $p->{package};
@@ -128,10 +129,10 @@ sub create_structure {
             DEBUG && _w( 1, " -- $this_status->{msg}" );
         }
         else {
-            $table_sql = $class->sql_modify_increment( $driver_name, $table_sql );
-            $table_sql = $class->sql_modify_increment_type( $driver_name, $table_sql );
-            $table_sql = $class->sql_modify_usertype( $driver_name, $table_sql );
-            $table_sql = $class->sql_modify_grouptype( $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_increment( $p->{config}, $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_increment_type( $p->{config}, $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_usertype( $p->{config}, $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_grouptype( $p->{config}, $driver_name, $table_sql );
             eval { $p->{db}->do( $table_sql ) };
             if ( $@ ) {
                 $this_status->{ok} = 0;
@@ -254,7 +255,7 @@ sub process_data_file {
     # item of data
 
     elsif ( my $object_class = $action->{spops_class} ) {
-        $object_class = $class->sql_class_to_website( $p->{config}->{website_name}, $object_class );
+        $object_class = $class->sql_class_to_website( $p->{config}{website_name}, $object_class );
         DEBUG && _w( 1, "Reading data for class $object_class" );
         my $fields = $action->{field_order};
         my $num_fields = scalar @{ $fields };
@@ -310,8 +311,8 @@ sub read_db_handlers {
     my %handlers = %{ $class . '::HANDLERS' };
     my $db_handlers = {};
     foreach my $action ( keys %handlers ) {
-        $db_handlers->{ $action } = $handlers{ $action }->{ $driver_name } ||
-                                    $handlers{ $action }->{'_default_'};
+        $db_handlers->{ $action } = $handlers{ $action }{ $driver_name } ||
+                                    $handlers{ $action }{'_default_'};
     }
     return $db_handlers;
 }
@@ -329,7 +330,7 @@ sub transform_data {
     # Setup the field order as a hash for the implementors
 
     for ( my $i = 0; $i < scalar @{ $action->{field_order} }; $i++ ) {
-        $p->{field_order}->{ $action->{field_order}->[ $i ] } = $i;
+        $p->{field_order}{ $action->{field_order}->[ $i ] } = $i;
     }
 
     # If an action specifies to change a field TO a particular website
@@ -351,6 +352,13 @@ sub transform_data {
         $data_list = $class->_transform_default_to_id( $action, $data_list, $p );
     }
 
+    # If an action specifies set the value of a particular field to a
+    # date string representing right now.
+
+    if ( ref $action->{transform_to_now} eq 'ARRAY' ) {
+        $data_list = $class->_transform_to_now( $action, $data_list, $p );
+    }
+
     return $data_list;
 }
 
@@ -358,10 +366,10 @@ sub transform_data {
 
 sub _transform_class_to_website {
     my ( $class, $action, $data_list, $p ) = @_;
-    my $website_name = $p->{config}->{website_name};
+    my $website_name = $p->{config}{website_name};
     foreach my $data ( @{ $data_list } ) {
         foreach my $website_field ( @{ $action->{transform_class_to_website} } ) {
-            my $idx = $p->{field_order}->{ $website_field };
+            my $idx = $p->{field_order}{ $website_field };
             $data->[ $idx ] =  $class->sql_class_to_website( $website_name, $data->[ $idx ] );
         }
     }
@@ -372,10 +380,10 @@ sub _transform_class_to_website {
 
 sub _transform_class_to_oi {
     my ( $class, $action, $data_list, $p ) = @_;
-    my $website_name = $p->{config}->{website_name};
+    my $website_name = $p->{config}{website_name};
     foreach my $data ( @{ $data_list } ) {
         foreach my $website_field ( @{ $action->{transform_class_to_oi} } ) {
-            my $idx = $p->{field_order}->{ $website_field };
+            my $idx = $p->{field_order}{ $website_field };
             $data->[ $idx ] = $class->sql_class_to_oi( $website_name, $data->[ $idx ] );
         }
     }
@@ -388,12 +396,27 @@ sub _transform_default_to_id {
     my $CONFIG = OpenInteract::Request->instance->CONFIG;
     foreach my $data ( @{ $data_list } ) {
         foreach my $field ( @{ $action->{transform_default_to_id} } ) {
-            my $idx = $p->{field_order}->{ $field };
+            my $idx = $p->{field_order}{ $field };
             $data->[ $idx ] =  $class->sql_default_to_id( $CONFIG->{default_objects}, $data->[ $idx ] );
         }
     }
     return $data_list;
 }
+
+
+sub _transform_to_now {
+    my ( $class, $action, $data_list, $p ) = @_;
+    my $now_string = Class::Date->now->strftime( '%Y-%m-%d %H:%M:%S' );
+    foreach my $data ( @{ $data_list } ) {
+        foreach my $field ( @{ $action->{transform_to_now} } ) {
+            my $idx = $p->{field_order}{ $field };
+            $data->[ $idx ] = $now_string;
+        }
+    }
+    return $data_list;
+}
+
+
 
 
 ########################################
@@ -439,7 +462,7 @@ sub sql_class_to_oi {
 # assigning every other db driver to 'int not null'...
 
 sub sql_modify_increment {
-    my ( $class, $driver_name, @sql ) = @_;
+    my ( $class, $config, $driver_name, @sql ) = @_;
     foreach ( @sql ) {
         if ( $driver_name eq 'mysql' ) {
             s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
@@ -459,7 +482,7 @@ sub sql_modify_increment {
 # NULL/NOT NULL are not handled here
 
 sub sql_modify_increment_type {
-    my ( $class, $driver_name, @to_change ) = @_;
+    my ( $class, $config, $driver_name, @to_change ) = @_;
     foreach ( @to_change ) {
         if ( $driver_name eq 'mysql' ) {
             s/%%INCREMENT_TYPE%%/INT/g;
@@ -480,9 +503,8 @@ sub sql_modify_increment_type {
 # integers.
 
 sub sql_modify_usertype {
-    my ( $class, $driver_name, @to_change ) = @_;
-    my $CONFIG = OpenInteract::Request->instance->CONFIG;
-    my $type = $CONFIG->{id}{user_type} || 'int';
+    my ( $class, $config, $driver_name, @to_change ) = @_;
+    my $type = $config->{id}{user_type} || 'int';
     foreach ( @to_change ) {
         if ( $type eq 'char' ) {
             s/%%USERID_TYPE%%/VARCHAR(25)/g;
@@ -496,9 +518,8 @@ sub sql_modify_usertype {
 
 
 sub sql_modify_grouptype {
-    my ( $class, $driver_name, @to_change ) = @_;
-    my $CONFIG = OpenInteract::Request->instance->CONFIG;
-    my $type = $CONFIG->{id}{group_type} || 'int';
+    my ( $class, $config, $driver_name, @to_change ) = @_;
+    my $type = $config->{id}{group_type} || 'int';
     foreach ( @to_change ) {
         if ( $type eq 'char' ) {
             s/%%GROUPID_TYPE%%/VARCHAR(25)/g;
@@ -673,7 +694,7 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
 One of the difficulties with developing an application that can
 potentially work with so many different databases is that it needs to
 work with so many different databases. Many of the differences among
-databases are dealt with by the amazing L<DBI> module, but enough
+databases are dealt with by the amazing L<DBI|DBI> module, but enough
 remain to warrant some thought.
 
 This module serves two audiences:
@@ -730,7 +751,7 @@ routines to accomplish this work.
 
 B<require_package_installer( $package_object )>
 
-Given a package object, finds and does a L<require> on the library
+Given a package object, finds and does a C<require> on the library
 used to install SQL for this package.
 
 B<apply( \%params )>
@@ -847,6 +868,30 @@ transform_class_to_website (\@)
 Specify a list of fields that should have the value transformed to
 replace 'OpenInteract' with the website name
 
+=item *
+
+transform_class_to_oi (\@)
+
+Specify a list of fields that should have the value transformed to
+replace the current website namespace with 'OpenInteract'.
+
+=item *
+
+transform_default_to_id (\@)
+
+Specify a list of fields for which we need to use the value specified
+lookup as a lookup in the 'default_objects' server configuration
+key. This is often used when specifying security -- if you are using
+LDAP, then your group ID is soemething like 'site admin' rather than
+'3', so you want to ensure that the security is set appropriately.
+
+=item *
+
+transform_to_now (\@)
+
+Specify a list of fields for which we need to set the value to a date
+string representing right now.
+
 =back
 
 B<read_perl_file( $filename )>
@@ -936,15 +981,15 @@ security data:
   $security = [
                 { spops_class => 'OpenInteract::Security',
                   field_order => [ qw/ class object_id scope scope_id security_level / ],
-                  transform_class_to_website => [ qw/ class / ] },
+                  transform_default_to_id    => [ 'scope_id' ],
+                  transform_class_to_website => [ 'class'] },
                 [ 'OpenInteract::Group', 1, 'w', 'world', 1 ],
                 [ 'OpenInteract::Group', 2, 'w', 'world', 4 ],
-                [ 'OpenInteract::Group', 2, 'g', '2', 4  ],
+                [ 'OpenInteract::Group', 2, 'g', 'site_admin_group', 8 ],
                 [ 'OpenInteract::Group', 3, 'w', 'world', 4 ],
-                [ 'OpenInteract::Group', 3, 'g', '3', 8 ],
-                [ 'OpenInteract::Group', 2, 'g', '3', 8 ],
+                [ 'OpenInteract::Group', 3, 'g', 'site_admin_group', 8 ],
                 [ 'OpenInteract::Handler::Group', 0, 'w', 'world', 4 ],
-                [ 'OpenInteract::Handler::Group', 0, 'g', '3', 8 ]
+                [ 'OpenInteract::Handler::Group', 0, 'g', 'site_admin_group', 8 ]
   ];
 
 So these steps would look like:
@@ -954,21 +999,23 @@ So these steps would look like:
  $object_class =~ s/OpenInteract/$website_name/;
  my %field_num = { class => 0, object_id => 1, scope => 2,
                    scope_id => 3, security_level => 4 };
+ my $defaults = $R->CONFIG->{default_objects};
  foreach my $row ( @{ $data_rows } ) {
    my $object = $object_class->new();
-   $object->{class}    = $row->[ $field_num{class} ];
-   $object->{oid}      = $row->[ $field_num{object_id} ];
-   $object->{scope}    = $row->[ $field_num{scope} ];
-   $object->{scope_id} = $row->[ $field_num{scope_id} ];
-   $object->{level}    = $row->[ $field_num{security_level} ];
+   $object->{class}     = $row->[ $field_num{class} ];
+   $object->{object_id} = $row->[ $field_num{object_id} ];
+   $object->{scope}     = $row->[ $field_num{scope} ];
+   my $scope_id         = $row->[ $field_num{scope_id} ];
+   $object->{scope_id}  = $defaults->{ $scope_id } || $scope_id;
+   $object->{level}     = $row->[ $field_num{security_level} ];
    $object->{class} =~ s/OpenInteract/$website_name/;
-   $object->save({ is_add => 1, skip_security => 1,
-                   skip_log => 1, skip_cache => 1 });
+   $object->save({ is_add   => 1, skip_security => 1,
+                   skip_log => 1, skip_cache    => 1 });
  }
 
 There are currently just a few behaviors you can set to transform the
-data before it gets saved, but the interface is there to do just about
-anything you can imagine.
+data before it gets saved (see C<transform_data()> above), but the
+interface is there to do just about anything you can imagine.
 
 =head2 SQL Processing
 
@@ -977,8 +1024,8 @@ similar to those performed when you are inserting objects. The only
 difference is that you need to specify a little more. Here is an
 example:
 
-  $data_link = [ { sql_type => 'insert',
-                   sql_table => 'sys_group_user',
+  $data_link = [ { sql_type    => 'insert',
+                   sql_table   => 'sys_group_user',
                    field_order => [ qw/ group_id user_id / ] },
                  [ 1, 1 ]
   ];
@@ -989,10 +1036,11 @@ So we specify the action ('insert'), the table to operate on
 data.
 
 You are also able to specify the data types. Most of the time this
-should not be necessary: if the database driver (e.g., L<DBD::mysql>)
-supports it, the L<SPOPS::SQLInterface> file has routines to discover
-data types in a table and do the right thing with regards to quoting
-values.
+should not be necessary: if the database driver (e.g.,
+L<DBD::mysql|DBD::mysql>) supports it, the
+L<SPOPS::SQLInterface|SPOPS::SQLInterface> file has routines to
+discover data types in a table and do the right thing with regards to
+quoting values.
 
 However, if you do find it necessary you can use the following simple
 type -> DBI type mappings:
@@ -1110,7 +1158,9 @@ since this is getting fairly hefty...
 
 =head1 SEE ALSO
 
-L<OpenInteract::Package>, L<DBI>
+L<OpenInteract::Package|OpenInteract::Package>
+
+L<DBI|DBI>
 
 =head1 COPYRIGHT
 

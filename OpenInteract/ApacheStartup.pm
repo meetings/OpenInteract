@@ -1,14 +1,15 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.13 2001/08/18 19:14:22 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.16 2001/10/08 21:34:41 lachoy Exp $
 
 use strict;
+use OpenInteract::DBI;
 use OpenInteract::Startup;
 
 use constant DEBUG => 0;
 
 $OpenInteract::ApacheStartup::VERSION   = '1.07';
-$OpenInteract::ApacheStartup::Revision  = substr(q$Revision: 1.13 $, 10);
+$OpenInteract::ApacheStartup::Revision  = substr(q$Revision: 1.16 $, 10);
 
 # Create a handler to put the X-Forwarded-For header into the IP
 # address -- thanks Stas! (perl.apache.org/guide/)
@@ -62,7 +63,7 @@ sub initialize {
     unless ( $C ) { die "No configuration object returned from initialization!\n"; }
     DEBUG && _w( 1, " --main initialization completed ok." );
 
-    OpenInteract::Startup->require_module({ class => $C->{session_info}->{class} });
+    OpenInteract::Startup->require_module({ class => $C->{session_info}{class} });
     DEBUG && _w( 1, " -- require the session class ok" );
 
     # Figure out how to do this more cleanly in the near future -- maybe
@@ -95,9 +96,15 @@ sub initialize {
 
     # Setup caching info for use in the child init handler below
 
-    my $cache_info      = $C->{cache_info}->{data};
+    my $cache_info      = $C->{cache_info}{data};
     my $cache_class     = $cache_info->{class};
-    my $ipc_cache_class = $C->{cache}->{ipc}->{class};
+    my $ipc_cache_class = $C->{cache}{ipc}{class};
+
+    # If we're told, cleanup the Template Toolkit compile directory
+
+    if ( $C->{template_info}{compile_cleanup} ) {
+        $class->cleanup_tt_cache( $C->get_dir( 'cache_tt' ) );
+    }
 
     # Do these initializations every time, unless we're on Win32 (they
     # have just call the routine to call something else...)
@@ -166,7 +173,7 @@ sub initialize {
 
             # Initialize all the SPOPS object classes
 
-            OpenInteract::Startup->initialize_spops({ config => $C, 
+            OpenInteract::Startup->initialize_spops({ config => $C,
                                                       class  => $init_class });
 
             # Create a list of error handlers for our website
@@ -179,6 +186,21 @@ sub initialize {
     }
 
 }
+
+
+sub cleanup_tt_cache {
+    my ( $class, $dir ) = @_;
+    eval { opendir( TTC, $dir ) || die $! };
+    if ( $@ ) {
+        _w( 0, "Cannot open TT cache dir ($dir) for cleanup: $!" );
+        return;
+    }
+    my @cache_files = grep { -f "$dir/$_" } readdir( TTC );
+    closedir( TTC );
+    for ( @cache_files ) { unlink( "$dir/$_" ) || _w( 0, "Cannot remove ($dir/$_): $!" ) }
+    return;
+}
+
 
 sub _w {
     return unless ( DEBUG >= shift );

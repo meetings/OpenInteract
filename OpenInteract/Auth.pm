@@ -1,16 +1,16 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.6 2001/08/29 13:22:57 lachoy Exp $
+# $Id: Auth.pm,v 1.10 2001/10/11 03:55:39 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
-# $R->{auth}->{logged_in} is true then $R->{auth}->{user} will be a
+# $R->{auth}{logged_in} is true then $R->{auth}{user} will be a
 # user object.
 
 sub user {
@@ -24,7 +24,7 @@ sub user {
         # SEC_LEVEL_NONE to the record)
 
         $R->{auth}{user} = eval { $R->user->fetch( $uid,
-                                                     { skip_security => 1 } ) };
+                                                   { skip_security => 1 } ) };
 
         # If there's a failure fetching the user, we need to ensure that
         # this user_id is not passed back to us again so we don't keep
@@ -43,8 +43,8 @@ sub user {
 
         $R->{auth}{logged_in} = 1;
 
-        $R->DEBUG && $R->scrib( 2, "User: ", Dumper( $R->{auth}->{user} ) );
-        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}->{user}->{login_name}" );
+        $R->DEBUG && $R->scrib( 2, "User: ", Dumper( $R->{auth}{user} ) );
+        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}{user}{login_name}" );
 
         # If there's a removal date, then this is the user's first
         # login
@@ -82,8 +82,11 @@ sub user {
     }
 
     my $login_name = $R->apache->param( $login_field );
-    return undef unless ( $login_name );
-    $R->DEBUG && $R->scrib( 1, "Found login name from form: <<$login_name>>" );
+    unless ( $login_name ) {
+        $R->{auth}{user} = $class->create_nologin_user();
+        return undef;
+    }
+    $R->DEBUG && $R->scrib( 1, "Found login name from form: ($login_name)" );
     my $user = eval { $R->user->fetch_by_login_name( $login_name,
                                                      { return_single => 1,
                                                        skip_security => 1 } ) };
@@ -102,7 +105,7 @@ sub user {
     # Check the password
 
     my $password   = $R->apache->param( $password_field );
-    $R->DEBUG && $R->scrib( 5, "Password entered: <<$password>>" );
+    $R->DEBUG && $R->scrib( 5, "Password entered: ($password)" );
     unless ( $user->check_password( $password ) ) {
         $R->scrib( 0, "Password check for ($login_name) failed. Throwing auth error" );
         $R->throw({ code  => 402,
@@ -118,15 +121,16 @@ sub user {
     # closes) unless the user clicked the 'Remember Me' checkbox
 
     unless ( $R->apache->param( $remember_field ) ) {
-        $R->{session}{expiration} = '';
+        $R->{session}{expiration} = undef;
     }
     $R->{auth}{logged_in} = 1;
     $R->{session}{user_id} = $user->id;
     $R->{auth}{user} = $user;
 
     if ( my $custom_class = $CONFIG->{login}{custom_login_handler} ) {
-        $R->scrib( 1, "Custom login handler being used: ($custom_class)" );
-        eval { $custom_class->handler };
+        my $custom_method = $CONFIG->{login}{custom_login_handler} || 'handler';
+        $R->scrib( 1, "Custom login handler/method being used: ($custom_class) ($custom_method)" );
+        eval { $custom_class->$custom_method() };
         if ( $@ ) {
             $R->scrib( 0, "Custom login handler died with: $@" );
             $R->{auth}{logged_in} = 0;
@@ -138,6 +142,13 @@ sub user {
     return undef;
 }
 
+
+sub create_nologin_user {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return $R->user->new({ login_name => 'anonymous', first_name => 'Anonymous',
+                           last_name  => 'User',      user_id    => 99999 });
+}
 
 # If the user is logged in, retrieve the groups he/she/it belongs to
 
@@ -205,11 +216,15 @@ password.
 If either of these is successful, then we create a user object and put
 it into:
 
- $R->{auth}->{user}
+ $R->{auth}{user}
 
-where it can be retrieved by all other handlers, modules, etc.
+where it can be retrieved by all other handlers, modules,
+etc. Otherwise we create a 'transient' (not serialized) user object
+for every request via the C<create_nologin_user()> method, which you
+can override by subclassing this class.
 
-The class also creates an arrayref of groups the user belongs to.
+The class also creates an arrayref of groups the user belongs to as
+long as the user is a valid one.
 
 =head1 METHODS
 
@@ -221,11 +236,11 @@ B<user()>
 
 Creates a user object by whatever means possible and puts it into:
 
- $R->{auth}->{user}
+ $R->{auth}{user}
 
 Note that we also set:
 
- $R->{auth}->{logged_in}
+ $R->{auth}{logged_in}
 
 which should be used to see whether the user is logged in or not. We
 will be changing the interface slightly so that you can no longer just
@@ -262,7 +277,7 @@ B<group()>
 If a user object has been created, this fetches the groups the user
 object belongs to and puts the arrayref of groups into:
 
- $R->{auth}->{group}
+ $R->{auth}{group}
 
 =head1 TO DO
 

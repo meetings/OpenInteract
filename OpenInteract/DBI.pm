@@ -1,6 +1,6 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.8 2001/08/13 03:48:08 lachoy Exp $
+# $Id: DBI.pm,v 1.9 2001/10/07 14:21:41 lachoy Exp $
 
 use strict;
 use Carp         qw( croak );
@@ -8,7 +8,7 @@ use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -62,6 +62,8 @@ sub connect {
     $db->{LongReadLen} = $db_info->{long_read_len} || DEFAULT_READ_LEN;
     $db->{LongTruncOk} = $db_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
 
+    $db->trace( $db_info->{trace_level} ) if ( $db_info->{trace_level} );
+
     # Allow callback to do something with the database handle along with
     # the parameters used to connect to it.
 
@@ -108,11 +110,11 @@ databases. When users of a certain name login (say, 'devel'), you can
 change the 'db_name' key of the database connection info hashref from
 'webdb' to 'webdb-devel'.
 
-Note that this should work flawlessly with Apache::DBI, and if you are
-using this on a different persistent Perl platform (say, PerlEx) then
-this module gives you a single location from which to retrieve
-database handles -- this makes using the BEGIN/END tricks ActiveState
-recommends in their FAQ pretty trivial.
+Note that this should work flawlessly with L<Apache::DBI|Apache::DBI>,
+and if you are using this on a different persistent Perl platform
+(say, PerlEx) then this module gives you a single location from which
+to retrieve database handles -- this makes using the BEGIN/END tricks
+ActiveState recommends in their FAQ pretty trivial.
 
 =head1 METHODS
 
@@ -120,25 +122,26 @@ B<connect( \%connnect_info, \%params )>
 
 Usage:
 
+ my $connect_name = 'main';
  my $db = eval { OpenInteract::DBI->connect({
-                    $CONFIG->{db_info} 
-                 }) };
- if ( $@ ) {
-   die "Cannot connect to database! Error found: $@";
- }
+                         $CONFIG->{db_info}{ $connect_name } }) };
+
+ die "Cannot connect to database! Error found: $@" if ( $@ );
  my ( $sth );
  eval {
-  $sth = $db->prepare( 'SELECT blah FROM bleh' );
-  $sth->execute;
+     $sth = $db->prepare( 'SELECT blah FROM bleh' );
+     $sth->execute;
  };
  ...
 
 Returns: A DBI database handle with the following parameters set:
 
- RaiseError: 1
- PrintError: 0
- ChopBlanks: 1
- AutoCommit: 1 (for now...) 
+ RaiseError:  1
+ PrintError:  0
+ ChopBlanks:  1
+ AutoCommit:  1 (for now...)
+ LongReadLen: 32768 (or as set in config)
+ LongTruncOk: 0 (or as set in config)
 
 The first parameter is a hashref of connection information. This
 should include:
@@ -162,7 +165,7 @@ connect to this database. Examples:
  OpenInteract DSN: server=SYBASE;database=web
 
 So the OpenInteract DSN string only includes the database-specific
-items for DBI, the third entry in the colon-separated string.This
+items for DBI, the third entry in the colon-separated string. This
 third item is generally separated by semicolons and usually specifies
 a database name, hostname, packet size, protocol version, etc. See
 your DBD driver for what to do.
@@ -201,6 +204,38 @@ B<db_owner> ($) (optional)
 
 Who owns this database? Only use if your database uses the database
 owner to differentiate different tables.
+
+=item *
+
+B<long_read_len> ($) (optional)
+
+Set the C<LongReadLen> value for the database handle (See L<DBI|DBI>
+for information on what this means.) If not set this defaults to
+32768.
+
+=item *
+
+B<long_trunc_ok> (bool) (optional)
+
+Set the C<LongTruncOk> value for the database handle (See L<DBI|DBI>
+for information on what this means.) If not set this defaults to false.
+
+=item *
+
+B<trace_level> ($) (optional)
+
+Use the L<DBI|DBI> C<trace()> method to output logging information for
+all calls on a database handle. Default is '0', which is no
+tracing. As documented by L<DBI|DBI>, the levels are:
+
+    0 - Trace disabled.
+    1 - Trace DBI method calls returning with results or errors.
+    2 - Trace method entry with parameters and returning with results.
+    3 - As above, adding some high-level information from the driver
+        and some internal information from the DBI.
+    4 - As above, adding more detailed information from the driver.
+        Also includes DBI mutex information when using threaded Perl.
+    5 and above - As above but with more and more obscure information.
 
 =back
 
@@ -276,24 +311,24 @@ they B<are> your callbacks.
 =head1 STRATEGIES
 
 Under mod_perl, you can use the simple connection-pooling module
-L<Apache::DBI>. This module is quite simple -- it overrides the
-C<connect> call for L<DBI>. For each C<connect> call made, it looks at
-the parameters (dsn, username, password and the DBI parameters) to
-determine whether it has connected to this database previously. If so,
-it returns the cached connection. If not, it creates the connection
-and caches it. This happens on a per-httpd-child basis, so if you have
-10 httpd children you will have 10 concurrent connections to the
-database. Easy, right?
+L<Apache::DBI|Apache::DBI>. This module is quite simple -- it
+overrides the C<connect> call for L<DBI|DBI>. For each C<connect> call
+made, it looks at the parameters (dsn, username, password and the DBI
+parameters) to determine whether it has connected to this database
+previously. If so, it returns the cached connection. If not, it
+creates the connection and caches it. This happens on a
+per-httpd-child basis, so if you have 10 httpd children you will have
+10 concurrent connections to the database. Easy, right?
 
 What happens if you are running multiple websites using one httpd
-child? Say you have five websites running on mod_perl process
-group which has the aforementioned 10 children. Since each website
-likely has its own database, you will eventually have C<10 x 5 = 50>
+child? Say you have five websites running on mod_perl process group
+which has the aforementioned 10 children. Since each website likely
+has its own database, you will eventually have C<10 x 5 = 50>
 connections to your database. This can be a bad thing.
 
-To get around this, and assuming that all of these websites
-connect to the database as the same user (which certainly is not a
-given), OpenInteract allows you to specify a single database for
+To get around this, and assuming that all of these websites connect to
+the database as the same user (which certainly is not a given),
+OpenInteract allows you to specify a single database for
 connection. Once the connection is handed out, OpenInteract will
 perform the SQL 'use' command to switch to the correct database.
 
@@ -319,11 +354,11 @@ None known.
 
 =head1 SEE ALSO
 
-L<Apache::DBI>
+L<Apache::DBI|Apache::DBI>
 
-L<DBI> - http://www.symbolstone.org/technology/perl/DBI
+L<DBI|DBI> - http://www.symbolstone.org/technology/perl/DBI
 
-PerlEx - http://www.activestate.com/Products/PerlEx/index.html
+PerlEx - http://www.activestate.com/Products/PerlEx/
 
 =head1 COPYRIGHT
 

@@ -1,18 +1,18 @@
 package OpenInteract::Session::DBI;
 
-# $Id: DBI.pm,v 1.4 2001/08/27 04:39:56 lachoy Exp $
+# $Id: DBI.pm,v 1.5 2001/10/01 22:08:52 lachoy Exp $
 
 use strict;
 use OpenInteract::Session;
 
 @OpenInteract::Session::DBI::ISA     = qw( OpenInteract::Session );
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session { 
     my ( $class, $session_id ) = @_;
     my $R = OpenInteract::Request->instance;
-    my $session_class  = $R->CONFIG->{session_info}->{class};
-    my $session_params = $R->CONFIG->{session_info}->{params} || {};
+    my $session_class  = $R->CONFIG->{session_info}{class};
+    my $session_params = $R->CONFIG->{session_info}{params} || {};
     $session_params->{Handle} = $R->db;
 
     # Detect Apache::Session::MySQL and modify parameters

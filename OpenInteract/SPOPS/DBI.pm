@@ -1,15 +1,16 @@
 package OpenInteract::SPOPS::DBI;
 
-# $Id: DBI.pm,v 1.5 2001/08/12 18:00:19 lachoy Exp $
+# $Id: DBI.pm,v 1.6 2001/10/07 14:26:17 lachoy Exp $
 
 use strict;
 use OpenInteract::SPOPS;
 
 @OpenInteract::SPOPS::DBI::ISA     = qw( OpenInteract::SPOPS );
-$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub global_datasource_handle {
     my ( $self, $connect_key ) = @_;
+    $connect_key ||= $self->CONFIG->{datasource};
     return OpenInteract::Request->instance->db( $connect_key );
 }
 
@@ -41,16 +42,18 @@ OpenInteract::SPOPS::DBI - Common SPOPS::DBI-specific methods for objects
 =head1 DESCRIPTION
 
 This class provides common datasource access methods required by
-L<SPOPS::DBI>.
+L<SPOPS::DBI|SPOPS::DBI>.
 
 =head1 METHODS
 
 B<global_datasource_handle( [ $connect_key ] )>
 
 Returns a DBI handle corresponding to the connection key
-C<$connect_key>. If C<$connect_key> is not given, then the default
-connection key is used. This is specified in the server configuration
-file under the key 'default_connection_db'.
+C<$connect_key>. If C<$connect_key> is not given, then the connection
+key specified for the object class is used. If the object class does
+not have a connection key (which is normal if you are using only one
+database), we use the key specified in the server configuration file
+in 'default_connection_db'.
 
 B<global_db_handle( [ $connect_key ] )>
 
@@ -77,7 +80,7 @@ Nothing known.
 
 =head1 SEE ALSO
 
-L<SPOPS::DBI>
+L<SPOPS::DBI|SPOPS::DBI>
 
 =head1 COPYRIGHT
 

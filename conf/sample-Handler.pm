@@ -1,6 +1,6 @@
 package OpenInteract::Handler::%%UC_FIRST_NAME%%;
 
-# $Id: sample-Handler.pm,v 1.2 2001/05/14 03:16:28 lachoy Exp $
+# $Id: sample-Handler.pm,v 1.3 2001/09/18 22:04:42 lachoy Exp $
 
 # This is a sample handler. It exists only to provide a template for
 # you and some notes on what these configuration variables mean.
@@ -30,7 +30,7 @@ use SPOPS::Secure qw( :level );
 # Use whatever standard you like here -- it's always nice to let CVS
 # deal with it :-)
 
-$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 # This might seem cosmetic but actually the GenericDispatcher will
 # e-mail you if someone tries to call the handler without a method and
@@ -65,25 +65,18 @@ $OpenInteract::Handler::%%UC_FIRST_NAME%%::default_method    = 'listing';
 sub listing {
 
  # These are invoked as class methods so the class is always the first
- # argument
+ # argument; $p is always a hashref (\%p) and always contains at least
+ # 'level', which is the security level GenericDispatcher found for
+ # this method. (If you're not using security then the level will
+ # always be SEC_LEVEL_WRITE.); other handlers and functions can also
+ # call your handler. Any arguments they pass in will be as a hashref.
 
- my $class = shift;
-
- # $p is always a hashref (\%p) and always contains at least 'level',
- # which is the security level GenericDispatcher found for this
- # method. (If you're not using security then the level will always be
- # SEC_LEVEL_WRITE.)
-
-
- # Other handlers and functions can also call your handler. Any
- # arguments they pass in will be as a hashref.
-
- my $p     = shift;
+    my ( $class, $p ) = @_;
 
  # Instantiate "big R" -- the request object. This is typically done
  # at the top of a method to get it out of the way.
 
- my $R = OpenInteract::Request->instance;
+    my $R = OpenInteract::Request->instance;
 
  # We've found the best way to pass parameters is to create a hashref
  # early in the method and then fill it with information and pass it
@@ -91,31 +84,33 @@ sub listing {
  # the method and then pass all the variables in an anonymous hashref
  # argument. But this is more explicit.
 
- my $params = { main_script => '/%%UC_FIRST_NAME%%', error_msg => $p->{error_msg} }; 
+    my $params = { main_script => '/%%UC_FIRST_NAME%%',
+                   error_msg   => $p->{error_msg} };
 
  # Retrieve the class corresponding to the '$R->myobj' alias and then
  # call 'fetch_group()' on the class
 
- $params->{myobj_list} = eval { $R->myobj->fetch_group() };
+    $params->{myobj_list} = eval { $R->myobj->fetch_group() };
 
  # Set the 'error_msg' variable in the template. Most templates call
  # the 'showerror' component with this message to consistently display
  # an error.
 
- if ( $@ ) {
-   $params->{error_msg} = "Could not retrieve objects. Error: $@";
- }
+    if ( $@ ) {
+        $params->{error_msg} = "Could not retrieve objects. Error: $@";
+    }
 
  # Set the title for the page
 
- $R->{page}->{title} = 'My Object Listing';
+    $R->{page}{title} = 'My Object Listing';
 
  # Every method should return either a template processing directive
  # or a call to another handler which will return a template
  # processing directive. Note that '$R->template' is an alias for the
  # default template processing handler.
 
- return $R->template->handler( {}, $params, { db => 'myobj_list' } );
+    return $R->template->handler( {}, $params, 
+                                  { name => '%%NAME%%::myobj_list' } );
 }
 
 1;
@@ -132,7 +127,7 @@ OpenInteract::Handler::%%UC_FIRST_NAME%% - Handler for this package
 
 =head1 DESCRIPTION
 
-=head1 BUGS 
+=head1 BUGS
 
 =head1 TO DO
 

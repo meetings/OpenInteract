@@ -1,11 +1,4 @@
-<HTML>
-<HEAD>
-<TITLE>No Title</TITLE>
-<LINK REV="made" HREF="mailto:root@monongahela.intes.net">
-</HEAD>
-
-<BODY>
-
+<!-- <template_status>no_parse</template_status> -->
 <!-- INDEX BEGIN -->
 
 <UL>
@@ -375,7 +368,7 @@ Examples:
  &lt;/ul&gt;
 </PRE>
 <P>
-<PRE> [% IF news.tmp_security_level &gt;= security_level.write %]
+<PRE> [% IF news.tmp_security_level >= security_level.write %]
   You can edit this object
  [% END %]
 </PRE>
@@ -703,7 +696,7 @@ Example:
 <PRE> [% expires_on_info = date_into_hash( news.expires_on ) %]
  [% comp( 'date_select', day = expires_on_info.day,
                          year = expires_on_info.year,
-                         month = expires_on_info.month, ... ) %]
+                         month = expires_on_info.month ) %]
 </PRE>
 <LI>
 <P>

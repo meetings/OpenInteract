@@ -1,13 +1,13 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.2 2001/07/19 17:59:27 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.3 2001/09/21 02:59:43 lachoy Exp $
 
 use strict;
 use SPOPS::Secure qw( SEC_LEVEL_WRITE );
 require Exporter;
 
 @OpenInteract::Handler::GenericDispatcher::ISA     = qw( Exporter );
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
@@ -147,9 +147,9 @@ sub _check_task_security {
 
         if ( $level < $target_level ) {
             $R->throw( { code => 305, type => 'security',
-                         extra => { user_level     => $level, 
-                                    required_level => $target_level, 
-                                    class          => $class, 
+                         extra => { user_level     => $level,
+                                    required_level => $target_level,
+                                    class          => $class,
                                     task           => $task } } );
         }
     }

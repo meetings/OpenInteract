@@ -66,7 +66,7 @@ $spops = {
 # least 'OpenInteract::SPOPS' and some sort of SPOPS implementation,
 # usually 'SPOPS::DBI'
 
-#              isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  
+#              isa          => [ qw/ OpenInteract::SPOPS::DBI  SPOPS::Secure  
 #                                    SPOPS::DBI::MySQL  SPOPS::DBI / ],
 
 # field - List of fields/properties of this object

@@ -179,6 +179,7 @@ Along with the core packages:
  base_template
  base_theme
  base_user
+ lookup
  results_manage
  static_page
  system_doc
@@ -192,6 +193,5 @@ And the following application packages:
 Every other package, whether developed by intes.net, inc. or other
 party, is licensed under its own terms.
 
-
 =========================
-$Id: README,v 1.4 2001/08/28 21:30:25 lachoy Exp $
+$Id: README,v 1.5 2001/10/15 05:26:05 lachoy Exp $
