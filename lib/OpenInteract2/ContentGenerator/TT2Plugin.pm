@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::TT2Plugin;
 
-# $Id: TT2Plugin.pm,v 1.3 2003/06/11 02:43:30 lachoy Exp $
+# $Id: TT2Plugin.pm,v 1.6 2003/07/02 05:13:51 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -8,12 +8,13 @@ use Data::Dumper               qw( Dumper );
 use DateTime;
 use DateTime::Format::Strptime qw( strptime );
 use HTML::Entities             qw();
+use Log::Log4perl              qw( get_logger );
 use OpenInteract2::Constants   qw( :log :template );
-use OpenInteract2::Context     qw( DEBUG LOG CTX );
+use OpenInteract2::Context     qw( CTX );
 use SPOPS::Secure              qw( :level :scope );
 use SPOPS::Utility;
 
-$OpenInteract2::ContentGenerator::TT2Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TT2Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -76,7 +77,8 @@ SYMBOL:
 
 sub comp {
     my ( $self, $name, @params ) = @_;
-    LOG( LWARN, "Deprecated plugin method comp() called: use ",
+    my $log = get_logger( LOG_TEMPLATE );
+    $log->warn( "Deprecated plugin method comp() called: use ",
                 "action_execute() instead" );
     return $self->action_execute( $name, @params );
 }
@@ -103,21 +105,24 @@ sub action_execute {
 sub box_add {
     my ( $self, $box, $params ) = @_;
     $params ||= {};
-    DEBUG && LOG( LDEBUG, "Box add [$box] " );
+    my $log = get_logger( LOG_TEMPLATE );
+    $log->is_debug &&
+        $log->debug( "Box add [$box] " );
     my %box_info = ( name => $box );
     if ( $params->{remove} ) {
         return $self->box_remove( $box );
     }
     for ( qw( weight title template ) ) {
         next unless ( $params->{ $_ } );
-        DEBUG && LOG( LDEBUG, "Box [$box] param [$_] [$params->{$_}]" );
+        $log->is_debug &&
+            $log->debug( "Box [$box] param [$_] [$params->{$_}]" );
         $box_info{ $_ } = $params->{ $_ };
         delete $params->{ $_ };
     }
     $box_info{params} = $params;
     eval { CTX->controller->add_box( \%box_info ) };
     if ( $@ ) {
-        LOG( LERROR, "Failed to add box [$box_info{name}]: $@" );
+        $log->error( "Failed to add box [$box_info{name}]: $@" );
     }
     return undef;
 }
@@ -127,10 +132,11 @@ sub box_add {
 
 sub box_remove {
     my ( $self, $box_name ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
     $box_name =~ s/^\-//;
     eval { CTX->controller->remove_box( $box_name ) };
     if ( $@ ) {
-        LOG( LERROR, "Failed to remove box [$box_name]: $@" );
+        $log->error( "Failed to remove box [$box_name]: $@" );
     }
     return undef;
 }
@@ -181,9 +187,10 @@ sub _create_date_object {
 sub date_format {
     my ( $self, $date_string, $format, $params ) = @_;
     return undef unless ( $date_string );
+    my $log = get_logger( LOG_TEMPLATE );
     my $date = _create_date_object( $date_string );
     unless ( $date ) {
-        LOG( LERROR, "Cannot parse [$date_string] into valid date" );
+        $log->error( "Cannot parse [$date_string] into valid date" );
         return undef;
     }
     $format ||= '%Y-%m-%d %l:%M %p';
@@ -213,7 +220,9 @@ sub date_into_object {
 
 sub limit_string {
     my ( $self, $str, $len ) = @_;
-    DEBUG && LOG( LDEBUG, "limiting [$str] to [$len] characters" );
+    my $log = get_logger( LOG_TEMPLATE );
+    $log->is_debug &&
+        $log->debug( "limiting [$str] to [$len] characters" );
     return $str if ( length $str <= $len );
     return substr( $str, 0, $len ) . '...';
 }
@@ -320,7 +329,7 @@ sub make_url {
         return OpenInteract2::URL->create_static( $static_url, $p );
     }
     else {
-        return 'javascript:alert("Incorrect parameters passed to make_url()")';
+        return q{javascript:alert('Incorrect parameters passed to make_url()')};
     }
 }
 
@@ -348,9 +357,10 @@ sub get_users {
 
 sub page_title {
     my ( $self, $title ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
     eval { CTX->controller->add_content_param( title => $title ) };
     if ( $@ ) {
-        LOG( LERROR, "Failed to set page title: $@" );
+        $log->error( "Failed to set page title: $@" );
     }
     return undef;
 }
@@ -359,13 +369,15 @@ sub page_title {
 
 sub use_main_template {
     my ( $self, $template_name ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
     eval { CTX->controller->main_template( $template_name ) };
     if ( $@ ) {
-        LOG( LERROR, "Cannot set main template [$template_name] in ",
+        $log->error( "Cannot set main template [$template_name] in ",
                      "controller: $@" );
     }
     else {
-        DEBUG && LOG( LINFO, "Set main template to [$template_name]" );
+        $log->is_info &&
+            $log->info( "Set main template to [$template_name]" );
     }
     return undef;
 }
@@ -377,9 +389,10 @@ sub use_main_template {
 
 sub content_template {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
     my $template = eval { CTX->controller->main_template };
     if ( $@ ) {
-        LOG( LERROR, "Cannot get main_template from controller: $@" );
+        $log->error( "Cannot get main_template from controller: $@" );
     }
     return $template;
 }
@@ -403,22 +416,30 @@ sub security_scope {
 
 sub action {
     my ( $self ) = @_;
-    return $self->{_CONTEXT}->stash()->get( ACTION_KEY );
+    return $self->{_CONTEXT}->stash()->get( 'ACTION' );
 }
 
-# TODO: Get from action?
+# Needed so we put lists in proper form for TT
+
+sub action_param {
+    my ( $self, $param_name ) = @_;
+    my $action = $self->action;
+    return undef unless ( $action );
+    my @params = $action->param( $param_name );
+    my $num_params = scalar @params;
+    if ( $num_params < 2 ) {
+        return $params[0];
+    }
+    return [ @params ];
+}
 
 sub request {
     return CTX->request;
 }
 
-# TODO: Get from action?
-
 sub response {
     return CTX->response;
 }
-
-# TODO: Get from action?
 
 sub controller {
     return CTX->controller;
@@ -658,6 +679,23 @@ doing:
  [% actions.join( "\n" ) %]
 
 =head2 METHODS
+
+B<action_param( $name )>
+
+Returns the value(s) for the parameter C<$name> in the action that
+spawned this template process. If no action spawned the process
+returns C<undef>.
+
+The benefit this gives you above calling C<param> on the return value
+for C<action()> is that multivalued parameters are returned in an
+arrayref rather than an array. Zero or one values are returned by
+themselves, everything else in an arrayref.
+
+Example:
+
+ [% FOREACH error_msg = OI.action_param( 'error_msg' ) -%]
+   Another error: [% error_msg %]
+ [% END %]
 
 B<action_execute( $name, \%params )>
 

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi2_daemon,v 1.7 2003/06/11 01:57:47 lachoy Exp $
+# $Id: oi2_daemon,v 1.9 2003/06/27 06:01:29 lachoy Exp $
 
 # oi2_daemon
 #   Standalone webserver with OpenInteract 2. Not for heavy production
@@ -13,11 +13,14 @@ use HTTP::Daemon::OpenInteract2;
 use HTTP::Response;
 use HTTP::Status;
 use IO::File;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Auth;
 use OpenInteract2::Config::Ini;
+use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Controller;
 use OpenInteract2::File;
+use OpenInteract2::Log;
 use OpenInteract2::Request;
 use OpenInteract2::Response;
 use POSIX qw( WNOHANG setsid );
@@ -33,10 +36,18 @@ my ( $STATIC_PATH_RE, $DEPLOY_URL );
     my ( $OPT_daemon_conf, $OPT_website_dir );
     GetOptions( 'conf=s'        => \$OPT_daemon_conf,
                 'website_dir=s' => \$OPT_website_dir );
-    $OPT_website_dir ||= $ENV{OPENINTERACT2};
-    unless( -d $OPT_website_dir ) {
-        die "Usage: $0 --conf=/path/to/oi_daemon.ini --website_dir=/path/to/website\n";
+
+    if ( ! $OPT_website_dir and $ENV{OPENINTERACT2} ) {
+        $OPT_website_dir = $ENV{OPENINTERACT2};
+        print "Using OPENINTERACT2 environment for website ",
+              "directory:\n  $OPT_website_dir\n";
     }
+
+    unless( -d $OPT_website_dir ) {
+        die "Usage: $0 --website_dir=/path/to/website --conf=/path/to/oi_daemon.ini\n";
+    }
+
+    OpenInteract2::Log->init_from_website( $OPT_website_dir );
 
     my $ctx = OpenInteract2::Context->create(
                                    { website_dir => $OPT_website_dir });
@@ -44,6 +55,12 @@ my ( $STATIC_PATH_RE, $DEPLOY_URL );
     $ctx->assign_response_type( 'lwp' );
 
     $DEPLOY_URL = $ctx->DEPLOY_URL;
+
+    unless ( $OPT_daemon_conf ) {
+        $OPT_daemon_conf = File::Spec->catfile(
+                               $OPT_website_dir, 'conf', 'oi2_daemon.ini' );
+        print "Using daemon configuration from website directory\n";
+    }
 
     my $all_options = OpenInteract2::Config::Ini->new(
                                    { filename => $OPT_daemon_conf });
@@ -94,23 +111,28 @@ my ( $STATIC_PATH_RE, $DEPLOY_URL );
 
 sub interact {
     my ( $client ) = @_;
-    print "New client attached from: ", $client->peerhost, "\n";
+    my $log = get_logger( LOG_OI );
+
+    $log->is_info &&
+        $log->info( "New client attached from: ", $client->peerhost );
+
 REQUEST:
     while ( my $lwp_request = $client->get_request ) {
         my $path = $lwp_request->uri->path;
+        $log->info( "Client request: $path" );
 
         # HEAD requests (who cares?)
         if ( $lwp_request->method eq 'HEAD' ) {
             my $lwp_response = HTTP::Response->new( RC_OK );
             $client->send_response( $lwp_response );
-            warn "daemon: Sent HEAD response ok\n";
+            $log->info( "Sent HEAD response ok" );
         }
 
         # Static requests
         elsif ( is_static_path( $path ) ) {
             my $lwp_response = get_static_response( $path );
             $client->send_response( $lwp_response );
-            warn "daemon: Sent static file [$path] ok\n";
+            $log->info( "Sent static file [$path] ok" );
         }
 
         # OI2 requests
@@ -130,8 +152,15 @@ REQUEST:
             else {
                 $controller->execute;
             }
-            $response->send;
-            warn "daemon: Sent OI request for [$path] ok\n";
+            eval {
+                $response->send;
+            };
+            if ( $@ ) {
+                $log->logcroak( "Caught error from response: $@" );
+            }
+            else {
+                $log->info( "Sent OI request for [$path] ok" );
+            }
         }
 
         # Non-deployment context requests
@@ -142,10 +171,11 @@ REQUEST:
                  "[Deploy: $DEPLOY_URL] ok\n";
         }
     }
-    print "Client finished.\n";
+    $log->info( "Client finished." );
 }
 
 sub open_pid_file {
+    my $log = get_logger( LOG_OI );
     if ( -e $pid_file ) {
         my $fh = IO::File->new( $pid_file ) || return;
         my $pid = <$fh>;
@@ -153,10 +183,10 @@ sub open_pid_file {
             if ( kill 0 => $pid ) {
                 die "Server already running with PID [$pid]";
             }
-            warn "daemon: Removing PID file for defunct server process [$pid]\n";
+            $log->info( "Removing PID file for defunct server process [$pid]" );
         }
         else {
-            warn "daemon: Removing empty stale PID file\n";
+            $log->info( "daemon: Removing empty stale PID file" );
         }
         unless ( -w $pid_file && unlink $pid_file ) {
             die "Cannot remove PID file [$pid_file]\n";
@@ -181,8 +211,9 @@ sub become_daemon {
 }
 
 sub reaper {
+    my $log = get_logger( LOG_OI );
     while ( my $kid = waitpid( -1, WNOHANG ) > 0 ) {
-        warn "daemon: Reaped child with PID [$kid]\n";
+        $log->info( "Reaped child with PID [$kid]" );
     }
 }
 
@@ -201,15 +232,17 @@ sub is_static_path {
 
 sub get_static_response {
     my ( $path ) = @_;
+    my $log = get_logger( LOG_OI );
+
     my @parts = split /\/+/, $path;
     my $file_path = File::Spec->catfile( CTX->server_config->{dir}{html},
                                          @parts );
-    warn "daemon: Trying to map [$path] -> [$file_path]\n";
+    $log->debug( "Trying to map [$path] -> [$file_path]" );
     my ( $lwp_response );
     if ( -f $file_path ) {
         eval { open( STATIC, '<', $file_path ) || die $! };
         if ( $@ ) {
-            warn "daemon: Cannot open file [$file_path]: $@";
+            $log->debug( "Cannot open file [$file_path]: $@" );
             $lwp_response = HTTP::Response->new( RC_INTERNAL_SERVER_ERROR );
             $lwp_response->content( "Failed to open file for request [$path]" );
         }
@@ -219,8 +252,8 @@ sub get_static_response {
                                    { filename => $file_path } );
             $lwp_response->content_type( $mime_type );
             my $file_length = (stat $file_path)[7];
-            warn "daemon: File for [$path] found: [Type: $mime_type] ",
-                 "[Length: $file_length]\n";
+            $log->debug( "File for [$path] found: [Type: $mime_type] ",
+                         "[Length: $file_length]" );
             $lwp_response->content_length( $file_length );
 
             # TODO: It would be nice to stream this instead...
@@ -259,7 +292,19 @@ oi2_daemon - Standalone version of OpenInteract2
 
 =head1 SYNOPSIS
 
- oi2_daemon --website_dir=/path/to/mysite --conf=/path/to/oi.ini
+ # Specify everything
+ 
+ $ oi2_daemon --website_dir=/path/to/mysite --conf=/path/to/oi2_daemon.ini
+ 
+ # Use ENV for site
+ 
+ $ export OPENINTERACT2=/path/to/mysite
+ $ oi2_daemon --conf=/path/to/oi2_daemon.ini
+ 
+ # Use ENV for site and the oi2_daemon specified in
+ # $WEBSITE_DIR/conf/oi2_daemon.ini
+ 
+ $ oi2_daemon
 
 =head1 DESCRIPTION
 

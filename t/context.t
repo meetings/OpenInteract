@@ -1,11 +1,10 @@
 # -*-perl-*-
 
-# $Id: context.t,v 1.15 2003/06/11 00:38:17 lachoy Exp $
+# $Id: context.t,v 1.21 2003/07/03 05:28:26 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use OpenInteract2::Constants qw( LDEBUG LERROR );
 use OpenInteract2::Manage;
 use SPOPS::Secure qw( :level );
 use Test::More;
@@ -15,7 +14,7 @@ if ( $@ ) {
     plan skip_all => "Cannot run tests because website creation failed: $@";
     exit;
 }
-plan tests => 80;
+plan tests => 78;
 
 require_ok( 'OpenInteract2::Context' );
 
@@ -24,17 +23,6 @@ my $ctx = eval {
                          website_dir => $website_dir })
 };
 ok( ! $@, "Created bare context" );
-
-########################################
-# DEBUGGING
-
-is( $ctx->DEBUG, LERROR,
-    'DEBUG get' );
-$ctx->assign_debug_level( LDEBUG );
-is( $ctx->DEBUG, LDEBUG,
-    'DEBUG set' );
-$ctx->assign_debug_level( LERROR );
-
 
 ########################################
 # ALIASES
@@ -93,31 +81,31 @@ is( $repository->website_dir, $website_dir,
 my $packages = $repository->fetch_all_packages;
 is( scalar @{ $packages }, 14,
     'Number of packages fetched by repository' );
-is( $repository->fetch_package( 'base' )->version, '2.02',
+is( $repository->fetch_package( 'base' )->version, '2.03',
     'Package base version' );
-is( $repository->fetch_package( 'base_box' )->version, '2.01',
+is( $repository->fetch_package( 'base_box' )->version, '2.02',
     'Package base_box version' );
-is( $repository->fetch_package( 'base_error' )->version, '2.02',
+is( $repository->fetch_package( 'base_error' )->version, '2.04',
     'Package base_error version' );
-is( $repository->fetch_package( 'base_group' )->version, '2.01',
+is( $repository->fetch_package( 'base_group' )->version, '2.02',
     'Package base_group version' );
-is( $repository->fetch_package( 'base_page' )->version, '2.04',
+is( $repository->fetch_package( 'base_page' )->version, '2.05',
     'Package base_page version' );
-is( $repository->fetch_package( 'base_template' )->version, '3.00',
+is( $repository->fetch_package( 'base_template' )->version, '3.02',
     'Package base_template version' );
-is( $repository->fetch_package( 'base_theme' )->version, '2.01',
+is( $repository->fetch_package( 'base_theme' )->version, '2.02',
     'Package base_theme version' );
-is( $repository->fetch_package( 'base_user' )->version, '2.03',
+is( $repository->fetch_package( 'base_user' )->version, '2.04',
     'Package base_user version' );
-is( $repository->fetch_package( 'full_text' )->version, '2.01',
+is( $repository->fetch_package( 'full_text' )->version, '2.03',
     'Package full_text version' );
-is( $repository->fetch_package( 'lookup' )->version, '2.00',
+is( $repository->fetch_package( 'lookup' )->version, '2.01',
     'Package lookup version' );
-is( $repository->fetch_package( 'news' )->version, '2.01',
+is( $repository->fetch_package( 'news' )->version, '2.03',
     'Package news version' );
-is( $repository->fetch_package( 'object_activity' )->version, '2.02',
+is( $repository->fetch_package( 'object_activity' )->version, '2.03',
     'Package object_activity version' );
-is( $repository->fetch_package( 'system_doc' )->version, '2.00',
+is( $repository->fetch_package( 'system_doc' )->version, '2.01',
     'Package system_doc version' );
 
 ########################################
@@ -154,7 +142,7 @@ is( $news_info->{security}{edit_summary}, SEC_LEVEL_WRITE,
 # See if the default action info got set
 is( $news_info->{content_generator}, 'TT',
     'and correct content generator from default action info...' );
-is( $news_info->{controller}, 'main',
+is( $news_info->{controller}, 'tt-template',
     'and correct controller from default action info...' );
 #is( $news_info->{method}, 'handler',
 #    'and correct handler from default action info...' );

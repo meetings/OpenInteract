@@ -1,18 +1,19 @@
 package OpenInteract2::Cache;
 
-# $Id: Cache.pm,v 1.4 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Cache.pm,v 1.7 2003/06/27 17:11:04 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
 # Returns: caching object (implementation-neutral)
 
 sub new {
-    my ( $pkg, @params ) = @_;
+    my ( $pkg, $conf ) = @_;
     my $class = ref $pkg || $pkg;
     my $self = bless( {}, $class );
-    $self->{_cache_object} = $self->initialize( @params );
+    $self->{_cache_object} = $self->initialize( $conf );
     return $self;
 }
 
@@ -21,32 +22,42 @@ sub new {
 
 sub get {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
-    return undef unless ( $self->{_cache_object} );
+
+    unless ( $self->{_cache_object} ) {
+        $log->is_info &&
+            $log->info( "Object from cache requested, cache object not created" );
+        return undef;
+    }
 
     my $key       = $p->{key};
     my $is_object = 0;
     my $obj_class = undef;
     if ( ! $key and $p->{class} and $p->{object_id} ) {
         $key = _make_spops_idx( $p->{class}, $p->{object_id} );
-        DEBUG && LOG( LDEBUG, "Created class+id key [$key]" );
+        $log->is_debug &&
+            $log->debug( "Created class+id key [$key]" );
         $obj_class = $p->{class};
         $is_object++;
         return undef  unless ( $obj_class->pre_cache_get( $p->{object_id} ) );
     }
     unless ( $key ) {
-        DEBUG && LOG( LDEBUG, "Cache MISS (no key)" );
+        $log->is_debug &&
+            $log->debug( "Cache MISS (no key)" );
         return undef;
     }
 
     my $data = $self->get_data( $self->{_cache_object}, $key );
     unless ( $data ) {
-        DEBUG && LOG( LDEBUG, "Cache MISS [$key]" );
+        $log->is_debug &&
+            $log->debug( "Cache MISS [$key]" );
         return undef;
     }
 
-    DEBUG && LOG( LDEBUG, "Cache HIT [$key]" );
+    $log->is_debug &&
+        $log->debug( "Cache HIT [$key]" );
     if ( $is_object ) {
         return undef unless ( $obj_class->post_cache_get( $data ) );
     }
@@ -55,9 +66,16 @@ sub get {
 
 sub set {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
-    return undef unless ( $self->{_cache_object} );
+
+    unless ( $self->{_cache_object} ) {
+        $log->is_info &&
+            $log->info( "Request to cache object, cache object not created" );
+        return undef;
+    }
+
 
     my $is_object = 0;
     my $key  = $p->{key};
@@ -66,7 +84,8 @@ sub set {
     if ( _is_object( $data ) ) {
         $obj = $data;
         $key = _make_spops_idx( ref $obj, $obj->id );
-        DEBUG && ( LDEBUG, "Created class/id key [$key]" );
+        $log->is_debug &&
+            $log->debug( "Created class+id key [$key]" );
         $is_object++;
         return undef  unless ( $obj->pre_cache_save );
         $data = $obj->as_data_only;
@@ -80,6 +99,7 @@ sub set {
 
 sub clear {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
     return undef unless ( $self->{_cache_object} );
@@ -91,18 +111,26 @@ sub clear {
     elsif ( ! $key and $p->{class} and $p->{object_id} ) {
         $key = _make_spops_idx( $p->{class}, $p->{object_id} );
     }
-    DEBUG && LOG( LDEBUG, "Trying to clear cache of [$key]" );
+    $log->is_debug &&
+        $log->debug( "Trying to clear cache of [$key]" );
     return $self->clear_data( $self->{_cache_object}, $key );
 }
 
 
 sub purge {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
-    return undef unless ( $self->{_cache_object} );
 
-    DEBUG && LOG( LINFO, "Trying to purge cache of all objects" );
+    unless ( $self->{_cache_object} ) {
+        $log->is_info &&
+            $log->info( "Purge of cache requested, cache object not created" );
+        return undef;
+    }
+
+    $log->is_info &&
+        $log->info( "Trying to purge cache of all objects" );
     return $self->purge_all( $self->{_cache_object} );
 }
 

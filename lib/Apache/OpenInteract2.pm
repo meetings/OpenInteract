@@ -1,19 +1,23 @@
 package Apache::OpenInteract2;
 
-# $Id: OpenInteract2.pm,v 1.8 2003/06/11 02:43:33 lachoy Exp $
+# $Id: OpenInteract2.pm,v 1.10 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Auth;
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Request;
 use OpenInteract2::Response;
 
 sub handler($$) {
     my ( $class, $r ) = @_;
-    DEBUG && LOG( LINFO, scalar( localtime ), ": request from ",
-                         "[", $r->connection->remote_ip, "] for URL ",
-                         "[", $r->uri, '?', scalar( $r->args ), "]" );
+    my $log = get_logger( LOG_OI );
+
+    $log->is_info &&
+        $log->info( scalar( localtime ), ": request from ",
+                    "[", $r->connection->remote_ip, "] for URL ",
+                    "[", $r->uri, '?', scalar( $r->args ), "]" );
 
     my $response = OpenInteract2::Response->new({ apache => $r });
     my $request  = OpenInteract2::Request->new({ apache => $r });

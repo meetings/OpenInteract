@@ -1,6 +1,6 @@
 =head1 NAME
 
-OpenInteract2 Packages
+OpenInteract2::Manual::Packages - Creating, installing and modifying OpenInteract2 applications
 
 =head1 SYNOPSIS
 

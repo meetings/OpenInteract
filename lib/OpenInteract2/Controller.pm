@@ -1,14 +1,17 @@
 package OpenInteract2::Controller;
 
-# $Id: Controller.pm,v 1.8 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Controller.pm,v 1.13 2003/07/02 15:17:43 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor Class::Factory );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-my @FIELDS = qw( type return_url initial_action request response );
+$OpenInteract2::Controller::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+
+my @FIELDS = qw( type generator_type return_url initial_action request response );
 __PACKAGE__->mk_accessors( @FIELDS );
 
 my ( $NONE_ACTION, $NOTFOUND_ACTION );
@@ -22,14 +25,49 @@ sub initialize_default_actions {
 
 sub new {
     my ( $class, $request, $response ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $action = $class->_find_action( $request );
-    my $impl_class = $class->_find_controller_implementation_class( $action );
-    DEBUG && LOG( LDEBUG, "Controller for [Action: ", $action->name, "] ",
-                          "to use [Class: $impl_class]" );
+    my $impl_type = $action->controller;
+    my $impl_class = $class->_get_controller_implementation_class( $impl_type );
+    $log->is_debug &&
+        $log->debug( "Controller for [Action: ", $action->name, "] ",
+                     "to use [Controller: $impl_type/$impl_class]" );
 
     my $self = bless( {}, $impl_class );
+    $self->type( $impl_type );
+
     $self->initial_action( $action );
-    $self->type( $action->content_generator );
+
+    # This will probably remain undocumented for a bit... it would be
+    # nice to be able to add other observers at request-time to an
+    # action but I don't want to create a framework without any use
+    # cases...
+
+    # Add a filter at runtime to the main action. So you could do:
+    #
+    # /news/display/?news_id=55&OI_FILTER=pittsburghese
+    #
+    # and have the news item be translated to da burg. You could even
+    # do:
+    #
+    # /news/display/?news_id=55&OI_FILTER=pittsburghese&OI_FILTER=bork
+    #
+    # and have it run through the yinzer AND the bork filter.
+
+    my @filter_add = $request->param( 'OI_FILTER' );
+    if ( scalar @filter_add ) {
+        foreach my $filter_name ( @filter_add ) {
+            OpenInteract2::Filter->add_filter_to_action( $filter_name, $action );
+        }
+    }
+
+    # TODO: Why not do this with the class? hmm...
+
+    my $controller_info = CTX->lookup_controller( $impl_type );
+    $self->generator_type( $controller_info->{content_generator} );
+
+    # TODO: Is this needed anymore?
     $self->request( $request );
     $self->response( $response );
     $self->init;
@@ -53,19 +91,22 @@ sub execute {
 
 sub _find_action {
     my ( $class, $request ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my ( $action_name, $task_name ) =
                ( $request->action_name, $request->task_name );
     my ( $action );
     if ( $action_name ) {
-        DEBUG && LOG( LDEBUG, "Trying action [$action_name -> $task_name] ",
-                              "in controller" );
+        $log->is_debug &&
+            $log->debug( "Trying action [$action_name -> $task_name] ",
+                         "in controller" );
         $action = eval {
             CTX->lookup_action( $action_name,
                                 { REQUEST_URL => $request->url_initial } )
         };
         if ( $@ ) {
-            LOG( LWARN, "Caught exception from Context trying to looking ",
-                        "up action [$action_name]: $@\nUsing action ",
+            $log->warn( "Caught exception from Context trying to lookup ",
+                        "action [$action_name]: $@\nUsing action ",
                         "specified for 'notfound'" );
             $action = OpenInteract2::Action->new( $NOTFOUND_ACTION );
         }
@@ -74,50 +115,42 @@ sub _find_action {
         }
     }
     else {
-        DEBUG && LOG( LDEBUG, "Using action specified for 'none': ",
-                              $NONE_ACTION->name );
+        $log->is_debug &&
+            $log->debug( "Using action specified for 'none': ",
+                         [$NONE_ACTION->name] );
         $action = OpenInteract2::Action->new( $NONE_ACTION );
     }
-    DEBUG && LOG( LDEBUG, 'Found action in controller [Name: ',
-                          $action->name, '] [Task: ', $action->task, ']' );
+    $log->is_debug &&
+        $log->debug( 'Found action in controller [Name: ',
+                     $action->name, '] [Task: ', $action->task, ']' );
     return $action;
 }
 
-sub _find_controller_implementation_class {
-    my ( $class, $action ) = @_;
-    my $generator_type = $action->content_generator;
-    DEBUG && LOG( LDEBUG, "Lookup controller for [$generator_type]" );
+sub _get_controller_implementation_class {
+    my ( $class, $controller_type ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
+    $log->is_debug &&
+        $log->debug( "Lookup controller for [$controller_type]" );
     my $impl_class = eval {
-        $class->get_factory_class( $generator_type )
+        $class->get_factory_class( $controller_type )
     };
     my ( $error );
     if ( $@ ) {
-        $error = "Failure to get factory class for [$generator_type]: $@";
+        $error = "Failure to get factory class for [$controller_type]: $@";
     }
     elsif ( ! $impl_class ) {
-        $error = "No implementation class defined for [$generator_type]";
+        $error = "No implementation class defined for [$controller_type]";
     }
     if ( $error ) {
-        DEBUG && LOG( LERROR, "Error getting controller for ",
-                              "action: ", $action->name, ": $error" );
+        $log->error( "Cannot create controller [$controller_type] -- $error" );
 
         # TODO: Have this output a static (no template vars) file
-        oi_error "Hey chuckie, you don't have a content ",
-                 "generator defined for action: ", $action->name;
+        oi_error "Hey chuckie, you don't have a controller ",
+                 "defined for type [$controller_type]";
     }
     return $impl_class;
 }
-
-# Note: These won't actually get loaded until someone tries to use them.
-
-__PACKAGE__->register_factory_type(
-               raw  => 'OpenInteract2::Controller::Raw' );
-__PACKAGE__->register_factory_type(
-               TT   => 'OpenInteract2::Controller::HTML' );
-__PACKAGE__->register_factory_type(
-               HTML => 'OpenInteract2::Controller::HTML' );
-__PACKAGE__->register_factory_type(
-               SOAP => 'OpenInteract2::Controller::SOAP' );
 
 1;
 
@@ -141,13 +174,13 @@ L<OpenInteract2::Response|OpenInteract2::Response> object
 
 B<type> - Type of controller
 
+B<generator_type> - Type of content generator
+
 B<initial_action> - The initial action used to generate content.
 
 B<return_url> - URL to which the system should return after completing
 various system tasks. It is a good idea to set this when possible so
 when a user logs in she is returned to the same page.
-
-B<page_title> - Title of the page to be generated.
 
 =head1 COPYRIGHT
 

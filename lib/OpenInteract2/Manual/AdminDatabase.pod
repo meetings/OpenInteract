@@ -1,6 +1,6 @@
 =head1 NAME
 
-Databases and OpenInteract2 - Setting up databases for use with OpenInteract2
+OpenInteract2::Manual::AdminDatabase - Setting up databases for use with OpenInteract2
 
 =head1 DESCRIPTION
 

@@ -1,17 +1,19 @@
 package Apache::OpenInteract2::HttpAuth;
 
-# $Id: HttpAuth.pm,v 1.4 2003/06/11 02:43:33 lachoy Exp $
+# $Id: HttpAuth.pm,v 1.6 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use Apache::Constants        qw( FORBIDDEN AUTH_REQUIRED OK );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
 sub handler {
     my ( $r ) = @_;
+    my $log = get_logger( LOG_AUTH );
 
     unless ( $r->some_auth_required ) {
-        DEBUG && LOG( LERROR, "Asked to process authentication request ",
+        $log->error( "Asked to process authentication request ",
                               "but no authentication configured" );
         $r->log_reason( "No authentication has been configured" );
         return FORBIDDEN;
@@ -21,12 +23,14 @@ sub handler {
 
     # e.g., HTTP_UNAUTHORIZED
     if ( $res ) {
-        DEBUG && LOG( LINFO, "Got result [$res] from auth" );
+        $log->is_info &&
+            $log->info( "Got result [$res] from auth" );
         return $res;
     }
 
     my $user_sent = $r->connection->user;
-    DEBUG && LOG( LDEBUG, "Trying to authenticate [$user_sent]" );
+    $log->is_debug &&
+        $log->debug( "Trying to authenticate [$user_sent]" );
     unless ( $user_sent ) {
         return AUTH_REQUIRED;
     }
@@ -35,18 +39,21 @@ sub handler {
                   ->fetch_by_login_name( $user_sent, { skip_security => 1,
                                                        return_single => 1 } );
     unless ( $user ) {
-        DEBUG && LOG( LINFO, "User [$user_sent] is not in OI" );
+        $log->is_info &&
+            $log->info( "User [$user_sent] is not in OI" );
         $r->log_reason( "User [$user_sent] is not in OI" );
         return AUTH_REQUIRED;
     }
     unless ( $user->check_password( $password_sent ) ) {
-        DEBUG && LOG( LINFO, "User [$user->{login_name}] found but password ",
+        $log->is_info &&
+            $log->info( "User [$user->{login_name}] found but password ",
                              "mismatch" );
         $r->log_reason( "User [$user->{login_name}] exists, but password ",
                         "does not match" );
         return AUTH_REQUIRED;
     }
-    DEBUG && LOG( LDEBUG, "User [$user->{login_name}] auth ok" );
+    $log->is_debug &&
+        $log->debug( "User [$user->{login_name}] auth ok" );
     $r->pnotes( 'login_user', $user );
     return OK;
 }
@@ -62,9 +69,9 @@ Apache::OpenInteract2::HttpAuth - Use HTTP authentication to check logins agains
 =head1 SYNOPSIS
 
  # In httpd.conf file, or in .htaccess
-
+ 
  # People must login to get to anything under /foo
-
+ 
  <Location /foo>
    # This is the normal OI content handler...
    SetHandler perl-script

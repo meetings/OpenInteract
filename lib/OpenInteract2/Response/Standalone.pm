@@ -1,17 +1,18 @@
 package OpenInteract2::Response::Standalone;
 
-# $Id: Standalone.pm,v 1.4 2003/06/11 02:43:26 lachoy Exp $
+# $Id: Standalone.pm,v 1.9 2003/06/27 17:15:51 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
 use Data::Dumper             qw( Dumper );
 use IO::File;
 use HTTP::Status             qw( RC_OK RC_FOUND );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::Standalone::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Standalone::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 my ( $CURRENT );
 
@@ -47,6 +48,9 @@ sub out {
 
 sub send {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
+
+    $log->info( "Sending Standalone response" );
 
     $self->save_session;
 
@@ -81,7 +85,7 @@ sub generate_cgi_header_fields {
         push @header, "$key: $value";
     }
     push @header, "Content-Type: " . $self->content_type;
-    unless ( CTX->server_config->{no_promotion} ) {
+    if ( CTX->server_config->{promote_oi} eq 'yes' ) {
         push @header, join( '', 'X-Powered-By: ', 'OpenInteract ', CTX->version );
     }
     return join( "\r\n", @header );
@@ -111,7 +115,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::Response::Standalone
+OpenInteract2::Response::Standalone - Standalone response handler, mostly for testing
 
 =head1 SYNOPSIS
 

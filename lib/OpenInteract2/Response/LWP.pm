@@ -1,18 +1,18 @@
 package OpenInteract2::Response::LWP;
 
-# $Id: LWP.pm,v 1.9 2003/06/11 02:43:26 lachoy Exp $
+# $Id: LWP.pm,v 1.15 2003/06/27 17:15:51 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
-use Data::Dumper qw( Dumper );
 use HTTP::Response;
 use HTTP::Status             qw( RC_OK RC_FOUND );
 use IO::File;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( lwp_response client );
 OpenInteract2::Response::LWP->mk_accessors( @FIELDS );
@@ -32,11 +32,14 @@ sub clear_current { $CURRENT = undef }
 
 sub send {
     my ( $self ) = @_;
-    LOG( LWARN, "Trying to send() response" );
+    my $log = get_logger( LOG_RESPONSE );
+
+    $log->is_info && $log->info( "Sending LWP response" );
     $self->content_type( 'text/html' ) unless ( $self->content_type );
     $self->status( RC_OK )             unless ( $self->status );
 
     $self->save_session;
+    $log->is_info && $log->info( "Saved session ok" );
 
     if ( $self->lwp_response ) {
         $self->lwp_response->code( $self->status );
@@ -50,6 +53,8 @@ sub send {
         my $fh = IO::File->new( "< $filename" )
                     || oi_error "Cannot open file [$filename]: $!";
         $self->client->send_file( $fh );
+        $log->is_info &&
+            $log->info( "Sent file [$filename] directly to client" );
         return;
     }
     $self->_set_lwp_headers;
@@ -58,16 +63,20 @@ sub send {
     );
     if ( my $client = $self->client ) {
         $client->send_response( $self->lwp_response );
-        LOG( LINFO, "Sent response ok" );
+        $log->is_info &&
+            $log->info( "Sent response ok" );
     }
     else {
-        LOG( LINFO, "Set content/headers but did not send content" );
+        $log->is_info &&
+            $log->info( "Set content/headers but did not send content" );
     }
 }
 
 
 sub redirect {
     my ( $self, $url ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
+
     my $lwp_response = $self->lwp_response;
     unless ( $lwp_response ) {
         $self->lwp_response( HTTP::Response->new( RC_FOUND ) );
@@ -78,15 +87,17 @@ sub redirect {
     }
     $lwp_response->header( Location => $url );
     $self->_set_lwp_cookies;
-    LOG( LWARN, "Getting ready to send response: ", Dumper( $lwp_response ) );
+    $log->debug( "Getting ready to send response: ", CTX->dump( $lwp_response ) );
     if ( my $client = $self->client ) {
         $client->send_response( $lwp_response );
     }
-    LOG( LWARN, "Sent redirect ok" );
+    $log->info( "Sent redirect ok" );
 }
 
 sub _set_lwp_headers {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
+
     my $lwp_response = $self->lwp_response;
     $lwp_response->code( $self->status );
     while ( my ( $name, $value ) = each %{ $self->header } ) {
@@ -97,19 +108,21 @@ sub _set_lwp_headers {
             $lwp_response->header( $name => $value );
         }
     }
-    unless ( CTX->server_config->{no_promotion} ) {
+    if ( CTX->server_config->{promote_oi} eq 'yes' ) {
         $lwp_response->header( 'X-Powered-By' => 'OpenInteract ' . CTX->version );
     }
-    LOG( LWARN, "Set response headers ok" );
+    $log->debug( "Set response headers ok" );
     $self->_set_lwp_cookies;
 }
 
 sub _set_lwp_cookies {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
+
     for ( @{ $self->cookie } ) {
         $self->lwp_response->push_header( 'Set-Cookie' => $_->as_string );
     }
-    LOG( LWARN, "Set response cookies ok" );
+    $log->debug( "Set response cookies ok" );
 }
 
 1;
@@ -118,7 +131,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::Response::CGI
+OpenInteract2::Response::LWP - Response handler using LWP
 
 =head1 SYNOPSIS
 

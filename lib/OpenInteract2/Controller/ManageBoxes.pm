@@ -1,9 +1,12 @@
 package OpenInteract2::Controller::ManageBoxes;
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
+
+$OpenInteract2::Controller::MangeBoxes::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 # Box might be an action object or just a hashref, but it must have
 # 'name' defined
@@ -16,8 +19,10 @@ sub init_boxes {
 sub add_box {
     my ( $self, $box ) = @_;
     return undef unless ( ref $box );
+    my $log = get_logger( LOG_ACTION );
     my $name = ( ref $box eq 'HASH' ) ? $box->{name} : $box->name;
-    DEBUG && LOG( LDEBUG, "Adding box [$name] to response" );
+    $log->is_debug &&
+        $log->debug( "Adding box [$name] to response" );
     return undef unless ( $name );
     $self->{_boxes}{ $name } = $box;
     return $box;
@@ -36,11 +41,13 @@ sub get_boxes {
 
 sub remove_box {
     my ( $self, $name ) = @_;
+    my $log = get_logger( LOG_ACTION );
     # TODO: Should this be an error or just a log?
     unless ( $name ) {
         oi_error "Must specify box name when removing box";
     }
-    DEBUG && LOG( LDEBUG, "Removing box [$name] from response" );
+    $log->is_debug &&
+        $log->debug( "Removing box [$name] from response" );
     delete $self->{_boxes}{ $name };
 }
 

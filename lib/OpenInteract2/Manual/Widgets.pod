@@ -1,6 +1,6 @@
 =head1 NAME
 
-Template Widgets in OpenInteract
+OpenInteract2::Manual::Widgets - Template Widgets in OpenInteract
 
 =head1 DESCRIPTION
 
@@ -317,12 +317,6 @@ never be overwritten unless you ask them to be (via the C<oi2_manage
 refresh_widget> command -- TODO: do we have a 'refresh_widget'
 command?) and they are specific to your website. You can add new ones,
 remove existing ones -- whatever you like
-
-If you have an existing website and want the widgets with OI 1.30+,
-just run:
-
- $ export OIWEBSITE=/path/to/my/website
- $ oi2_manage refresh_widget
 
 =head2 Gotchas
 

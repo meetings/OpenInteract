@@ -1,22 +1,25 @@
-package OpenInteract2::Controller::HTML;
+package OpenInteract2::Controller::MainTemplate;
 
-# $Id: HTML.pm,v 1.8 2003/06/11 02:43:30 lachoy Exp $
+# $Id: MainTemplate.pm,v 1.1 2003/07/02 05:17:28 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Controller
              OpenInteract2::Controller::ManageBoxes
              OpenInteract2::Controller::ManageTemplates );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-my @FIELDS = qw( no_template main_template_key page_title ); # main_template
+$OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+
+my @FIELDS = qw( no_template main_template_key page_title );
 __PACKAGE__->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self ) = @_;
     if ( CTX->request->param( 'no_template' ) eq 'yes' ) {
-        $self->no_template('yes');
+        $self->no_template( 'yes' );
     }
     $self->init_boxes;
     $self->init_templates;
@@ -29,14 +32,21 @@ sub main_template {
 
 sub execute {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $action = $self->initial_action;
-    DEBUG && LOG( LDEBUG, "Executing top-level action [", $action->name, "] ",
-                          "with task [", $action->task, "]" );
+    $log->is_debug &&
+        $log->debug( "Executing top-level action [", $action->name, "] ",
+                     "with task [", $action->task, "]" );
+
+    # TODO: needed anymore?
     $action->request( $self->request );
     $action->response( $self->response );
+
     my $content = eval { $action->execute };
     if ( $@ ) {
-        LOG( LERROR, "Caught exception from action: $@" );
+        $log->error( "Caught exception from action: $@" );
+
         # TODO: Set this error message from config file
         $self->add_content_param( title => 'Action execution error' );
         $content = $@;
@@ -45,7 +55,8 @@ sub execute {
     # If an action set a file to send back, we're done
 
     if ( my $send_file = $self->response->send_file ) {
-        DEBUG && LOG( LINFO, "Action specified return file [$send_file]" );
+        $log->is_info &&
+            $log->info( "Action specified return file [$send_file]" );
         return;
     }
 
@@ -53,9 +64,10 @@ sub execute {
     # content. (Just like ::Raw does)
 
     if ( $self->no_template eq 'yes' ) {
-        DEBUG && LOG( LINFO, "Someone told us not to use a wrapper ",
-                             "template; returning raw content" );
-        $self->response->content( $content );
+        $log->is_info &&
+            $log->info( "Someone told us not to use a wrapper template; ",
+                        "returning raw content" );
+        $self->response->content( \$content );
         return;
     }
 
@@ -68,14 +80,24 @@ sub execute {
         my $template_key = $self->main_template_key || 'main_template';
         $template_name = $self->request->theme_values->{ $template_key };
     }
-    DEBUG && LOG( LDEBUG, "Full page template [$template_name]" );
-    my ( $gen_class, $gen_method, $gen_sub ) =
-                    OpenInteract2::ContentGenerator->instance( $self->type );
-    my $full_content = $gen_class->$gen_sub(
-                                        $self->template_params,
-                                        $self->content_params,
-                                        { name => $template_name } );
+    $log->is_debug &&
+        $log->debug( "Using full page template [$template_name]" );
+
+    my $generator = CTX->content_generator( $self->generator_type );
+    my $full_content = eval {
+        $generator->execute( $self->template_params,
+                             $self->content_params,
+                             { name => $template_name } )
+    };
+    if ( $@ ) {
+        my $msg = "Content generator failed to execute: $@";
+        $log->error( $msg );
+        oi_error $msg;
+    }
+    $log->is_debug &&
+        $log->debug( "Generated content ok, setting to response" );
     $self->response->content( \$full_content );
+    return;
 }
 
 ########################################
@@ -130,19 +152,19 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::Controller::HTML - Controller for HTML content
+OpenInteract2::Controller::MainTemplate - Controller for content to be placed in a main template
 
 =head1 SYNOPSIS
 
  # In server config
  
- [controller TT]
+ [controller tt-template]
  content_generator = TT
- class             = OpenInteract2::Controller::HTML
+ class             = OpenInteract2::Controller::MainTemplate
  
- # In your action
+ # In your action (not done often)
  [myaction]
- controller = TT
+ controller = tt-template
 
 =head1 DESCRIPTION
 

@@ -1,8 +1,11 @@
 package OpenInteract2::Controller::ManageTemplates;
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
+
+$OpenInteract2::Controller::MangeTemplates::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub init_templates {
     my ( $self ) = @_;
@@ -14,7 +17,9 @@ sub init_templates {
 
 sub add_template_used {
     my ( $self, $name ) = @_;
-    DEBUG && LOG( LDEBUG, "Adding template [$name] list of those used" );
+    my $log = get_logger( LOG_ACTION );
+    $log->is_debug &&
+        $log->debug( "Adding template [$name] list of those used" );
     return push @{ $self->{_template_used} }, $name;
 }
 

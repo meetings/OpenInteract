@@ -1,11 +1,12 @@
 package OpenInteract2::Conversion::SPOPSConfig;
 
-# $Id: SPOPSConfig.pm,v 1.6 2003/06/11 02:43:29 lachoy Exp $
+# $Id: SPOPSConfig.pm,v 1.7 2003/06/11 11:48:03 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Conversion::IniConfig );
 use OpenInteract2::Exception qw( oi_error );
 
+$OpenInteract2::Conversion::SPOPSConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 my @ORDER = qw( class code_class isa field field_discover id_field
                 is_secure increment_field convert_date_field
                 sequence_name no_insert skip_undef no_update

@@ -1,23 +1,27 @@
 package OpenInteract2::Session::File;
 
-# $Id: File.pm,v 1.4 2003/06/11 02:43:26 lachoy Exp $
+# $Id: File.pm,v 1.5 2003/06/24 03:35:40 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Session );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Session::File::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Session::File::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_config, $session_id ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     my $impl_class = $session_config->{impl_class};
     my $session_params = $session_config->{params};
-    DEBUG && LOG( LINFO, "Trying to fetch File session [$session_id] ",
-                         "with [Dir: $session_params->{Directory}] ",
-                         "[LockDir: $session_params->{LockDirectory}] ",
-                         "[Impl: $impl_class]" );
+    $log->is_info &&
+        $log->info( "Trying to fetch File session [$session_id] ",
+                    "with [Dir: $session_params->{Directory}] ",
+                    "[LockDir: $session_params->{LockDirectory}] ",
+                    "[Impl: $impl_class]" );
     my %session = ();
     tie %session, $impl_class, $session_id, $session_params;
     return \%session;

@@ -1,14 +1,16 @@
 package OpenInteract2::Response::Apache;
 
-# $Id: Apache.pm,v 1.7 2003/06/11 02:43:26 lachoy Exp $
+# $Id: Apache.pm,v 1.12 2003/06/27 17:15:51 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
 use HTTP::Status             qw( RC_OK RC_FOUND );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::Apache::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Apache::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( apache );
 OpenInteract2::Response::Apache->mk_accessors( @FIELDS );
@@ -28,6 +30,10 @@ sub init {
 
 sub send {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
+
+    $log->info( "Sending Apache response" );
+
     my $apache = $self->apache;
 
     $self->save_session;
@@ -62,7 +68,7 @@ sub send_header {
     my ( $self, $apache ) = @_;
     unless ( $self->content_type ) { $self->content_type( 'text/html' ) }
     unless ( $self->status       ) { $self->status( RC_OK ) }
-    unless ( CTX->server_config->{no_promotion} ) {
+    if ( CTX->server_config->{promote_oi} eq 'yes' ) {
         $apache->headers_out->add( 'X-Powered-By', "OpenInteract " . CTX->version );
     }
     $apache->send_http_header( $self->content_type );
@@ -82,7 +88,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::Response::Apache
+OpenInteract2::Response::Apache - Response handler using Apache/mod_perl 1.x
 
 =head1 SYNOPSIS
 

@@ -1,15 +1,19 @@
 package OpenInteract2::Action::CommonRemove;
 
-# $Id: CommonRemove.pm,v 1.5 2003/06/11 02:43:31 lachoy Exp $
+# $Id: CommonRemove.pm,v 1.7 2003/06/25 14:11:57 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
 
 sub remove {
     my ( $self ) = @_;
     $self->_remove_init_param;
+    my $log = get_logger( LOG_ACTION );
+
     my $fail_task = $self->param( 'c_remove_fail_task' );
     my $object = eval { $self->fetch_object };
     if ( $@ ) {
@@ -40,6 +44,8 @@ sub remove {
     eval { $object->remove };
     if ( $@ ) {
         $self->param_add( error_msg => "Object removal failed: $@" );
+        $log->error( "Failed to remove ", $self->param( 'c_object_class' ),
+                     "with ID" , $object->id, ": $@" );
         return $self->execute({ task => $fail_task });
     }
 
@@ -85,7 +91,6 @@ OpenInteract2::Action::CommonRemove - Task to remove an object
  package OpenInteract2::Action::MyAction;
  
  use base qw( OpenInteract2::Action::CommonRemove );
-
  
  # In your action configuration:
  

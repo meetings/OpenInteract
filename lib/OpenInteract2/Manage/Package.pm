@@ -1,13 +1,12 @@
 package OpenInteract2::Manage::Package;
 
-# $Id: Package.pm,v 1.10 2003/06/11 02:43:29 lachoy Exp $
+# $Id: Package.pm,v 1.11 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
 use OpenInteract2::Exception qw( oi_error );
-use OpenInteract2::Manage;
 
-$OpenInteract2::Manage::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # INTERFACE

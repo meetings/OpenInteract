@@ -1,34 +1,18 @@
 package OpenInteract2::Context;
 
-# $Id: Context.pm,v 1.23 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Context.pm,v 1.35 2003/07/02 15:47:00 lachoy Exp $
 
 use strict;
 use base                     qw( Exporter Class::Accessor );
 use Data::Dumper             qw( Dumper );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::Log;
 
-$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.35 $ =~ /(\d+)\.(\d+)/);
 
-# XXX - Pull the version in from somewhere else?
-sub version { return '1.90' }
-
-# Global debugging level. By default debugging is on full-tilt, but
-# setup() calls $ctx->assign_debug_level() after reading in the server
-# configuration.
-
-my $DEBUG            = LALL;
-my $DB_LOG_THRESHOLD = LERROR;
-
-# Exportable debugging/logging calls
-
-sub DEBUG { return $DEBUG }
-# internal use only...
-sub _SET_DEBUG {
-#    warn "Setting _SET_DEBUG( $_[1] ) from ", join( '/', caller() ), "\n";
-    $DEBUG = $_[1];
-}
-sub LOG   { unshift @_, __PACKAGE__; goto &OpenInteract2::Context::log }
+sub version { return '1.99_01' }
 
 # Exportable deployment URL call -- main, images, static
 
@@ -47,28 +31,17 @@ my ( $CTX );
 sub CTX { return $CTX }
 
 @OpenInteract2::Context::EXPORT_OK = qw(
-     CTX DEBUG LOG DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL
+     CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL
 );
 
 require OpenInteract2::Config::Base;
 require OpenInteract2::DatasourceManager;
+require OpenInteract2::Filter;
 require OpenInteract2::Request;
 require OpenInteract2::Response;
 require OpenInteract2::Setup;
 require OpenInteract2::Action;
 require OpenInteract2::Controller;
-
-# Used in logging (change to constant/sub?)
-
-my %LOG_LEVEL_VERBOSE = (
-     LALL()   => 'ALL',
-     LDEBUG() => 'DEBUG',
-     LINFO()  => 'INFO',
-     LWARN()  => 'WARN',
-     LERROR() => 'ERROR',
-     LFATAL() => 'FATAL',
-     LOFF()   => 'OFF'
-);
 
 my @CORE_FIELDS    = qw( base_config server_config repository packages cache
                          datasource_manager );
@@ -82,13 +55,17 @@ __PACKAGE__->mk_accessors( @CORE_FIELDS, @REQUEST_FIELDS );
 # parameter 'website_dir') or an OI::Config::Base object
 
 sub create {
-    my ( $class, $item, @setup_params ) = @_;
+    my ( $class, $item, $params ) = @_;
     return $CTX if ( $CTX );
-    $item ||= {};
+    $item   ||= {};
+    $params ||= {};
+
+    my ( $website_dir );
     $CTX = bless( {}, $class );
     my ( $base_config );
     if ( ref $item eq 'OpenInteract2::Config::Base' ) {
         $base_config = $item;
+        $website_dir = $base_config->website_dir;
     }
     elsif ( $item->{website_dir} ) {
         $base_config = eval {
@@ -96,21 +73,32 @@ sub create {
                               website_dir => $item->{website_dir} })
         };
         if ( $@ ) {
-            $class->log( LALL, "Cannot create base config from ",
-                         "[$item->{website_dir}]: $@" );
             oi_error "Cannot create base config object using website ",
                      "directory [$item->{website_dir}]: $@";
         }
+        $website_dir = $item->{website_dir};
     }
+
+    # this is typically only set from standalone scripts; see POD
+
+    if ( $params->{initialize_log} and -d $website_dir ) {
+        OpenInteract2::Log->init_from_website( $website_dir );
+    }
+    elsif ( $params->{initialize_log} ) {
+        OpenInteract2::Log->init_screen;
+    }
+
+    my $log = get_logger( LOG_INIT );
+
     if ( $base_config ) {
         $CTX->base_config( $base_config );
-        $DEBUG && $class->log( LDEBUG, "Assigned base config ok" );
-        eval { $CTX->setup( @setup_params ) };
+        $log->is_debug && $log->debug( "Assigned base config ok" );
+        eval { $CTX->setup( $params ) };
         if ( $@ ) {
-            $class->log( LERROR, "Setup failed to run: $@" );
+            $log->error( "Setup failed to run: $@" );
         }
         else {
-            $DEBUG && $class->log( LDEBUG, "Setup ran ok" );
+            $log->is_info && $log->info( "Setup ran ok" );
         }
     }
     return $CTX;
@@ -129,6 +117,8 @@ sub instance {
 sub setup {
     my ( $self, $params ) = @_;
     $params ||= {};
+    my $log = get_logger( LOG_INIT );
+
     my %skip = ();
     if ( $params->{skip} ) {
         if ( ref $params->{skip} ne 'ARRAY' ) {
@@ -140,7 +130,7 @@ sub setup {
     my $base_config = $self->base_config;
     unless ( $base_config and
              ref( $base_config ) eq 'OpenInteract2::Config::Base' ) {
-        $self->log( LALL, "Cannot run setup() without base_config defined" );
+        $log->error( "Cannot run setup() without base_config defined" );
         oi_error "Cannot run setup() on context without a valid base ",
                  "configuration object set";
     }
@@ -148,18 +138,17 @@ sub setup {
     my $setup = OpenInteract2::Setup->new;
     my $server_config = $setup->read_server_config;
     $self->server_config( $server_config );
-    $DEBUG && $self->log( LINFO, "Assigned server config ok" );
+    $log->is_info && $log->info( "Assigned server config ok" );
 
     # Assign constants from server config to the context.
 
-    $self->assign_debug_level;
-    $self->assign_db_log_level;
     $self->assign_deploy_url;
     $self->assign_deploy_image_url;
     $self->assign_deploy_static_url;
     $self->assign_request_type;
     $self->assign_response_type;
-    $DEBUG && $self->log( LINFO, "Assigned constants from server config ok" );
+    $log->is_info &&
+        $log->info( "Assigned constants from server config ok" );
 
     if ( $skip{ 'initialize repository' } ) {
         $skip{ 'initialize temp lib' }++;
@@ -174,8 +163,8 @@ sub setup {
             my $packages = $setup->read_packages;
             $self->packages( $packages );
         }
-        $DEBUG && $self->log( LINFO, "Opened repository and read package ",
-                              "definitions ok" );
+        $log->is_info &&
+            $log->info( "Opened repository and read package definitions ok" );
     }
 
 
@@ -193,14 +182,14 @@ sub setup {
             }
         }
         $setup->require_module({ class => \@alias_classes });
-        $DEBUG && $self->log( LINFO, "Required alias classes ok" );
+        $log->is_info && $log->info( "Required alias classes ok" );
     }
 
     unless ( $skip{ 'initialize datasource' } ) {
         my $ds_manager_class = $server_config->{datasource_config}{manager};
         eval "require $ds_manager_class";
         $self->datasource_manager( $ds_manager_class );
-        $DEBUG && $self->log( LINFO, "Assigned aliases ok" );
+        $log->is_info && $log->info( "Assigned aliases ok" );
         $setup->check_datasources();
     }
 
@@ -209,23 +198,25 @@ sub setup {
     }
     else {
         my $action_table = $setup->read_action_table;
-        $DEBUG && $self->log( LINFO, "Read action table ok" );
+        $log->is_info && $log->info( "Read action table ok" );
         $setup->require_action_classes( $action_table );
         $setup->register_action_types;
-        $DEBUG && $self->log( LINFO, "Required action classes ok" );
+        $log->is_info && $log->info( "Required action classes ok" );
         $self->action_table( $action_table );
-        $DEBUG && $self->log( LINFO, "Assigned action table ok" );
+        $log->is_info && $log->info( "Assigned action table ok" );
+        $setup->initialize_action_filters;
+        $log->is_info && $log->info( "Assigned filters (if any) ok" );
     }
 
     unless ( $skip{ 'initialize spops' } ) {
         my $spops_config = $setup->read_spops_config;
-        $DEBUG && $self->log( LINFO, "Read SPOPS configurations ok" );
+        $log->is_info && $log->info( "Read SPOPS configurations ok" );
         unless ( $skip{ 'activate spops' } ) {
             $setup->activate_spops_classes( $spops_config );
-            $DEBUG && $self->log( LINFO, "Activated SPOPS classes ok" );
+            $log->is_info && $log->info( "Activated SPOPS classes ok" );
         }
         $self->spops_config( $spops_config );
-        $DEBUG && $self->log( LINFO, "Assigned SPOPS table ok" );
+        $log->is_info && $log->info( "Assigned SPOPS table ok" );
     }
 
     unless ( $skip{ 'initialize session' } ) {
@@ -236,24 +227,26 @@ sub setup {
         my $cache = $setup->create_cache;
         if ( $cache ) {
             $self->cache( $cache );
-            $DEBUG && $self->log( LINFO, "Created cache ok" );
+            $log->is_info && $log->info( "Created cache ok" );
         }
         else {
-            $DEBUG && $self->log( LINFO, "Cache not configured for use, ok" );
+            $log->is_info &&
+                $log->info( "Cache not configured for use, ok" );
         }
     }
 
     unless ( $skip{ 'initialize generator' } ) {
         $setup->initialize_content_generator;
-        $DEBUG && $self->log( LINFO, "Initialized content generators ok" );
+        $log->is_info && $log->info( "Initialized content generators ok" );
     }
 
     unless ( $skip{ 'initialze controller' } ) {
-        OpenInteract2::Controller->initialize_default_actions;
-        $DEBUG && $self->log( LINFO, "Initialized default actions ok" );
+        $setup->initialize_controller;
+        $log->is_info &&
+            $log->info( "Initialized controller and default actions ok" );
     }
 
-    $DEBUG && $self->log( LDEBUG, "Initialized context ok" );
+    $log->is_debug && $log->info( "Initialized context ok" );
     return $self;
 }
 
@@ -267,47 +260,11 @@ sub setup {
 # reflected in the configuration as well.
 
 
-# Assign the global debug level
-
-sub assign_debug_level {
-    my ( $self, $level ) = @_;
-    my $debug_level = $level || $self->server_config->{DEBUG};
-    return unless ( $debug_level );
-    $DEBUG = $self->_parse_log_level( $debug_level );
-#    warn "Setting assign_debug_level( $DEBUG ) from ", join( '/', caller() ), "\n";
-    return $self->server_config->{DEBUG} = $DEBUG;
-}
-
-# Assign the threshold above which we log to error object
-
-sub assign_db_log_level {
-    my ( $self, $level ) = @_;
-    my $debug_level = $level || $self->server_config->{error}{database_log};
-    return unless ( $debug_level );
-    $DB_LOG_THRESHOLD = $self->_parse_log_level( $debug_level );
-    return $self->server_config->{error}{database_log} = $DB_LOG_THRESHOLD;
-}
-
-sub _parse_log_level {
-    my ( $self, $debug_level ) = @_;
-    my ( $parsed );
-    if ( $debug_level =~ /^[\d\s]+$/ ) {
-        $parsed = int( $debug_level );
-    }
-    else {
-        my $token_re = join( '|', values %LOG_LEVEL_VERBOSE );
-        if ( $debug_level =~ /^$token_re$/ ) {
-            my %verbose_level = map { $LOG_LEVEL_VERBOSE{ $_ } => $_ } keys %LOG_LEVEL_VERBOSE;
-            $parsed =  $verbose_level{ $debug_level };
-        }
-    }
-    return $parsed;
-}
-
 # Where is this app deployed under?
 
 sub assign_deploy_url {
     my ( $self, $url ) = @_;
+    my $log = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under};
     $url = $self->_clean_deploy_url( $url );
     if ( $url and $url !~ m|^/| ) {
@@ -317,24 +274,31 @@ sub assign_deploy_url {
     }
     $DEPLOY_URL = $url;
     $self->server_config->{context_info}{deployed_under} = $url;
+    $log->is_info && $log->info( "Assigned deployment URL [$url]" );
     return $DEPLOY_URL;
 }
 
 sub assign_deploy_image_url {
     my ( $self, $url ) = @_;
+    my $log = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under_image};
     $url = $self->_clean_deploy_url( $url );
     $DEPLOY_IMAGE_URL = $url;
     $self->server_config->{context_info}{deployed_under_image} = $url;
+    $log->is_info &&
+        $log->info( "Assigned image deployment URL [$url]" );
     return $DEPLOY_IMAGE_URL;
 }
 
 sub assign_deploy_static_url {
     my ( $self, $url ) = @_;
+    my $log = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under_static};
     $url = $self->_clean_deploy_url( $url );
     $DEPLOY_STATIC_URL = $url;
     $self->server_config->{context_info}{deployed_under_static} = $url;
+    $log->is_info &&
+        $log->info( "Assigned static deployment URL [$url]" );
     return $DEPLOY_STATIC_URL;
 }
 
@@ -351,17 +315,23 @@ sub _clean_deploy_url {
 
 sub assign_request_type {
     my ( $self, $type ) = @_;
+    my $log = get_logger( LOG_INIT );
     $type ||= $self->server_config->{context_info}{request};
     $self->server_config->{context_info}{request} = $type;
     OpenInteract2::Request->set_implementation_type( $type );
+    $log->is_info &&
+        $log->info( "Assigned request type [$type]" );
 }
 
 
 sub assign_response_type {
     my ( $self, $type ) = @_;
+    my $log = get_logger( LOG_INIT );
     $type ||= $self->server_config->{context_info}{response};
     $self->server_config->{context_info}{response} = $type;
     OpenInteract2::Response->set_implementation_type( $type );
+    $log->is_info &&
+        $log->info( "Assigned response type [$type]" );
 }
 
 
@@ -370,23 +340,29 @@ sub assign_response_type {
 
 sub lookup_action_name {
     my ( $self, $action_url ) = @_;
+    my $log = get_logger( LOG_ACTION );
     unless ( $action_url ) {
         oi_error "Cannot lookup action without action name without URL";
     }
-    $DEBUG && LOG( LDEBUG, "Try to find action name for URL [$action_url]" );
+    $log->is_debug &&
+        $log->debug( "Try to find action name for URL [$action_url]" );
     my $server_config = $self->server_config;
     my $action_name = $server_config->{action_url}{ $action_url };
-    $DEBUG && LOG( LDEBUG, "Found name [$action_name] for URL [$action_url]" );
+    $log->is_debug &&
+        $log->debug( "Found name [$action_name] for URL [$action_url]" );
     return $action_name;
 }
 
 sub lookup_action_info {
     my ( $self, $action_name ) = @_;
+    my $log = get_logger( LOG_ACTION );
     unless ( $action_name ) {
+        $log->error( "No action name given to lookup info" );
         oi_error "Cannot lookup action without action name";
     }
 
-    $DEBUG && LOG( LDEBUG, "Try to find action info for [$action_name]" );
+    $log->is_debug &&
+        $log->debug( "Try to find action info for [$action_name]" );
     my $server_config = $self->server_config;
     my $action_info = $server_config->{action}{ lc $action_name };
 
@@ -394,12 +370,11 @@ sub lookup_action_info {
     # we know best.
 
     unless ( $action_info ) {
-        $DEBUG && LOG( LWARN, "Action [$action_name] not found in ",
-                              "action table" );
+        $log->error( "Action [$action_name] not found in action table" );
         oi_error "Action [$action_name] not found in action table";
     }
 
-    $DEBUG && LOG( LDEBUG, "Action [$action_name] is ",
+    $log->is_debug && $log->debug( "Action [$action_name] is ",
                            "[Class: $action_info->{class}] ",
                            "[Template: $action_info->{template}] " );
 
@@ -409,12 +384,12 @@ sub lookup_action_info {
     while ( my $action_redir = $action_info->{redir} ) {
         $action_info = $server_config->{action}{ lc $action_redir };
         unless ( $action_info ) {
-            $DEBUG && LOG( LWARN, "Failed redirect from [$current_name] to ",
-                                  "[$action_redir]: no action defined " );
+            $log->warn( "Failed redirect from [$current_name] to ",
+                        "[$action_redir]: no action defined " );
             return undef;
         }
-        $DEBUG && LOG( LDEBUG, "Redirect to [$action_redir]:\n",
-                               Dumper( $action_info ) );
+        $log->is_debug &&
+            $log->debug( "Redirect to [$action_redir]" );
         $current_name = $action_redir;
     }
     return $action_info;
@@ -423,11 +398,10 @@ sub lookup_action_info {
 
 sub lookup_action {
     my ( $self, $action_name, $props ) = @_;
-    unless ( $action_name ) {
-        oi_error "Cannot lookup action without action name";
-    }
+    my $log = get_logger( LOG_ACTION );
     my $action_info = $self->lookup_action_info( $action_name );
     unless ( $action_info ) {
+        $log->error( "No action found for [$action_name]" );
         oi_error "No action defined for [$action_name]";
     }
     return OpenInteract2::Action->new( $action_info, $props );
@@ -436,8 +410,11 @@ sub lookup_action {
 
 sub lookup_action_none {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
     my $action_info = $self->server_config->{action_info}{none};
     unless ( $action_info ) {
+        $log->error( "Please define the server configuration entry ",
+                     "under 'action_info.none'" );
         oi_error "The 'none' item under 'action_info' is not defined. ",
                  "Please check your server configuration.";
     }
@@ -450,8 +427,11 @@ sub lookup_action_none {
 
 sub lookup_action_not_found {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
     my $action_info = $self->server_config->{action_info}{not_found};
     unless ( $action_info ) {
+        $log->error( "Please define the server configuration entry ",
+                     "under 'action_info.not_found'" );
         oi_error "The 'not_found' item under 'action_info' is not ",
                  "defined. Please check your server configuration.";
     }
@@ -467,21 +447,82 @@ sub lookup_action_not_found {
 
 sub lookup_object {
     my ( $self, $object_name ) = @_;
+    my $log = get_logger( LOG_SPOPS );
     unless ( $object_name ) {
+        $log->error( "Must lookup object class using name" );
         oi_error "Cannot lookup object class without object name";
     }
     my $spops_config = $self->spops_config;
     unless ( $spops_config->{ lc $object_name } ) {
-        oi_error "No object class found for [$object_name]";
+        my $msg = "No object class found for [$object_name]";
+        $log->error( $msg );
+        oi_error $msg;
     }
-    return $spops_config->{ lc $object_name }{class};
+    my $object_class = $spops_config->{ lc $object_name }{class};
+    $log->is_debug &&
+        $log->debug( "Found class [$object_class] for [$object_name]" );
+    return $object_class;
 }
 
+
+########################################
+# CONTROLLER LOOKUP
+
+sub lookup_controller {
+    my ( $self, $name ) = @_;
+    if ( $name ) {
+        return $self->server_config->{controller}{ $name };
+    }
+    return $self->server_config->{controller};
+}
+
+########################################
+# CONTENT GENERATOR LOOKUP
+
+sub lookup_content_generator {
+    my ( $self, $name ) = @_;
+    if ( $name ) {
+        return $self->server_config->{content_generator}{ $name };
+    }
+    return $self->server_config->{content_generator};
+}
+
+sub lookup_filter {
+    my ( $self, $name ) = @_;
+    if ( $name ) {
+        return $self->{filters}{ $name };
+    }
+    return $self->{filters};
+}
+
+sub set_filter_registry {
+    my ( $self, $registry ) = @_;
+    $self->{filters} = $registry;
+    return;
+}
+
+sub add_filter {
+    my ( $self, $filter_name, $filter_info ) = @_;
+    OpenInteract2::Filter->register_filter(
+            $filter_name, $filter_info, $self->{filters} );
+}
+
+########################################
+# DIRECTORY LOOKUP
+
+sub lookup_directory {
+    my ( $self, $dir_name ) = @_;
+    if ( $dir_name ) {
+        return $self->server_config->{dir}{ $dir_name };
+    }
+    return $self->server_config->{dir};
+}
 
 ########################################
 # GLOBAL SETTINGS/ALIASES
 
 # These are generally temporary
+# TODO: Get rid of these?
 
 sub global_attribute {
     my ( $self, $name, $value ) = @_;
@@ -518,11 +559,15 @@ sub alias {
 
 sub action_table {
     my ( $self, $table ) = @_;
+    my $log = get_logger( LOG_ACTION );
     if ( $table ) {
+        $log->is_info &&
+            $log->info( "Assigning new action table" );
         $self->server_config->{action} = $table;
         my %url_to_name = ();
         while ( my ( $name, $info ) = each %{ $table } ) {
-            $DEBUG && LOG( LDEBUG, "Finding URL(s) for action [$name]" );
+            $log->is_debug &&
+                $log->debug( "Finding URL(s) for action [$name]" );
             my $action = OpenInteract2::Action->new( $info );
             my $respond_urls = $action->get_dispatch_urls;
             $url_to_name{ $_ } = $name for ( @{ $respond_urls } );
@@ -537,7 +582,12 @@ sub action_table {
 
 sub spops_config {
     my ( $self, $table ) = @_;
-    if ( $table ) { $self->server_config->{SPOPS} = $table }
+    my $log = get_logger( LOG_SPOPS );
+    if ( $table ) {
+        $log->is_info &&
+            $log->info( "Assigning new SPOPS configuration" );
+        $self->server_config->{SPOPS} = $table;
+    }
     return $self->server_config->{SPOPS};
 }
 
@@ -572,7 +622,12 @@ sub content_generator {
 
 sub template {
     my ( $self, $template ) = @_;
-    if ( $template ) { $self->{template} = $template }
+    my $log = get_logger( LOG_TEMPLATE );
+    if ( $template ) {
+        $log->is_info &&
+            $log->info( "Assigning new template object" );
+        $self->{template} = $template;
+    }
     return $self->{template};
 }
 
@@ -590,7 +645,11 @@ sub cleanup_request {
 
 sub check_security {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_SECURITY );
+
+    # TODO: make static at startup...
     my $security_class = $self->lookup_object( 'security' );
+
     my %security_info = ( security_object_class => $security_class,
                           class                 => $params->{class},
                           object_id             => $params->{object_id},
@@ -598,38 +657,15 @@ sub check_security {
                           group                 => $params->{group} );
     my $request = $self->request;
     if ( $request and $request->auth_is_logged_in ) {
+        $log->is_debug &&
+            $log->debug( "Assigning user/group from login" );
         $security_info{user}  ||= $request->auth_user;
         $security_info{group} ||= $request->auth_group;
     }
+    $log->is_debug &&
+        $log->debug( "Checking security for [$params->{class}] ",
+                     "[$params->{object_id}] with [$security_class]" );
     return SPOPS::Secure->check_security( \%security_info );
-}
-
-
-########################################
-# REQUEST INFORMATION
-
-# Just delegate these requests to the embedded OI::Request object
-
-# XXX - These will almost certainly change
-
-sub user {
-    my ( $self, @params ) = @_;
-    return $self->request->auth_user( @params );
-}
-
-sub group {
-    my ( $self, @params ) = @_;
-    return $self->request->auth_group( @params );
-}
-
-sub is_logged_in {
-    my ( $self, @params ) = @_;
-    return $self->request->auth_is_logged_in( @params );
-}
-
-sub is_admin {
-    my ( $self, @params ) = @_;
-    return $self->request->auth_is_admin( @params );
 }
 
 
@@ -639,33 +675,15 @@ sub is_admin {
 # Exception shortcuts (may remove?)
 
 sub throw            { shift; goto &OpenInteract2::Exception::throw( @_ ) }
-sub get_exceptions   { return OpenInteract2::Exception->get_stack }
-sub clear_exceptions { OpenInteract2::Exception->clear_exceptions }
 
 
-
-########################################
-# ETC
-
-# Replaces OpenInteract2::Request->scrib( ... );
-
-sub log {
-    my ( $item, $level, @msg ) = @_;
-    return undef if ( $level == LALL || $level > $DEBUG );
-    my ( $pkg, $file, $line ) = caller;
-    my @ci = caller(1);
-    if ( $level >= $DB_LOG_THRESHOLD and $msg[-1] ne 'nodb' ) {
-        # XXX: Create a new error object and save it...
-        #warn "I want to create a new error object here..."
-    }
-    if ( $msg[-1] eq 'nodb' ) {
-        pop @msg;
-    }
-    warn "$LOG_LEVEL_VERBOSE{ $level } [$line] $ci[3]: ", join( '', @msg ), "\n";
-}
+# outside world doesn't need to know...
 
 sub dump {
-    shift; warn Dumper( $_ ) for ( @_ );
+    shift;
+    my $output = '';
+    $output .= Dumper( $_ ) for ( @_ );
+    return $output;
 }
 
 1;
@@ -678,18 +696,11 @@ OpenInteract2::Context - Provides the environment for a server
 
 =head1 SYNOPSIS
 
- use OpenInteract2::Context qw( DEBUG LOG CTX );
+ use OpenInteract2::Context qw( CTX );
  
  # You can create a variable for the context as well, but normal way
  # is to import it
  my $ctx = OpenInteract2::Context->instance;
- 
- # If debugging for server is turned on, log info the long way (Note:
- # 'LDEBUG' defined by inporting ':log' from OpenInteract2::Constants)
- CTX->DEBUG && CTX->log( LDEBUG, "Things are looking great!" );
- 
- # ...or the short way (with the import)
- DEBUG && LOG( LDEBUG, "Things are looking great!" );
  
  # Get the information for the 'TT" content generator
  my $generator_info = CTX->content_generator( 'TT' );
@@ -738,11 +749,6 @@ The information is holds and services it provides access to include:
 
 =over 4
 
-=item B<debugging and logging>
-
-The C<DEBUG> and C<LOG> subroutines are exported to provide simple
-access to logging from any class.
-
 =item B<configuration>
 
 The data in the server configuration is always available. (See
@@ -766,6 +772,11 @@ information as well as create a
 L<OpenInteract2::Action|OpenInteract2::Action> object from it. (See
 C<lookup_action()>, C<lookup_action_info()>, C<lookup_action_none()>,
 C<lookup_action_not_found()>)
+
+=item B<controllers>
+
+The context provides a shortcut to lookup controller information from
+the server configuration.
 
 =item B<other aliases>
 
@@ -807,22 +818,30 @@ B<create( $base_config|\%config_params, [ \%setup_params ] )>
 
 Creates a new context. If you pass in a
 L<OpenInteract2::Config::Base|OpenInteract2::Config::Base> object or
-specify 'website_dir' in C<\%params>, it will run the server
+specify 'website_dir' in C<\%setup_params>, it will run the server
 initialization routines in C<setup()>. (If you pass in an invalid
-'website_dir' an exception is thrown.)
+directory for the parameter an exception is thrown.)
 
 If you do not know these items when the context is created, you can do
 something like:
 
- my $context = OpenInteract2::Context->create();
+ my $ctx = OpenInteract2::Context->create();
  
  ... some time later ...
  
  my $base_config = OpenInteract2::Config::Base->new({ website_dir => $dir } );
  ... or ...
  my $base_config = OpenInteract2::Config::Base->new({ filename => $file } );
- $context->base_config( $base_config );
- $context->setup();
+ $ctx->base_config( $base_config );
+ $ctx->setup();
+
+You may also initialize the L<Log::Log4perl|Log::Log4perl> logger when
+creating the context by passing a true value for the 'initialize_log'
+parameter in C<\%setup_params>. This is typically only done for
+standalone scripts and as a convenience. For example:
+
+ my $ctx = OpenInteract2::Context->create( { website_dir => $dir },
+                                           { initialize_log => 1 });
 
 Finally, C<create()> stores the context for later retrieval by
 C<instance()>.
@@ -927,128 +946,6 @@ Initialize the main controller with default actions. (Skip:
 =back
 
 Returns: the context object
-
-=head2 Object Methods: Debugging and Logging
-
-B<assign_debug_level( [ $level ] )>
-
-Assign the debugging level for the context. If C<$level> is not passed
-in we read the global 'DEBUG' item in the server configuration. The
-level should a descriptive token in the set ( 'ALL', 'DEBUG', 'INFO',
-'WARN', 'ERROR', 'FATAL', 'OFF' ) corresponding to the relevant
-logging level.
-
-Returns: new debugging level
-
-B<DEBUG()>
-
-Shortcut to the current debugging level. This value can be imported by
-your code. By default this is set in the server config, but you can
-set it on-the-fly in code as well using the method
-C<assign_debug_level()>.
-
-Example:
-
- CTX->DEBUG && CTX->log( LERROR, "Cannot find authenticated user in cookie: $@" );
-
-If you find yourself using the above idiom many times within a package,
-you can also import the C<DEBUG> symbol:
-
- use OpenInteract2::Context qw( DEBUG LOG );
-
-And call it in a slightly different manner:
-
- DEBUG && LOG( LERROR, "Cannot find authenticated user in cookie: $@" );
-
-Returns: current debugging level
-
-(See also: C<assign_debug_level>, C<LOG>, C<log>.)
-
-B<log( $level, @message )>
-
-If C<$level> is constant C<LALL> or it is less than or equal to the
-current C<DEBUG> level as set in the server configuration, C<@message>
-is sent along with calling information to STDERR using C<warn>.
-
-The message is formatted:
-
- level [line-num] Package::subroutine: error-message
-
-For example:
-
- INFO [97] OpenInteract2::Context::lookup_action_info: Action [news] not found in table
-
-The B<error-message> is created by joining the contents of C<@message>
-together.
-
-Example:
-
- # Always log this
-
- CTX->log( LALL, "We should never reach this area. Something is wrong" );
-
- # This is a lot of information, so we shouldn't display this
- # except at permissive debugging levels
-
- CTX->DEBUG && CTX->log( LDEBUG, "Context is: ", Dumper( CTX ) );
-
-The logging level symbols are also listed in
-L<OpenInteract2::Constants|OpenInteract2::Constants>. Here they are in
-briefer form, ordered:
-
-=over 4
-
-=item * LALL: Highest rank, intended to turn on all logging. Messages
-sent with this rank will always get logged.
-
-=item * LDEBUG: Fine-grained informational events that are most useful
-to debug an application.
-
-=item * LINFO: Informational messages that highlight the progress of
-the application at coarse-grained level.
-
-=item * LWARN: Potentially harmful situations.
-
-=item * LERROR: Error events that might still allow the application to
-continue running.
-
-=item * LFATAL: Very severe error events that will presumably lead the
-application to abort.
-
-=item * LOFF: Lowest rank, intended to turn off logging for all
-messages except those sent with C<LALL>.
-
-=back
-
-So setting C<DEBUG> in your server configuration to C<LFATAL> would
-only log messages sent with L<LFATAL> and L<LALL> rankings. Setting it
-to C<LWARN> would log messages sent with C<LWARN>, C<LERROR>,
-C<LFATAL> and C<LALL> rankings.
-
-Returns: nothing
-
-(See also: LOG and DEBUG shortcuts.)
-
-B<LOG( $level, @message)>
-
-Shortcut for logging call. This routine can be imported by your
-code. The effects are exactly the same as specified in C<log>, but the
-call can be a little shorter. The following are common debugging
-calls:
-
- my CTX = OpenInteract2::Context->instance;
- CTX->log( LALL, "We should never reach this area. Something is wrong" );
- CTX->DEBUG && CTX->log( LDEBUG, "Context is: ", Dumper( CTX ) );
-
-These can be written using both common symbols as:
-
- use OpenInteract2::Context qw( DEBUG LOG );
- ...
- my CTX = OpenInteract2::Context->instance;
- LOG( LALL, "We should never reach this area. Something is wrong" );
- DEBUG && LOG( LDEBUG, "Context is: ", Dumper( CTX ) );
-
-Returns: see entry for C<log>.
 
 =head2 Object Methods: Actions
 
@@ -1198,6 +1095,38 @@ to hold the class name, the second does not.
 Returns: SPOPS class name; throws an exception if C<$object_name> is
 not found.
 
+=head2 Object Methods: Controller
+
+B<lookup_controller( [ $controller_name ] )>
+
+Returns a hashref of information about C<$controller_name>. If
+C<$controller_name> not given returns a hashref with the controller
+names as keys and the associated info as values. This is typically
+just a class and content generator type, but we may add more...
+
+=head2 Object Methods: Content Generator
+
+B<lookup_content_generator( [ $generator_name ] )>
+
+Returns a hashref of information about C<$generator_name>. If
+C<$generator_name> not given returns a hashref with the generator
+names as keys and the associated info as values. This is typically
+just a class and method, but we may add more...
+
+B<content_generator( $name )>
+
+Returns information necessary to call the content generator named by
+C<$name>. A 'content generator' is simply a class which can marry some
+sort of template with some sort of data to produce content. The
+generator that comes with OpenInteract is the Template Toolkit, but
+there is no reason you cannot use another templating system or an
+entirely different technology, like C<SOAP>.
+
+Returns: a
+L<OpenInteract2::ContentGenerator|OpenInteract2::ContentGenerator>
+object. Generally you'd only call C<execute()> on it with the
+appropriate parameters to get the generated content.
+
 =head2 Object Methods: Attributes and Aliases
 
 B<global_attribute( $name, [ $value ] )>
@@ -1330,18 +1259,6 @@ that.
 
 Returns: the result of looking up the datasource using
 L<OpenInteract2::DatasourceManager|OpenInteract2::DatasourceManager>
-
-B<content_generator( $name )>
-
-Returns information necessary to call the content generator named by
-C<$name>. A 'content generator' is simply a class which can marry some
-sort of template with some sort of data to produce content. The
-generator that comes with OpenInteract is the Template Toolkit, but
-there is no reason you cannot use another templating system or an
-entirely different technology, like C<SOAP>.
-
-Returns: a list with three-members - the class of the generator, the
-method of the generator and a subroutine reference to the method.
 
 B<template( [ $template ] )>
 

@@ -1,13 +1,12 @@
 package OpenInteract2::Manage::Package::Export;
 
-# $Id: Export.pm,v 1.7 2003/06/11 02:43:28 lachoy Exp $
+# $Id: Export.pm,v 1.8 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
-use Data::Dumper qw( Dumper );
 use File::Spec;
 
-$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub brief_description {
     return 'Export a package to a distributable format';

@@ -1,16 +1,15 @@
 package OpenInteract2::Manage::Website;
 
-# $Id: Website.pm,v 1.11 2003/06/11 02:43:29 lachoy Exp $
+# $Id: Website.pm,v 1.12 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
 use File::Spec;
 use OpenInteract2::Config::Readonly;
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package   qw( DISTRIBUTION_EXTENSION );
 
-$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 sub list_param_require  { return [ 'website_dir' ] }
 sub list_param_validate { return [ 'website_dir' ] }

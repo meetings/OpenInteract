@@ -1,17 +1,28 @@
 =head1 NAME
 
-Converting from 1.x - Moving your site and custom packages from OI 1.x to 2.x
+OpenInteract2::Manual::Conversion - Moving your site and custom packages from OI 1.x to 2.x
+
+=head1 SYNOPSIS 
+
+This part of the manual will describe how to migrate your website and
+packages from OpenInteract 1.x to OpenInteract 2.x.
+
+=head1 BASE REPOSITORY
+
+There is no more base repository! (The crowd cheers.) Every website
+stands on its own, every package's classes sit in the
+'OpenInteract2::' namespace. This makes for much simpler development
+and deployment.
 
 =head1 WEBSITE
 
-This part of the manual will describe how to translate your
-website. All this should require is translating your server
-configuration and any database schema changes.
+All this should require is translating your server configuration and
+any database schema changes.
 
 =head2 Server Configuration
 
 First off, OI 2.x exclusively uses the INI file format for the server
-configuration -- 1.x allowed you to use either the serialized Perl
+configuration. OI 1.x allowed you to use either the serialized Perl
 data structure or the INI format. Hopefully you will see this as a
 good thing.
 
@@ -32,11 +43,10 @@ just the highlights...)
 
 =head2 Database
 
-Following is a list of database schema changes you need to make to
-bring your 1.x database up to speed:
-
-(...the wind howls, the sagebrush ambles across the screen, nothing is
-here...)
+Instead of converting schemas from OI 1.x, it's recommended you
+install OI 2.x to a separate database and use standard SQL tools to
+migrate the data. Hopefully every package will have a document
+C<DATA_CONVERSION> that will help with this process.
 
 =head1 PACKAGES
 
@@ -106,9 +116,10 @@ renamings/removals will have to be reflected here. Running:
 from your package's root directory will still let you know of any
 discrepancies between your C<MANIFEST> and the files in the directory.
 
-You can also use the =ExtUtils::Manifest= trick:
+You can also use the L<ExtUtils::Manifest|ExtUtils::Manifest> trick:
 
- $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
+  $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
+
 
 =head2 Configuration (conf/)
 
@@ -119,14 +130,26 @@ the action configuration and the SPOPS configurations.
 
 Two scripts are included with OI2 to help with this task:
 
- script/translate_action_to_ini.pl
- script/translate_spops_to_ini.pl
+=over 4
+
+=item *
+
+C<script/translate_action_to_ini.pl>
+
+=item *
+
+C<script/translate_spops_to_ini.pl>
+
+=back
 
 Both are just wrappers around a class found under
 C<OpenInteract2::Conversion>. They work on STDIN and STDOUT:
 
- perl translate_action_to_ini.pl < ~/pkg/mypkg/conf/action.perl > action.ini
- perl translate_action_to_ini.pl < ~/pkg/mypkg/conf/spops.perl > spops.ini
+  $ cd /path/to/OpenInteract-2.00-source/script
+  $ perl translate_action_to_ini.pl < ~/pkg/mypkg/conf/action.perl > action.ini
+  $ perl translate_spops_to_ini.pl < ~/pkg/mypkg/conf/spops.perl > spops.ini
+  
+
 
 In addition to doing the fairly simple conversion from the Perl data
 structure to INI, it also does a few modifications to your data. Some
@@ -149,7 +172,9 @@ SPOPS configurations in a single file, but they're probably easier to
 edit if they're in multiple files.
 
 B<NOTE>: Each SPOPS configuration file should begin with C<spops> so
-the OI2 startup procedure can find it.
+the OI2 startup procedure can find it. You may also list your SPOPS
+configuration files in your C<package.conf> file under the key
+C<spops_file>.
 
 =head2 Documentation (doc/)
 
@@ -171,7 +196,7 @@ To change:
 
 =item *
 
-C<titles> - Delete this file
+C<titles> - Delete this file, it's no longer used.
 
 =item *
 
@@ -183,17 +208,64 @@ C<package.pod> - If you have a file of this name, rename it to
 
 =head2 Package data (data/)
 
+While the data installation process has been completely rewritten (see
+L<OpenInteract2::SQLInstall|OpenInteract2::SQLInstall>, the data
+declarations have only small changes. Two of the conversion
+declarations were removed since they're no longer necessary with the
+elimination of the base repository:
+
+=over 4
+
+=item *
+
+C<transform_class_to_website>
+
+=item *
+
+C<transform_class_to_oi>
+
+=back
+
+And the remaining two conversion declarations were renamed:
+
+=over 4
+
+=item *
+
+Old value: C<transform_default_to_id>
+
+New value: C<transform_default>
+
+=item *
+
+Old value: C<transform_to_now>
+
+New value: C<transform_now>
+
+=back
+
 =head2 SQL Structures (struct/)
+
+These should remain the same.
 
 =head2 Template (template/)
 
 =head2 Libraries (OpenInteract/)
 
+=head2 Handlers (OpenInteract/Handler)
+
 =head2 Examples (eg/)
+
+No changes.
 
 =head2 HTML files/images (html/)
 
+No changes.
+
 =head2 Standalone scripts (script/)
+
+No changes, besides needing to rewrite them to use the new OI2
+features.
 
 =head1 COPYRIGHT
 

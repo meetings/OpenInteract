@@ -18,14 +18,18 @@ Module::Build->new(
       'Class::Fields'     => 0,
       'Class::Observable' => 1.00,
       'Class::Singleton'  => 1.03,
-      'DateTime'          => 0.12,
+      'DateTime'          => 0.13,
       'DateTime::Format::Strptime' => 1.00,
-      'DBD::SQLite'       => 0.25, # remove this for final release
       'Devel::StackTrace' => 0,
       'Digest::MD5'       => 0,
       'Email::Valid'      => 0.12,
+      'Exception::Class'  => 1.10,
+      'File::DirSync'     => 1.08,
       'File::MMagic'      => 0,
       'HTML::Entities'    => 1.13,
+      'Lingua::Stem'      => 0.50,
+      'Log::Dispatch'     => 2.00,
+      'Log::Log4perl'     => 0.34,
       'LWP::Simple'       => 0,
       'MIME::Lite'        => 2.00,
       'Mail::Sendmail'    => 0.77,
@@ -34,7 +38,10 @@ Module::Build->new(
       'Template'          => 2.04,
       'Test::More'        => 0.41,
       'Text::Sentence'    => 0,
-      'Time::Piece'       => 1.07,
       'URI'               => 1,
+
+# remove these for final release?
+      'Apache::Session::SQLite' => 0.21,
+      'DBD::SQLite'             => 0.25,
     },
 )->create_build_script();

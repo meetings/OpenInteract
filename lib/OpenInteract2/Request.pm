@@ -1,27 +1,30 @@
 package OpenInteract2::Request;
 
-# $Id: Request.pm,v 1.18 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Request.pm,v 1.20 2003/06/27 17:11:43 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory Class::Accessor );
+use Log::Log4perl            qw( get_logger );
 use DateTime;
 use DateTime::Format::Strptime qw( strptime );
 use OpenInteract2::Constants qw( :log SESSION_COOKIE );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Cookie;
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Session;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # ACCESSORS
 
-my @FIELDS = qw( server_name remote_host user_agent referer cookie_header
-                 url_absolute url_relative url_initial action_name task_name
-                 theme theme_values session
-                 auth_user auth_group auth_is_admin auth_is_logged_in );
+my @FIELDS = qw(
+    server_name remote_host user_agent referer cookie_header
+    url_absolute url_relative url_initial action_name task_name
+    theme theme_values session
+    auth_user auth_group auth_is_admin auth_is_logged_in
+);
 __PACKAGE__->mk_accessors( @FIELDS );
 
 my ( $REQUEST_TYPE, $REQUEST_CLASS );
@@ -46,7 +49,9 @@ sub get_current { return $REQUEST_CLASS->get_current }
 
 sub new {
     my ( $class, @params ) = @_;
+    my $log = get_logger( LOG_REQUEST );
     unless ( $REQUEST_CLASS ) {
+        $log->fatal( "No request implementation type set" );
         oi_error 'Before creating an OpenInteract2::Request object you ',
                  'must set the request type with "set_implementation_type()"';
     }
@@ -100,9 +105,9 @@ sub param_date {
                           $self->param( $name . '_month' ),
                           $self->param( $name . '_day' ) );
     return undef unless ( $y and $m and $d );
-    return DateTime->new( year     => $y,
-                          month    => $m,
-                          day      => $d );
+    return DateTime->new( year  => $y,
+                          month => $m,
+                          day   => $d );
 }
 
 sub param_datetime {
@@ -140,8 +145,14 @@ sub auth_user_id {
 
 sub _set_url {
     my ( $self, $url ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    $log->is_info &&
+        $log->info( "Setting absolute URL [$url]" );
     $self->url_absolute( $url );
-    my $relative_url = OpenInteract2::URL->parse_absolute_to_relative( $url );
+    my $relative_url =
+        OpenInteract2::URL->parse_absolute_to_relative( $url );
+    $log->is_debug &&
+        $log->debug( "Setting relative URL [$relative_url]" );
     $self->url_relative( $relative_url );
 
     my ( $action_url, $task ) = OpenInteract2::URL->parse( $relative_url );
@@ -160,8 +171,8 @@ sub _set_url {
     }
     $self->action_name( $action_name );
     $self->task_name( $task );
-    DEBUG && LOG( LDEBUG, "Read URI and parsed ok" );
-
+    $log->is_info &&
+        $log->info( "Pulled action info [$action_name] [$task] from URL" );
     return $relative_url;
 }
 
@@ -197,11 +208,14 @@ sub upload {
 
 sub _set_upload {
     my ( $self, $name, $value ) = @_;
+    my $log = get_logger( LOG_REQUEST );
     unless ( $name and $value ) {
-        LOG( LWARN, "Called set_upload() without valid params",
+        $log->warn( "Called set_upload() without valid params",
                     "Name [$name] Value [", ref( $value ), "]" );
         return undef;
     }
+    $log->is_info &&
+        $log->info( "Adding upload $name" );
     my @existing = $self->upload( $name );
     if ( ref $value eq 'ARRAY' ) {
         push @existing, @{ $value };
@@ -217,7 +231,11 @@ sub _set_upload {
 
 sub clean_uploads {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+
     my @uploads = $self->upload;
+    $log->is_info &&
+        $log->info( "Cleaning all uploads: ", scalar @uploads );
     foreach my $item ( @uploads ) {
         unlink( $item->tmp_name ) if ( -f $item->tmp_name );
     }
@@ -271,8 +289,11 @@ sub create_session {
 
 sub create_theme {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_REQUEST );
     my $user = $self->auth_user;
     unless ( $user ) {
+        $log->is_info &&
+            $log->info( "Theme not created, no user authenticated" );
         oi_error "Must authenticate before trying to fetch/create theme";
     }
     my $theme_id = $user->{theme_id}
@@ -281,11 +302,12 @@ sub create_theme {
         CTX->lookup_object( 'theme' )->fetch( $theme_id )
     };
     if ( $@ ) {
-        LOG( LERROR, "Failed to fetch theme [$theme_id]: $@" );
+        $log->error( "Failed to fetch theme [$theme_id]: $@" );
         oi_error "Failed to fetch requested theme";
     }
     $self->theme( $theme );
-    DEBUG && LOG( LDEBUG, "Loaded theme $theme_id ok, now getting values" );
+    $log->is_info &&
+        $log->info( "Loaded theme $theme_id ok, getting values" );
     $self->theme_values( $theme->all_values );
 }
 
@@ -307,10 +329,10 @@ OpenInteract2::Request->register_factory_type(
 # OVERRIDE
 
 # Initialize new object
-sub init          { die 'Subclass must implement init()' }
+sub init          { oi_error 'Subclass must implement init()' }
 
 # Clear out current object
-sub clear_current { die 'Subclass must implement clear_current()' }
+sub clear_current { oi_error 'Subclass must implement clear_current()' }
 
 1;
 
@@ -323,13 +345,15 @@ OpenInteract2::Request - Represent a single request
 =head1 SYNOPSIS
 
  # In server startup/OI::Context initialization
- 
+  
  OpenInteract2::Request->set_implementation_type( 'cgi' );
  
  # Later...
  use OpenInteract2::Request;
  
  my $req = OpenInteract2::Request->get_current;
+ # also:
+ my $req = CTX->request;
  print "All parameters: ", join( ', ', $req->param(), "\n";
  print "User agent: ", $req->user_agent(), "\n";
 
@@ -342,7 +366,7 @@ that are slightly inconsistent with the rest of OpenInteract.
 
 When you create a new request object you need to specify what type of
 request it is. (Your OpenInteract server configuration should have
-this specified in the 'server_info' section.) The process of
+this specified in the 'context_info' section.) The process of
 initializing the object during the C<new()> call fills the Request
 object with any parameters, uploaded files and important headers from
 the client.
@@ -431,7 +455,7 @@ For example:
 
  # mytime = '2003-04-01 6:08 PM'
  my $datetime = $request->param_date( 'mytime', '%Y-%m-%d %I:%M %p' );
-
+ 
  # mytime_year   = '2003'
  # mytime_month  = '04'
  # mytime_day    = '01'

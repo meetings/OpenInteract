@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Package;
 
-# $Id: Package.pm,v 1.8 2003/06/11 02:43:30 lachoy Exp $
+# $Id: Package.pm,v 1.10 2003/07/01 19:04:57 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor );
@@ -8,7 +8,7 @@ use File::Basename ();
 use File::Spec;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_FILENAME => 'package.conf';
 
@@ -43,8 +43,6 @@ my %HASH_FIELDS = map { $_ => 1 } qw( template_plugin filter );
 
 my @FIELDS      = ( @SERIAL_FIELDS, @OBJECT_FIELDS );
 OpenInteract2::Config::Package->mk_accessors( @FIELDS );
-
-sub DEBUG { return OpenInteract2::Config->DEBUG }
 
 ########################################
 # CLASS METHODS
@@ -269,13 +267,14 @@ OpenInteract2::Config::Package - Read, write and check package config files
  author              Chuck <chuck@guy.com>
  url                 http://www.oirox.com/
  template_plugin     TestPlugin     OpenInteract2::Plugin::Test
+ filter              mywiki         OpenInteract2::Filter::MyWiki
  description
  This package rocks!
 
  # Create a new package file from scratch
-
+ 
  use OpenInteract2::Config::Package;
-
+ 
  my $c = OpenInteract2::Config::Package->new();
  $c->name( 'MyPackage' );
  $c->version( 1.53 );
@@ -283,19 +282,19 @@ OpenInteract2::Config::Package - Read, write and check package config files
  $c->author( [ 'Steve <steve@dude.com>', 'Chuck <chuck@guy.com>' ] );
  $c->template_plugin({ TestPlugin => 'OpenInteract2::Plugin::Test' });
  $c->description( 'This package rocks!' );
-
+ 
  # Set the filename to save the config to and save it
-
+ 
  $c->filename( 'mydir/pkg/MyPackage/package.conf' );
  eval { $c->save_config };
-
+ 
  # Specify a directory for an existing config
-
+ 
  my $c = OpenInteract2::Config::Package->new(
                     { directory => '/path/to/mypackage' } );
-
+ 
  # Specify a filename for an existing config
-
+ 
  my $c = OpenInteract2::Config::Package->new(
                     { filename => 'work/pkg/mypackage/package-alt.conf' } );
 
@@ -324,6 +323,7 @@ Example:
 
  template_plugin    MyPlugin     OpenInteract2::Template::Plugin::MyPlugin
  template_plugin    MyPluginNew  OpenInteract2::Template::Plugin::MyPluginNew
+ filter             mywiki       OpenInteract2::Filter::MyWiki
 
 Additionally, all data below the last entry C<description> is used as
 the description. Example:
@@ -509,10 +509,10 @@ Template Toolkit plugins defined by this package.
 
 C<filter> (\%)
 
-XXX: Need to implement this
-Filters defined by this package.
+Filters defined by this package. It should be in a 'name class' format
+simiilar to C<template_plugin>.
 
-description ($*)
+C<description> ($*)
 
 Description of this package. Instead of reading a single line we read
 every line after the 'description' key to the end of the file. Do not

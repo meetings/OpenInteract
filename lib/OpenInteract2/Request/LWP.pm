@@ -1,17 +1,19 @@
 package OpenInteract2::Request::LWP;
 
-# $Id: LWP.pm,v 1.12 2003/06/11 02:43:27 lachoy Exp $
+# $Id: LWP.pm,v 1.14 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
-use CGI                     qw();
-use File::Temp              qw( tempfile );
+use CGI                      qw();
+use File::Temp               qw( tempfile );
 use IO::File;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 
-$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( lwp );
 OpenInteract2::Request::LWP->mk_accessors( @FIELDS );
@@ -20,6 +22,9 @@ my ( $CURRENT );
 
 sub init {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    $log->is_info &&
+        $log->info( "Creating LWP request" );
 
     my $client      = $params->{client};
     my $lwp_request = $params->{request};
@@ -41,10 +46,10 @@ sub init {
     if ( $client ) {
         $self->remote_host( $client->peerhost );
     }
-    DEBUG && LOG( LDEBUG, "Set request and server properties ok" );
 
     $self->_parse_request;
-    DEBUG && LOG( LDEBUG, "Parsed request ok" );
+    $log->is_debug &&
+        $log->debug( "Parsed request ok" );
     $CURRENT = $self;
     return $self;
 }
@@ -59,11 +64,12 @@ sub _parse_request {
     my $method = $request->method;
     if ( $method eq 'GET' || $method eq 'HEAD' ) {
         $self->_assign_args( CGI->new( $request->uri->equery ) );
-        $request->uri->query(undef);
+        $request->uri->query( undef );
     }
     elsif ( $method eq 'POST' ) {
         my $content_type = $request->content_type;
-        if ( ! $content_type || $content_type eq "application/x-www-form-urlencoded" ) {
+        if ( ! $content_type
+                 || $content_type eq "application/x-www-form-urlencoded" ) {
             $self->_assign_args( CGI->new( $request->content ) );
             $request->uri->query(undef);
         }
@@ -71,16 +77,18 @@ sub _parse_request {
             return $self->_parse_multipart_data();
         }
         else {
-            die "Invalid content type: $content_type\n";
+            oi_error "Invalid content type: $content_type";
         }
     }
     else {
-        die "Unsupported method: $method\n";
+        oi_error "Unsupported method: $method";
     }
 }
 
 sub _assign_args {
     my ( $self, $cgi ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    my $num_param = 0;
     foreach my $name ( $cgi->param() ) {
         my @values = $cgi->param( $name );
         if ( scalar @values > 1 ) {
@@ -89,14 +97,20 @@ sub _assign_args {
         else {
             $self->param( $name, $values[0] );
         }
+        $num_param++;
     }
+    $log->is_debug &&
+        $log->debug( "Set parameters ok ($num_param)" );
 }
 
 sub _parse_multipart_data {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_REQUEST );
     my $request = $self->lwp;
 
-    my $full_content_type = $request->headers->header( "Content-Type" );
+    my $num_param = 0;
+    my $num_upload = 0;
+    my $full_content_type = $request->headers->header( 'Content-Type' );
     my ( $boundary ) = $full_content_type =~ /boundary=(\S+)$/;
     foreach my $part ( split(/-?-?$boundary-?-?/, $request->content ) ) {
         $part =~ s|^\r\n||g;
@@ -136,14 +150,17 @@ sub _parse_multipart_data {
                                    filename     => $filename,
                                    tmp_name     => $tmp_filename });
             $self->_set_upload( $name, $oi_upload );
-            DEBUG && LOG( LDEBUG, "Set arg [$name] to OI::Upload" );
+            $num_upload++;
         }
         else {
             my $value = join( "\n", @lines );
-            DEBUG && LOG( LDEBUG, "Set arg [$name] to $value" );
             $self->param( $name, $value );
+            $num_param++;
         }
     }
+    $log->is_debug &&
+        $log->debug( "Set parameters ($num_param) and file ",
+                     "uploads ($num_upload)" );
 }
 
 1;

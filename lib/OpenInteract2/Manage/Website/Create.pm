@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::Create;
 
-# $Id: Create.pm,v 1.13 2003/06/11 02:43:28 lachoy Exp $
+# $Id: Create.pm,v 1.14 2003/06/12 00:05:37 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -12,7 +12,7 @@ use OpenInteract2::Manage    qw( SYSTEM_PACKAGES );
 use OpenInteract2::Package;
 use OpenInteract2::Repository;
 
-$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 # think about merging this with info from OI2::Manage::Website::SetDirectoryPermissions
 
@@ -94,7 +94,6 @@ sub run_task {
     my $source_dir  = $self->param( 'source_dir' );
     $self->_create_directories( $website_dir );
     $self->notify_observers( progress => 'Directories created' );
-    $self->_copy_site_info( $website_dir, $source_dir );
     $self->_copy_widgets( $website_dir, $source_dir );
     $self->notify_observers(
         progress => 'Global templates copied' );
@@ -146,21 +145,6 @@ sub _create_directories {
                               action   => 'create subdirectory',
                               filename => $full_subdir,
                               message  => 'Directory created' } );
-    }
-}
-
-sub _copy_site_info {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_site_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                           'website' );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_site_dir )
-                         ->run( $website_dir );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status( { is_ok   => 'yes',
-                              action  => 'copy site information',
-                              message => 'Copied file from sample site',
-                              filename => $copied } );
     }
 }
 

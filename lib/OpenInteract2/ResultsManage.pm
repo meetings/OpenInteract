@@ -1,16 +1,18 @@
 package OpenInteract2::ResultsManage;
 
-# $Id: ResultsManage.pm,v 1.2 2003/06/11 02:43:31 lachoy Exp $
+# $Id: ResultsManage.pm,v 1.4 2003/06/25 14:11:57 lachoy Exp $
 
 use strict;
 use Data::Dumper  qw( Dumper );
 use IO::File;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::ResultsIterator;
 use SPOPS::Utility;
 
-$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use constant FILENAME_WIDTH => 20;
 
@@ -49,6 +51,7 @@ sub clear {
 
 sub save {
     my ( $self, $to_save, $p ) = @_;
+    my $log = get_logger( LOG_APP );
 
     my ( $is_empty );
 
@@ -57,11 +60,12 @@ sub save {
     $is_empty++ if ( UNIVERSAL::isa( $to_save, 'SPOPS::Iterator' ) and ! $to_save->has_next );
 
     if ( $is_empty ) {
-        LOG( LERROR, "Bailing out of saving search results -- nothing to save!" );
+        $log->error( "Bailing out of saving search results -- nothing to save!" );
         return undef;
     }
 
-    DEBUG && LOG( LDEBUG, "Trying to save search results." );
+    $log->is_debug &&
+        $log->debug( "Trying to save search results." );
 
     my %params = ( force_mixed => $p->{force_mixed},
                    extra       => $p->{extra},
@@ -102,7 +106,7 @@ sub save {
     # clear the lockfile and die.
 
     if ( $@ ) {
-        LOG( LERROR, "Search result save failure. $@" );
+        $log->error( "Search result save failure. $@" );
         $out->close();
         $meta_out->close();
         $self->results_clear( $params{search_id} );
@@ -115,7 +119,8 @@ sub save {
 
     # Set various information into the object
 
-    DEBUG && LOG( LDEBUG, "($num_records) results saved ok." );
+    $log->is_debug &&
+        $log->debug( "($num_records) results saved ok." );
     $self->{num_records}      = $num_records;
     return $self->{search_id} = $params{search_id};
 }
@@ -236,11 +241,13 @@ sub persist_meta {
 
 sub get_meta {
     my ( $self, $search_id ) = @_;
+    my $log = get_logger( LOG_APP );
+
     my $meta_filename = $self->build_meta_filename( $search_id );
     return {} unless ( -f $meta_filename );
     eval { open( META, $meta_filename ) || die "Cannot open ($meta_filename): $!" };
     if ( $@ ) {
-        LOG( LERROR, "Error opening meta file. $@" );
+        $log->error( "Error opening meta file. $@" );
         return {};
     }
     local $/ = undef;
@@ -261,6 +268,8 @@ sub get_meta {
 
 sub retrieve {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_APP );
+
     unless ( $self->{search_id} ) {
         die "Cannot retrieve results without a search_id! Please ",
             "set at object initialization or as a property of the ",
@@ -276,8 +285,9 @@ sub retrieve {
 
     $self->{num_records} = 0;
 
-    DEBUG && LOG( LDEBUG, "Retrieving raw search results for ",
-                  "ID ($self->{search_id})" );
+    $log->is_debug &&
+        $log->debug( "Retrieving raw search results for ",
+                     "ID ($self->{search_id})" );
     $self->assign_results_to_object( $self->retrieve_raw_results( $p ) );
 
     # If they asked for an iterator return it, but first clear out any
@@ -295,14 +305,15 @@ sub retrieve {
 
 sub retrieve_iterator {
     my ( $self, $p ) = @_;
-    require OpenInteract2::ResultsIterator;
+    my $log = get_logger( LOG_APP );
 
     # 'min' and 'max' can be properties or passed in
 
     $self->{min}         ||= $p->{min};
     $self->{max}         ||= $p->{max};
 
-    DEBUG && LOG( LDEBUG, "Retrieving search iterator for ID",
+    $log->is_debug &&
+        $log->debug( "Retrieving search iterator for ID",
                   "($self->{search_id})" );
 
     unless ( $self->{result_list} ) {
@@ -344,14 +355,17 @@ sub get_id_list {
 
 sub retrieve_raw_results {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_APP );
+
     unless ( $self->{search_id} ) {
         oi_error "No search_id defined in object!";
     }
 
     my $meta_info = $self->get_meta({ search_id => $self->{search_id} });
-    DEBUG && LOG( LDEBUG, "Run on: ($meta_info->{date})",
-                  "Saved: ($meta_info->{num_records})",
-                  "Type: ($meta_info->{record_class})" );
+    $log->is_debug &&
+        $log->debug( "Run on: ($meta_info->{date})",
+                     "Saved: ($meta_info->{num_records})",
+                     "Type: ($meta_info->{record_class})" );
     if ( $meta_info->{num_records} <= 0 ) {
         return $meta_info;
     }
@@ -359,7 +373,7 @@ sub retrieve_raw_results {
     my $filename = $self->build_results_filename;
     eval { open( RESULTS, $filename ) || die "Cannot open ($filename): $!\n" };
     if ( $@ ) {
-        LOG( LERROR, "Search result retrieval failure. $@" );
+        $log->error( "Search result retrieval failure. $@" );
         return undef;
     }
 
@@ -505,16 +519,18 @@ sub results_clear {
 
 sub generate_search_id {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_APP );
+
     $self->{results_dir} ||= $self->get_results_dir;
 
     unless ( -d $self->{results_dir} ) {
-        LOG( LERROR, "Search results directory ($self->{results_dir})",
+        $log->error( "Search results directory ($self->{results_dir})",
                       "is not a directory" );
         die "Configuration option for writing search results ",
             "($self->{results_dir}) is not a directory";
     }
     unless ( -w $self->{results_dir} ) {
-        LOG( LERROR, "Search results dir ($self->{results_dir}) is not writeable" );
+        $log->error( "Search results dir ($self->{results_dir}) is not writeable" );
         die "Configuration option for writing search results ",
             "($self->{results_dir}) exists but is not writeable";
     }
@@ -523,7 +539,8 @@ sub generate_search_id {
         my $filename = $self->build_results_filename( $search_id );
         my $lockfile = $self->build_lock_filename( $search_id );
         next if ( -f $filename || -f $lockfile );
-        DEBUG && LOG( LDEBUG, "Found non-existent search info for ",
+        $log->is_debug &&
+            $log->debug( "Found non-existent search info for ",
                       "($search_id) in ($self->{results_dir})" );
         return $search_id;
     }

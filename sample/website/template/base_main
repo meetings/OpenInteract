@@ -24,14 +24,16 @@
 <tr><td>
 <table border="0" width="100%" bgcolor="[% theme.main_menu_bgcolor %]"
        cellpadding="4" cellspacing="0">
- <tr align="center" valign="middle">
-   <td><font size="+1">
+ <tr valign="middle">
+   <td align="left"><div class="titlebar">
        <b><a href="[% home_url %]">Home</a></b> |
        <b><a href="[% OI.make_url( ACTION = 'user' ) %]">Users</a></b> |
        <b><a href="[% OI.make_url( ACTION = 'group' ) %]">Groups</a></b> |
        <b><a href="[% OI.make_url( ACTION = 'page',
-                                   TASK   = 'directory_list' ) %]">Pages</a></b>
-   </td>
+                                   TASK   = 'directory_list' ) %]">Pages</a></b> |
+       <b><a href="[% OI.make_url( ACTION = 'news' ) %]">News</a></b>
+   </div></td>
+   <td align="right">[%- INCLUDE full_text::search_box( submit_label = 'Search' ) -%]</td>
  </tr>
 </table>
 

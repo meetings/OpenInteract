@@ -1,6 +1,6 @@
 =head1 NAME
 
-OpenInteract and LDAP
+OpenInteract2::Manual::LDAP - OpenInteract and LDAP
 
 =head1 SYNOPSIS
 

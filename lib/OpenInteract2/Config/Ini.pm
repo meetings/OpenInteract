@@ -1,14 +1,13 @@
 package OpenInteract2::Config::Ini;
 
-# $Id: Ini.pm,v 1.8 2003/06/11 02:43:30 lachoy Exp $
+# $Id: Ini.pm,v 1.9 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
-
-sub DEBUG { return OpenInteract2::Config->DEBUG }
+$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # CLASS METHODS
@@ -120,6 +119,7 @@ sub get_comments {
 
 sub translate_ini {
     my ( $self, $content ) = @_;
+    my $log = get_logger( LOG_CONFIG );
 
     # Content can be either an arrayref of lines from a file or a
     # scalar with the content.
@@ -147,15 +147,17 @@ sub translate_ini {
             next;
         }
         if ( /^\s*\[\s*(\S|\S.*\S)\s*\]\s*$/) {
-            DEBUG && LOG( LDEBUG, "Found section [$1]" );
+            $log->is_debug &&
+                $log->debug( "Found section [$1]" );
             ( $section, $sub_section ) =
                               $self->read_section_head( $1, \@comments );
             @comments = ();
             next;
         }
         my ( $param, $value ) = /^\s*([^=]+?)\s*=\s*(.*)\s*$/;
-        DEBUG && LOG( LDEBUG, "Set [$section $sub_section $param] ",
-                      "to [$value]" );
+        $log->is_debug &&
+            $log->debug( "Set [$section $sub_section $param] ",
+                         "to [$value]" );
         $self->read_item( $section, $sub_section, $param, $value );
     }
     return $self;
@@ -222,6 +224,8 @@ sub set_value {
 
 sub write_file {
     my ( $self, $filename ) = @_;
+    my $log = get_logger( LOG_CONFIG );
+
     $filename ||= $self->{_m}{filename} || 'config.ini';
     my ( $original_filename );
     if ( -f $filename ) {
@@ -235,8 +239,9 @@ sub write_file {
         $self->{Global}{ $key } = $self->{ $key };
     }
 
-    DEBUG && LOG( LDEBUG, "Writing INI to [$filename] (original: ",
-                  "$original_filename)" );
+    $log->is_debug &&
+        $log->debug( "Writing INI to [$filename] (original: ",
+                     "$original_filename)" );
     open( OUT, '>', $filename )
           || die "Cannot write configuration to [$filename]: $!";
     print OUT "# Written by ", ref $self, " at ", scalar localtime, "\n";

@@ -1,15 +1,16 @@
 package OpenInteract2::Action::CommonSearch;
 
-# $Id: CommonSearch.pm,v 1.7 2003/06/10 17:01:24 lachoy Exp $
+# $Id: CommonSearch.pm,v 1.9 2003/06/25 14:11:57 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::ResultsManage;
 
-$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # SEARCH FORM
@@ -43,6 +44,8 @@ sub _search_form_init_param {
 sub search {
     my ( $self ) = @_;
     $self->_search_init_param;
+    my $log = get_logger( LOG_ACTION );
+
     my %tmpl_params = ();
 
     my $req = CTX->request;
@@ -54,7 +57,8 @@ sub search {
         # If the search has been run before, just set the ID
 
         if ( $search_id ) {
-            DEBUG && LOG( LDEBUG, "Retrieving search for ID [$search_id]" );
+            $log->is_debug &&
+                $log->debug( "Retrieving search for ID [$search_id]" );
             $results->{search_id} = $search_id;
         }
 
@@ -63,13 +67,15 @@ sub search {
         # results
 
         else {
-            DEBUG && LOG( LDEBUG, "Running search for the first time" );
+            $log->is_debug &&
+                $log->debug( "Running search for the first time" );
             my $iterator = eval {
                 $self->_search_build_and_run({ is_paged => 'yes' })
             };
             $self->_search_catch_errors( "$@" );
             $results->save( $iterator );
-            DEBUG && LOG( LDEBUG, "Search ID [$results->{search_id}]" );
+            $log->is_debug &&
+                $log->debug( "Search ID [$results->{search_id}]" );
         }
 
         if ( $results->{search_id} ) {
@@ -85,11 +91,12 @@ sub search {
             $tmpl_params{total_pages} = $results->find_total_page_count( $hits_per_page );
             $tmpl_params{total_hits}  = $results->{num_records};
             $tmpl_params{search_id}   = $results->{search_id};
-            DEBUG && LOG( LDEBUG, "Search info: min: ($min); max: ($max)",
-                                  "records ($results->{num_records})" );
+            $log->is_debug &&
+                $log->debug( "Search info: min: ($min); max: ($max)",
+                             "records ($results->{num_records})" );
         }
         else {
-            LOG( LWARN, "No search ID from results, creating empty iterator" );
+            $log->warn( "No search ID from results, creating empty iterator" );
             $tmpl_params{iterator} = SPOPS::Iterator->from_list( [] );
         }
     }
@@ -191,6 +198,7 @@ sub _search_catch_errors {
 
 sub _search_build_and_run {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
 
     $self->_search_build_criteria;
     $self->_search_build_where_clause;
@@ -225,7 +233,7 @@ sub _search_build_and_run {
                                          order => $order,
                                          %{ $additional_params } }) };
     if ( $@ ) {
-        LOG( LERROR, "Search failed: $@" );
+        $log->error( "Search failed: $@" );
         oi_error $@;
     }
     return $iter;
@@ -237,6 +245,8 @@ sub _search_build_and_run {
 
 sub _search_build_criteria {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $object_class = $self->param( 'c_object_class' );
     my $object_table = $object_class->base_table;
     my ( %search );
@@ -252,7 +262,8 @@ sub _search_build_criteria {
         my @value = $req->param( $field );
         next unless ( defined $value[0] and $value[0] ne '' );
         my $full_field = _fq( $object_table, $field );
-        DEBUG && LOG( LDEBUG, "Adding search criteria [$field] [@value]" );
+        $log->is_debug &&
+            $log->debug( "Adding search criteria [$field] [@value]" );
         $search{ $full_field } = ( scalar @value > 1 ) ? \@value : $value[0];
     }
     $self->param( c_search_criteria => \%search );
@@ -269,6 +280,8 @@ sub _search_build_criteria {
 
 sub _search_build_where_clause {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $criteria = $self->param( 'c_search_criteria' );
 
     # Find all our configured information
@@ -288,7 +301,8 @@ sub _search_build_where_clause {
 
     my ( @where, @value ) = ();
     while ( my ( $field_name, $field_value ) = each %{ $criteria } ) {
-        DEBUG && LOG( LDEBUG, "Adding criteria [$field_name: $field_value]" );
+        $log->is_debug &&
+            $log->debug( "Adding criteria [$field_name: $field_value]" );
         next unless ( defined $field_value );
 
         # Discard unqualified fieldnames. Note that this regex will
@@ -335,7 +349,8 @@ sub _search_build_where_clause {
                 $search_value = "%$value%";
             }
             push @value, $search_value;
-            DEBUG && LOG( LDEBUG, "Clause [$field_name $oper $search_value]" );
+            $log->is_debug &&
+                $log->debug( "Clause [$field_name $oper $search_value]" );
         }
         push @where, '( ' . join( ' OR ', @where_param ) . ' )';
     }
@@ -355,7 +370,7 @@ TABLE:
         next if ( $link_table eq $object_table );
         my $id_link = $table_links->{ $link_table };
         unless ( ref $id_link eq 'ARRAY' ) {
-            LOG( LWARN, "No links for non-object table used [$link_table]; ",
+            $log->warn( "No links for non-object table used [$link_table]; ",
                         "this is likely a bad thing..." );
             next TABLE;
         }
@@ -366,8 +381,9 @@ TABLE:
         my $num_linking_fields = scalar @{ $id_link };
         if ( $num_linking_fields == 2 ) {
             my ( $object_field, $link_field ) = @{ $id_link };
-            DEBUG && LOG( LDEBUG, "Linking [$link_table] with ",
-                          "[$object_field = $link_field]" );
+            $log->is_debug &&
+                $log->debug( "Linking [$link_table] with ",
+                             "[$object_field = $link_field]" );
             push @where, "$object_field = $link_field";
         }
 
@@ -375,8 +391,9 @@ TABLE:
 
         elsif ( $num_linking_fields == 4 ) {
             my ( $from, $middle_from, $middle_to, $to ) = @{ $id_link };
-            DEBUG && LOG( LDEBUG, "Linking [$from = $middle_from > ",
-                                  "$middle_to = $to]" );
+            $log->is_debug &&
+                $log->debug( "Linking [$from = $middle_from > ",
+                             "$middle_to = $to]" );
                 push @where, "$from = $middle_from ",
                              "$middle_to = $to";
             my ( $middle_table ) = $middle_from =~ /^([\w\.]*)\./; # greedy on purpose
@@ -389,13 +406,14 @@ TABLE:
     $self->param( c_search_query_values => \@value );
     $self->_search_query_customize;
 
-    DEBUG && LOG( LDEBUG, join( "\n",
-                  "Built: ",
-                  "  FROM: " .
-                  join( ', ', $self->param( 'c_search_query_tables' ) ),
-                  "  WHERE: " . join( ' AND ', $self->param( 'c_search_query_where' ) ),
-                  "  VALUES:" . join( ', ', $self->param( 'c_search_query_values' ) ),
-    ) );
+    $log->is_debug &&
+        $log->debug( join( "\n",
+                           "Built: ",
+                           "  FROM: " .
+                           join( ', ', $self->param( 'c_search_query_tables' ) ),
+                           "  WHERE: " . join( ' AND ', $self->param( 'c_search_query_where' ) ),
+                           "  VALUES:" . join( ', ', $self->param( 'c_search_query_values' ) ),
+                         ) );
     return $self;
 }
 

@@ -1,13 +1,14 @@
 package OpenInteract2::Auth;
 
-# $Id: Auth.pm,v 1.6 2003/06/11 02:43:33 lachoy Exp $
+# $Id: Auth.pm,v 1.8 2003/06/24 03:35:37 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my ( $AUTH_USER_CLASS, $AUTH_GROUP_CLASS, $AUTH_ADMIN_CLASS );
 my ( $USE_CUSTOM, $CUSTOM_CLASS, $CUSTOM_METHOD, $CUSTOM_FAIL_METHOD );
@@ -18,6 +19,7 @@ sub login {
         $class->_include_impl_classes;
     }
 
+    my $log = get_logger( LOG_AUTH );
     my $request = CTX->request;
 
     my ( $is_logged_in );
@@ -32,7 +34,7 @@ sub login {
     # TODO: Throw exception here?
 
     unless ( $user ) {
-        LOG( LERROR, "No user returned from [$AUTH_USER_CLASS]" );
+        $log->error( "No user returned from [$AUTH_USER_CLASS]" );
         return;
     }
     $request->auth_user( $user );
@@ -56,27 +58,30 @@ sub login {
 
 sub run_custom_handler {
     my ( $class,  $user, $is_logged_in, $groups, $is_admin ) = @_;
+    my $log = get_logger( LOG_AUTH );
     unless ( $USE_CUSTOM ) {
         $USE_CUSTOM = $class->_include_custom_class;
     }
     return if ( $USE_CUSTOM eq 'no' );
-    DEBUG && LOG( LDEBUG, "Custom login handler/method being used: ",
+    $log->is_debug &&
+        $log->debug( "Custom login handler/method being used: ",
                           "[$CUSTOM_CLASS] [$CUSTOM_METHOD]" );
     eval {
         $CUSTOM_CLASS->$CUSTOM_METHOD(
                 $user, $is_logged_in, $groups, $is_admin )
     };
     if ( $@ ) {
-        LOG( LERROR, "Custom login handler died with: $@" );
+        $log->error( "Custom login handler died with: $@" );
         if ( $CUSTOM_FAIL_METHOD ) {
-            DEBUG && LOG( LDEBUG, "Custom login handler failure method: ",
+            $log->is_debug &&
+                $log->debug( "Custom login handler failure method: ",
                           "[$CUSTOM_CLASS] [$CUSTOM_FAIL_METHOD]" );
             eval {
                 $CUSTOM_CLASS->$CUSTOM_FAIL_METHOD(
                         $user, $is_logged_in, $groups, $is_admin )
             };
             if ( $@ ) {
-                LOG( LERROR, "Custom login handler failure method ",
+                $log->error( "Custom login handler failure method ",
                              "died with: $@" );
             }
         }
@@ -104,6 +109,7 @@ sub _include_impl_classes {
 
 sub _include_custom_class {
     my ( $class ) = @_;
+    my $log = get_logger( LOG_AUTH );
     my $server_config = CTX->server_config;
     $CUSTOM_CLASS = $server_config->{login}{custom_handler};
     unless ( $CUSTOM_CLASS ) {
@@ -111,7 +117,7 @@ sub _include_custom_class {
     }
     eval "require $CUSTOM_CLASS";
     if ( $@ ) {
-        LOG( LERROR, "Tried to use custom login handler [$CUSTOM_CLASS]",
+        $log->error( "Tried to use custom login handler [$CUSTOM_CLASS]",
                      "but requiring the class failed: $@" );
         return 'no';
     }
@@ -127,7 +133,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Auth - Base class for logging in OpenInteract users
+OpenInteract2::Auth - Base class for logging in OpenInteract users
 
 =head1 SYNOPSIS
 

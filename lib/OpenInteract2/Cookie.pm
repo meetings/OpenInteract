@@ -1,12 +1,12 @@
 package OpenInteract2::Cookie;
 
-# $Id: Cookie.pm,v 1.7 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Cookie.pm,v 1.8 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use CGI::Cookie;
 use OpenInteract2::Context qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Cookie::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Cookie::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 # keys names, values CGI::Cookie objects
 
@@ -21,7 +21,7 @@ sub create {
     my @cgi_keys = qw( name value expires domain path );
     foreach my $key ( @cgi_keys ) {
         next unless ( $params->{ $key } );
-        $cgi_params{"-$key"} = $params->{ $key };
+        $cgi_params{ "-$key" } = $params->{ $key };
     }
     my $cookie = CGI::Cookie->new( %cgi_params );
     if ( $params->{HEADER} ) {

@@ -1,17 +1,20 @@
 package OpenInteract2::Session::SQLite;
 
-# $Id: SQLite.pm,v 1.5 2003/06/11 02:43:26 lachoy Exp $
+# $Id: SQLite.pm,v 1.6 2003/06/24 03:35:40 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Session );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_config, $session_id ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     my $impl_class = $session_config->{impl_class};
     my %params = ();
     if ( my $handle = $class->_get_sqlite_handle( $session_config ) ) {
@@ -23,9 +26,10 @@ sub _create_session {
     else {
         oi_error "Insufficient parameters (this should have been caught earlier)";
     }
-    DEBUG && LOG( LINFO, "Trying to fetch SQLite session [$session_id] ",
-                         "[DSN: $params{DataSource}] [Impl: $impl_class] ",
-                         "[Handle: $params{Handle}]" );
+    $log->is_info &&
+        $log->info( "Trying to fetch SQLite session [$session_id] ",
+                    "[DSN: $params{DataSource}] [Impl: $impl_class] ",
+                    "[Handle: $params{Handle}]" );
     my %session = ();
     tie %session, $impl_class, $session_id, \%params;
     return \%session;

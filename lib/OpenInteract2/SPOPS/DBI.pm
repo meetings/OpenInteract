@@ -1,14 +1,12 @@
 package OpenInteract2::SPOPS::DBI;
 
-# $Id: DBI.pm,v 1.4 2003/04/21 14:17:28 lachoy Exp $
+# $Id: DBI.pm,v 1.5 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::SPOPS );
-use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
-use SPOPS::ClassFactory      qw( OK NOTIFY );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # SPOPS CONFIGURATION

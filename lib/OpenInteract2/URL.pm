@@ -1,11 +1,12 @@
 package OpenInteract2::URL;
 
-# $Id: URL.pm,v 1.13 2003/06/11 02:43:31 lachoy Exp $
+# $Id: URL.pm,v 1.14 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw(
-    DEBUG LOG CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL
+    CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL
 );
 use URI;
 
@@ -118,20 +119,21 @@ sub _create_deployment {
 
 sub create_from_action {
     my ( $class, $action, $task, $params ) = @_;
+    my $log = get_logger( LOG_OI );
+
     my $info = eval { CTX->lookup_action_info( $action ) };
 
     # ...if the action isn't found
     if ( $@ ) {
-        DEBUG && LOG( LWARN, "Request URL for action [$action] but ",
-                             "it was not found" );
+        $log->warn( "Request URL for action [$action]; not found" );
         return undef;
     }
 
     # ...if a URL for the action isn't found
     unless ( $info->{url_primary} ) {
-        DEBUG && LOG( LWARN, "Request URL for action [$action] but ",
-                             "primary URL was not found in action info; ",
-                             "probably means it's not URL-accessible" );
+        $log->warn( "Request URL for action [$action] but ",
+                    "primary URL was not found in action info; ",
+                    "probably means it's not URL-accessible" );
         return undef;
     }
 

@@ -1,16 +1,18 @@
 package OpenInteract2::Action::CommonUpdate;
 
-# $Id: CommonUpdate.pm,v 1.8 2003/06/10 17:01:23 lachoy Exp $
+# $Id: CommonUpdate.pm,v 1.9 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
 
 sub display_form {
     my ( $self ) = @_;
     $self->_update_init_param;
+    my $log = get_logger( LOG_ACTION );
 
     my $fail_task = $self->param( 'c_display_form_fail_task' );
     my $object_class = $self->param( 'c_object_class' );
@@ -19,7 +21,7 @@ sub display_form {
         my $id = $self->param( 'c_id' );
         $object = eval { $object_class->fetch( $id ) };
         if ( $@ ) {
-            LOG( LERROR, "Failed to fetch object [$object_class: $id]: $@" );
+            $log->error( "Failed to fetch object [$object_class: $id]: $@" );
             $self->param_add(
                 error_msg => "Cannot fetch object for update: $@" );
             return $self->execute( task => $fail_task );
@@ -41,6 +43,7 @@ sub update {
     my ( $self ) = @_;
     $self->_update_init_param;
 
+    my $log = get_logger( LOG_ACTION );
     CTX->response->return_url( $self->param( 'c_update_return_url' ) );
     my $fail_task = $self->param( 'c_update_fail_task' );
     my $object = eval { $self->_common_fetch_object };
@@ -49,7 +52,7 @@ sub update {
     }
 
     unless ( $object and $object->is_saved ) {
-        LOG( LERROR, "Object does not exist or is not saved, cannot update" );
+        $log->error( "Object does not exist or is not saved, cannot update" );
         my $msg = join( '', "You cannot update this object because it ",
                             "has not yet been saved." );
         $self->param_add( error_msg => $msg );
@@ -89,7 +92,7 @@ sub update {
     $self->_update_customize( $object, $old_data, \%save_options );
     eval { $object->save( \%save_options ) };
     if ( $@ ) {
-        LOG( LERROR, "Update of $object_spec failed: $@" );
+        $log->error( "Update of $object_spec failed: $@" );
         $self->param_add( error_msg => "Object update failed: $@" );
         return $self->execute({ task => $fail_task });
     }
@@ -97,7 +100,8 @@ sub update {
     $self->param( c_object_old_data => $old_data );
     $self->_update_post_action;
     my $success_task = $self->param( 'c_update_task' );
-    DEBUG && LOG( LDEBUG, "Update ok, executing task [$success_task]" );
+    $log->is_debug &&
+        $log->debug( "Update ok, executing task [$success_task]" );
     return $self->execute({ task => $success_task });
 }
 

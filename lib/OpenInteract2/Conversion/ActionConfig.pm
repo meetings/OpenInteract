@@ -1,10 +1,12 @@
 package OpenInteract2::Conversion::ActionConfig;
 
-# $Id: ActionConfig.pm,v 1.3 2003/06/11 02:43:29 lachoy Exp $
+# $Id: ActionConfig.pm,v 1.4 2003/06/11 11:48:04 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Conversion::IniConfig );
 use OpenInteract2::Exception qw( oi_error );
+
+$OpenInteract2::Conversion::ActionConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 my @ORDER = qw( class method security template package title weight
                 is_lookup object_key order field_list label_list size_list

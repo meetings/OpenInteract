@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::TestDB;
 
-# $Id: TestDB.pm,v 1.6 2003/06/11 02:43:28 lachoy Exp $
+# $Id: TestDB.pm,v 1.8 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Manage::Website::TestDB::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::TestDB::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub brief_description {
     return 'Test all configured database connections in a website';
@@ -26,7 +26,6 @@ sub run_task {
         $self->_add_status( { is_ok   => 'yes',
                               message => $msg } );
     }
-    DEBUG && LOG( LDEBUG, "Datasources defined in config ok" );
 
     my $dbi_ds = 0;
     my @status = ();
@@ -44,7 +43,6 @@ DATASOURCE:
             $self->_add_status( \%s );
             next DATASOURCE;
         }
-        DEBUG && LOG( LDEBUG, "Datasource [$name] has required items" );
         my $db = eval { CTX->datasource( $name ) };
         if ( $@ ) {
             $s{message} = $@;
@@ -57,7 +55,6 @@ DATASOURCE:
             $self->_add_status( \%s );
             next DATASOURCE;
         }
-        DEBUG && LOG( LDEBUG, "Datasource [$name] connected ok" );
         my $test_table = 'oi_test_create';
         eval { $db->do( "CREATE TABLE $test_table " .
                         "( oi_id int not null, primary key( oi_id ) )" ) };
@@ -67,7 +64,6 @@ DATASOURCE:
             $self->_add_status( \%s );
             next DATASOURCE;
         }
-        DEBUG && LOG( LDEBUG, "Datasource [$name] table created" );
         $s{is_ok} = 'yes';
         eval { $db->do( "DROP TABLE $test_table" ) };
         if ( $@ ) {
@@ -75,17 +71,11 @@ DATASOURCE:
                           "ok, but DROP failed: $@. Please remove " .
                           "table [$test_table] by hand.";
         }
-        else {
-            DEBUG && LOG( LDEBUG, "Datasource [$name] table dropped" );
-        }
         eval { $db->disconnect };
         if ( $@ ) {
             $s{message} = "Connected to database, create table, " .
                           "dropped table, but could not disconnect " .
                           "from database: $@";
-        }
-        else {
-            DEBUG && LOG( LDEBUG, "Datasource [$name] disconnected" );
         }
         $self->_add_status( \%s );
     }

@@ -1,15 +1,15 @@
 package OpenInteract2::Datasource::LDAP;
 
-# $Id: LDAP.pm,v 1.4 2003/06/11 02:51:16 lachoy Exp $
+# $Id: LDAP.pm,v 1.6 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
-use Data::Dumper          qw( Dumper );
-use Net::LDAP             qw();
+use Log::Log4perl            qw( get_logger );
+use Net::LDAP                qw();
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
-use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use constant LDAP_PORT    => 389;
 use constant LDAP_DEBUG   => 0;
@@ -18,16 +18,21 @@ use constant LDAP_VERSION => 2;
 
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
+    my $log = get_logger( LOG_DS );
     unless ( ref $ds_info ) {
+        $log->error( "No data given to create LDAP [$ds_name] handle" );
         oi_error "Cannot create connection without datasource info!";
     }
     unless ( $ds_name ) {
-        LOG( LALL, 'WARNING: Correct usage of connect() is',
-             '$class->connect( $ds_name, \%ds_info ). Continuing...' );
+        $log->warn( 'Correct usage of connect() is',
+                    '$class->connect( $ds_name, \%ds_info ). ',
+                    'Continuing...' );
     }
 
     unless ( $ds_info->{host} ) {
-        oi_error "Key 'host' must be defined in hashref of parameters.";;
+        $log->error( "Required configuration key undefined ",
+                     "'datasource.$ds_name.host'" );
+        oi_error "Key 'host' must be defined in hashref of parameters.";
     }
 
     # Set defaults
@@ -37,7 +42,8 @@ sub connect {
     $ds_info->{timeout} ||= LDAP_TIMEOUT;
     $ds_info->{version} ||= LDAP_VERSION;
 
-    DEBUG && LOG( LDEBUG, "LDAP connect info:\n", Dumper( $ds_info ) );
+    $log->is_debug &&
+        $log->debug( "LDAP connect info:\n", CTX->dump( $ds_info ) );
 
     my $ldap = Net::LDAP->new( $ds_info->{host},
                                timeout => $ds_info->{timeout},
@@ -46,14 +52,15 @@ sub connect {
                                version => $ds_info->{version} );
 
     unless ( $ldap ) {
-        OpenInteract2::Exception::Datasource->throw(
+        oi_datasource_error
                     "Cannot create connection to LDAP directory",
                     { datasource_name => $ds_name,
                       datasource_type => 'LDAP',
-                      connect_params  => "$ds_info->{host} $ds_info->{port}" } );
+                      connect_params  => "$ds_info->{host} $ds_info->{port}" };
     }
 
-    DEBUG && LOG( LDEBUG, "LDAP directory [$ds_name] connected ok." );
+    $log->is_info &&
+        $log->info( "LDAP directory [$ds_name] connected ok." );
 
     if ( $ds_info->{perform_bind} ) {
         $class->bind( $ldap, $ds_info );
@@ -64,10 +71,12 @@ sub connect {
 
 sub bind {
     my ( $class, $ldap, $ds_info ) = @_;
+    my $log = get_logger( LOG_DS );
     my %bind_params = ();
     if ( $ds_info->{sasl} and $ds_info->{bind_dn} ) {
         eval { require Authen::SASL };
         if ( $@ ) {
+            $log->error( "Authen::SASL not available, cannot do SASL auth" );
             oi_error "You requested SASL authentication, but Authen::SASL ",
                      "could not be loaded: $@";
         }
@@ -79,8 +88,9 @@ sub bind {
         $bind_params{password} = $ds_info->{bind_password};
     }
 
-    DEBUG && LOG( LDEBUG, "Calling bind() with DN ($ds_info->{bind_dn}) ",
-                  "and params:\n", Dumper( \%bind_params ) );
+    $log->is_debug &&
+        $log->debug( "Calling bind() with DN ($ds_info->{bind_dn}) ",
+                     "and params:\n", CTX->dump( \%bind_params ) );
     my $bind_msg = $ldap->bind( $ds_info->{bind_dn}, %bind_params );
     if ( my $bind_code = $bind_msg->code ) {
         my $error_msg = $bind_msg->error . " (Code: $bind_code)";
@@ -92,7 +102,8 @@ sub bind {
                          { datasource_type => 'LDAP',
                            connect_params  => $params } );
     }
-    DEBUG && LOG( LDEBUG, "Bind to [$ds_info->{bind_dn}] ok" );
+    $log->is_info &&
+        $log->info( "Bound to [$ds_info->{bind_dn}] ok" );
 }
 
 
@@ -127,9 +138,9 @@ OpenInteract2::Datasource::LDAP - Centralized connection location to LDAP direct
  bind_dn       = cn=webuser, ou=People, dc=mycompany, dc=com
  bind_password = urkelnut
  perform_bind  = yes
-
+ 
  # Request the datasource 'primary' from the $OP object
-
+ 
  my $ldap = CTX->datasource( 'primary' );
  my $mesg =  $ldap->search( "urkelFan=yes" );
  ...
@@ -226,13 +237,9 @@ B<connect_and_bind( \%connect_params, \%other_params )>
 
 Run both the C<connect()> and C<bind()> methods.
 
-=head1 BUGS
-
-None known.
-
 =head1 TO DO
 
-Nothing known.
+This hasn't been tested yet. (Got an LDAP server/setup handy?)
 
 =head1 SEE ALSO
 

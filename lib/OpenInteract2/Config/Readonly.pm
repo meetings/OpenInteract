@@ -1,17 +1,16 @@
 package OpenInteract2::Config::Readonly;
 
-# $Id: Readonly.pm,v 1.4 2003/06/11 02:43:30 lachoy Exp $
+# $Id: Readonly.pm,v 1.5 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use File::Basename           qw( basename );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Wrap               qw( wrap );
 
-$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
-
-sub DEBUG { return OpenInteract2::Config->DEBUG }
+$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 # Name of the file that specifies which files we shouldn't overwrite
 # when copying
@@ -47,12 +46,13 @@ sub get_writeable_files {
 
 sub read_config {
     my ( $class, $dir ) = @_;
+    my $log = get_logger( LOG_CONFIG );
     my $overwrite_check_file = $class->_create_readonly_file( $dir );
     return [] unless ( -f $overwrite_check_file );
     my ( @no_write );
     eval { open( NOWRITE, '<', $overwrite_check_file ) || die $! };
     if ( $@ ) {
-        LOG( LERROR, "Cannot read readonly file [$overwrite_check_file]: $@" );
+        $log->error( "Cannot read readonly file [$overwrite_check_file]: $@" );
         return [];
     }
     while ( <NOWRITE> ) {

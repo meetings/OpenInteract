@@ -1,6 +1,6 @@
 =head1 NAME
 
-OpenInteract Authentication
+OpenInteract2::Manual::Authentication - Recognizing users and groups in OpenInteract2
 
 =head1 SYNOPSIS
 

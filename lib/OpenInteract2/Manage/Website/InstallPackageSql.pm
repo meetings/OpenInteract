@@ -1,14 +1,14 @@
 package OpenInteract2::Manage::Website::InstallPackageSql;
 
-# $Id: InstallPackageSql.pm,v 1.5 2003/06/10 04:31:59 lachoy Exp $
+# $Id: InstallPackageSql.pm,v 1.7 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
-use OpenInteract2::Context qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub brief_description {
     return "Run the 'install_sql_structure', 'install_sql_data' and " .

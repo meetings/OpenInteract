@@ -1,14 +1,12 @@
 package OpenInteract2::SPOPS::LDAP;
 
-# $Id: LDAP.pm,v 1.3 2003/06/11 02:43:26 lachoy Exp $
+# $Id: LDAP.pm,v 1.4 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::SPOPS );
-use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
-
+$OpenInteract2::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # SPOPS CONFIGURATION

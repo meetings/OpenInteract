@@ -1,4 +1,4 @@
-# $Id: utils.pl,v 1.14 2003/06/11 00:38:17 lachoy Exp $
+# $Id: utils.pl,v 1.17 2003/06/26 04:56:16 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
@@ -6,19 +6,33 @@ use File::Basename           qw( basename );
 use File::Path;
 use File::Spec;
 use IO::File;
-use OpenInteract2::Constants qw( LERROR LINFO );
+use Log::Log4perl            qw( :levels );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::Ini;
+use OpenInteract2::Log;
 use OpenInteract2::Manage;
 use OpenInteract2::Setup;
 use Test::More;
 
 my $WEBSITE_CREATE_THRESHOLD = 60 * 60;      # 60 minutes
 my ( $TEST_DIR );
+
 $Data::Dumper::Indent = 1;
 
-# Always turn debugging down
-OpenInteract2::Context->_SET_DEBUG( LERROR );
+my ( $log );
+
+sub main::LOG {
+     return $log;
+}
+
+BEGIN {
+    $log = OpenInteract2::Log->init_file( 'oi2_tests.log', $INFO );
+    $log->info( "Starting test run" );
+}
+
+END {
+    $log->info( "Finished test run" );
+}
 
 # Dump out a reference
 
@@ -162,19 +176,26 @@ sub main::install_website {
              "This may take a while...\n";
     }
     if ( -d $website_dir ) {
+        LOG()->debug( "Removing existing dir [$website_dir]" );
         rmtree( $website_dir );
-        unlink( get_test_site_db_file() );
+        my $db_file = get_test_site_db_file();
+        LOG()->debug( "Removing existing db file [$db_file]" );
+        unlink( $db_file );
     }
     my $tmp_dir = get_tmp_dir();
     unless ( -d $tmp_dir ) {
+        LOG()->debug( "Creating temp dir [$tmp_dir]" );
         mkdir( $tmp_dir, 0777 );
     }
 
     # let any errors bubble up
-    OpenInteract2::Manage->new( 'create_website',
-                                { website_dir => $website_dir,
-                                  source_dir  => $source_dir } )
-                         ->execute;
+    my $manage = OpenInteract2::Manage->new( 'create_website',
+                                             { website_dir => $website_dir,
+                                               source_dir  => $source_dir } );
+    LOG()->debug( "Created management task for creating website" );
+    $manage->execute;
+    LOG()->debug( "Executed management task ok" );
+
     _write_website_check_file();
     _modify_server_config();
 

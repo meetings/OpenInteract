@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::TestLDAP;
 
-# $Id: TestLDAP.pm,v 1.5 2003/06/11 02:43:28 lachoy Exp $
+# $Id: TestLDAP.pm,v 1.7 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Manage::Website::TestLDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::TestLDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub brief_description {
     return 'Test all configured LDAP connections in a website';

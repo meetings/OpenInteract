@@ -1,6 +1,6 @@
 =head1 NAME
 
-Datasources in OpenInteract
+OpenInteract2::Manual::Datasource - Datasources in OpenInteract
 
 =head1 SYNOPSIS
 

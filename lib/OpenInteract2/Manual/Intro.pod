@@ -1,8 +1,13 @@
 =head1 NAME
 
-Introduction to OpenInteract2
+OpenInteract2::Manual::Install - Create an OpenInteract2 website in ten minutes!
 
-=head1 DESCRIPTION
+=head1 SYNOPSIS
+
+This part of the manual will walk you through setting up an
+OpenInteract2 website.
+
+=head1 WHAT IS IT?
 
 OpenInteract2 is an extensible application server that includes
 everything you need to quickly build robust applications. It includes:
@@ -56,212 +61,86 @@ interfaces.
 
 =back
 
-=head1 GETTING STARTED
+=head1 CONCEPTS
 
-=head2 Creating a Website
+For more information about these concepts see
+L<OpenInteract2::Manual::Architecture|OpenInteract2::Manual::Architecture>.
 
-Once you've downloaded and installed the OpenInteract2 distribution
-you need to create a website. Many administrative tasks are
-accomplished through the C<oi2_manage> script that should have been
-copied to somewhere along your path you installed OpenInteract2. One
-of them is creating a new website. Here's how.
+=head2 Context
 
-First, set the environment variable OPENINTERACT2 to the directory
-your website will live. The directory shouldn't exist yet.
+Holds all application configuration information and provides a central
+lookup mechanism. This is a singleton (there's only one in the system
+at any time) and can be imported from the
+L<OpenInteract2::Context|OpenInteract2::Context> class since it's used
+fairly often.
 
- $ export OPENINTERACT2=/path/to/my/website
+=head2 Adapter
 
-(You'll need to use the full path for now, relative paths will fail in
-non-obvious ways.)
+This is the tool that sits between your interface (e.g.,
+Apache/mod_perl, CGI, etc.) and the OpenInteract server. The adapter
+translates parameters from the user, information about the request
+(hostname, URL, referer, cookies, etc.) and other data into the
+relevant L<OpenInteract2::Request|OpenInteract2::Request> subclass.
 
-Many OI2 scripts use this environment variable and it saves us
-typing. We'll refer to this as C<$WEBSITE_DIR> throughout this guide.
+Once the OpenInteract cycle is complete it translates OpenInteract
+data (content, headers, etc.) into a response to send back to the user
+via the relevant L<OpenInteract2::Response|OpenInteract2::Response>
+subclass. For an example see
+L<Apache::OpenInteract2|Apache::OpenInteract2>.
 
-Next, issue the command to create the website:
+=head2 Controller
 
- $ oi2_manage create_website --source_dir=/path/to/OpenInteract2-source
+Once the adapter has created the request and response it hands off the
+processing to the
+L<OpenInteract2::Controller|OpenInteract2::Controller> object. This
+reads the URL and creates the relevant action object that will
+generate the content. It knows which action object to create through a
+URL-to-action mapping created at server startup. The controller places
+the generated content in a larger scope so you can control common
+graphical elements (sidebars, menus, etc.) from once place.
 
-(You'll need to use the full path for now, relative paths will fail in
-non-obvious ways.)
+=head2 Action
 
-The C<--source_dir> must have at least the C<sample/> and C<pkg/>
-directories from the OpenInteract2 distribution.
+Actions are the core of OpenInteract2. Each action provides a discrete
+set of functionality. What "discrete set" means is up to the
+developer, but typically this is a set of SCRUD (Search - CReate -
+Update - Delete) operations on a class of objects.
 
-=head2 Configuring Your Site: server.ini
+Each action is represented by zero or more URLs, and each operation is
+specified by a task referenced in that URL. So if I created a 'news'
+action my URLs might look like:
 
-Once you've done that, you'll need to edit the server configuration
-file. See a brief description of this and other configuration files
-below (L<CONFIGURATION FILES>), but for now let's say you're impatient
-and want to see something running as soon as possible to see how
-things work.
+  /news/search/
+  /news/create/
+  /news/update/
+  /news/remove/
 
-First, make sure you have L<DBD::SQLite|DBD::SQLite> installed. This
-is a standalone, file-based SQL database you have to do very little
-configuration for. (Win32 users can grab the PPM from the theoryx5
-repository -- see L<SEE ALSO>.)
 
-Next, open up C<$WEBSITE_DIR/conf/server.ini> in your favorite text
-editor and make the following changes, replacing your actual website
-directory for C<$WEBSITE_DIR> throughout:
+Every task returns some sort of content, generally by passing data to
+a Content Generator which marries it with a template. See
+L<OpenInteract2::Action|OpenInteract2::Action> for much more
+information.
 
-B<Set request/response interfaces to LWP>
+=head2 Content Generator
 
-Change:
+As mentioned above tasks in an Action return content. They normally
+generate that content by assembling a set of data and passing that
+data off to a content generator. A content generator is a wrapper
+around some sort of templating system, such as the L<Template
+Toolkit|Template>, L<HTML::Template|HTML::Template> or
+L<Text::Template|Text::Template> or even your own homegrown
+system. (Admit it, you've written your own.)
 
- [context_info]
- request               = cgi
- response              = cgi
-
-to:
-
- [context_info]
- request               = lwp
- response              = lwp
-
-B<Set email information>
-
-Change:
-
- [mail]
- smtp_host     = 127.0.0.1
- admin_email   = admin@mycompany.com
- content_email = content@mycompany.com
-
-to something relevant to your situation.
-
-B<Set database metadata>
-
-Change:
-
- [datasource main]
- type          = DBI
- spops         = 
- driver_name   =
- dsn           =
- username      =
- password      =
- db_owner      =
- sql_install   =
- long_read_len = 65536
- long_trunc_ok = 0
-
-to:
-
- [datasource main]
- type          = DBI
- spops         = SPOPS::DBI::SQLite
- driver_name   = SQLite
- dsn           = dbname=$WEBSITE_DIR/oi2test.db
- username      =
- password      =
- db_owner      =
- sql_install   =
- long_read_len = 65536
- long_trunc_ok = 0
-
-B<Set session handler>
-
-Create the directories C<$WEBSITE_DIR/cache/session> and
-C<$WEBSITE_DIR/cache/session_lock> and change:
-
- [session_info]
- class       = OpenInteract2::Session::DBI
- impl_class  = Apache::Session::MySQL
- datasource  = main
- expiration  = +3M
- expires_in  = 0
- cache_user  = 30
- cache_group = 30
- cache_theme = 30
- 
- [session_info params]
-
-to:
-
- [session_info]
- class       = OpenInteract2::Session::File
- impl_class  = Apache::Session::File
- datasource  = main
- expiration  = +3M
- expires_in  = 0
- cache_user  = 30
- cache_group = 30
- cache_theme = 30
- 
- [session_info params]
- Directory     = $WEBSITE_DIR/cache/session
- LockDirectory = $WEBSITE_DIR/cache/session_lock
-
-That's it!
-
-=head2 Seed the Database
-
-You need to create the database tables and seed it with initial data:
-
- $ oi2_manage install_sql --package=SYSTEM
-
-This tells the OI2 website you've specified in the environment
-variable C<OPENINTERACT2> to run the SQL installation routines for all
-packages named in the SYSTEM key. This happens to be all the packages
-installed when you created the website. Handy!
-
-This should issue a bunch of messages listing the different tables
-created, data files used, etc.
-
-=head2 Create the Superuser Password
-
-Now it's time to create the superuser password:
-
- $ oi2_manage create_password --password=cindilauper
-
-(replacing 'cindilauper' with your favorite password)
-
-=head2 Start the Server
-
-Now, issue the command:
-
- $ oi2_daemon --website_dir=$WEBSITE_DIR --conf=$WEBSITE_DIR/conf/oi2_daemon.ini
-
-You should see a message something like:
-
- OpenInteract2 now running at URL <http://localhost:8080>
-
-Now fire up your web browser to the given URL and you should see the
-'Welcome to OpenInteract 2!' page. Try and login as 'superuser' with
-the password you set. Have fun!
-
-=head2 Behind the Curtain
-
-If you want to see what's going on behind the scenes, set the global
-debugging level to be more permissive. In your server configuration
-file change:
-
- [Global]
- DEBUG                 = ERROR
-
-to:
-
- [Global]
- DEBUG                 = DEBUG
-
-near the top of the file. Restart your server once you've made the
-change. You'll see lots of messages fly by. One of the last ones may
-look like this:
-
- DEBUG [120] OpenInteract2::DatasourceManager::shutdown: Disconnecting
- datasource main from manager shutdown
-
-Don't worry about it. We have to do this to prevent the forked
-children from sharing the parent's database handle database.
-
-To see the requests as they come in keep an eye on the C<daemon.log>
-file in the directory you were in when you started it up. There's also
-a file C<oi2.pid> holding the process ID of the daemon. On unix-y
-systems you can use this to kill the process:
-
- $ kill -15 `cat oi2.pid`
+Each action is associated with a content generator. And you can even
+associate an action with multiple content generators so you can settle
+a bet as to which templating system is easiest to use.
 
 =head1 CONFIGURATION FILES
+
+These are the major configuration files at the server level. Each
+package has its own configuration files -- see
+L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages> for
+more information about packages.
 
 B<server configuration> - C<conf/server.ini>
 
@@ -271,6 +150,15 @@ global debugging level, deployment URL, email addresses, directory
 layouts, database connection data, session information along with lots
 of other items. Much of it you don't need to edit, but it's useful to
 give it a once-over so you're familiar with it.
+
+B<logging configuration> - C<conf/log4perl.conf>
+
+This controls logging for the application server. Here you can
+determine the logging level for the whole server or discrete parts of
+it, which logfiles get written, when/if they're rolled over, etc. See
+L<OpenInteract2::Manual::Logging|OpenInteract2::Manual::Logging> for a
+quick intro to logging and read up about
+L<Log::Log4perl|Log::Log4perl> for details.
 
 B<interface configuration: Apache> - C<conf/httpd_modperl_solo.conf>
 
@@ -285,12 +173,6 @@ B<interface configuration: standalone> - C<conf/oi2_daemon.ini>
 
 Just a few directives to tell the standalone web server what host and
 port to run on.
-
-=head1 SEE ALSO
-
-Win32 PPD for SQLite (ActivePerl 5.8x)
-
-L<http://theoryx5.uwinnipeg.ca/ppms/DBD-SQLite.ppd>
 
 =head1 COPYRIGHT
 

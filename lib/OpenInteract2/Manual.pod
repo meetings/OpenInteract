@@ -23,8 +23,14 @@ The manual is broken down into:
 
 L<OpenInteract2::Manual::Intro|OpenInteract2::Manual::Intro>
 
-Provides an introduction to the capabilities of OpenInteract 2 and a
-quick start guide for setting up a website.
+An introduction to the capabilities and architecture of OpenInteract
+2.
+
+=item
+
+L<OpenInteract2::Manual::QuickStart|OpenInteract2::Manual::QuickStart>
+
+A quick start guide for setting up a website.
 
 =item
 
@@ -50,15 +56,22 @@ changes between 1.x and 2.x are also listed here.
 
 =item
 
+L<OpenInteract2::Manual::Architecture|OpenInteract2::Manual::Architecture>
+
+More in-depth discussion of the major areas of OpenInteract and a
+walk-through for a request.
+
+=item
+
 L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
 
-Using templates.
+Using templates, focusing on the Template Toolkit.
 
 =item
 
 L<OpenInteract2::Manual::Widgets|OpenInteract2::Manual::Widgets>
 
-Using template widgets.
+Using template widgets in the Template Toolkit.
 
 =item 
 
@@ -73,12 +86,11 @@ L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching>
 
 How to setup and use content caching.
 
-=item 
+=item
 
-L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
+L<OpenInteract2::Manual::Logging|OpenInteract2::Manual::Logging>
 
-Walk through creating a new package, including templates, actions,
-data and documentation.
+How to use and configure logging.
 
 =item
 
@@ -267,6 +279,10 @@ L<OpenInteract2::ContentGenerator|OpenInteract2::ContentGenerator>: Coordinator 
 
 =item *
 
+L<OpenInteract2::ContentGenerator::HtmlTemplate|OpenInteract2::ContentGenerator::HtmlTemplate>: Content generator using HTML::Template
+
+=item *
+
 L<OpenInteract2::ContentGenerator::TT2Context|OpenInteract2::ContentGenerator::TT2Context>: Provide a custom context for templates in OpenInteract
 
 =item *
@@ -299,7 +315,7 @@ L<OpenInteract2::Controller|OpenInteract2::Controller>: Top-level controller to 
 
 =item *
 
-L<OpenInteract2::Controller::HTML|OpenInteract2::Controller::HTML>: Controller for HTML content
+L<OpenInteract2::Controller::MainTemplate|OpenInteract2::Controller::MainTemplate>: Controller for content to be placed in a main template
 
 =item *
 
@@ -347,19 +363,7 @@ L<OpenInteract2::Exception|OpenInteract2::Exception>: Base class for exceptions 
 
 =item *
 
-L<OpenInteract2::Exception::Application|OpenInteract2::Exception::Application>: Unknown
-
-=item *
-
-L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>: Unknown
-
-=item *
-
-L<OpenInteract2::Exception::Parameter|OpenInteract2::Exception::Parameter>: Unknown
-
-=item *
-
-L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>: Unknown
+L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>: Security exceptions
 
 =item *
 
@@ -367,7 +371,23 @@ L<OpenInteract2::File|OpenInteract2::File>: Safe filesystem operations for OpenI
 
 =item *
 
+L<OpenInteract2::Filter|OpenInteract2::Filter>: Initialize and manage content filters
+
+=item *
+
+L<OpenInteract2::Log|OpenInteract2::Log>: Initialization for log4p logger
+
+=item *
+
+L<OpenInteract2::Log::OIAppender|OpenInteract2::Log::OIAppender>: Appender to put error message in OI error log
+
+=item *
+
 L<OpenInteract2::Manage|OpenInteract2::Manage>: Provide common functions and factory for management tasks
+
+=item *
+
+L<OpenInteract2::Manage::CreateSourceDirectory|OpenInteract2::Manage::CreateSourceDirectory>: Create a source directory from the OI2 distribution
 
 =item *
 
@@ -491,19 +511,19 @@ L<OpenInteract2::Response|OpenInteract2::Response>: Information about and action
 
 =item *
 
-L<OpenInteract2::Response::Apache|OpenInteract2::Response::Apache>: OpenInteract2::Response::Apache
+L<OpenInteract2::Response::Apache|OpenInteract2::Response::Apache>: Response handler using Apache/mod_perl 1.x
 
 =item *
 
-L<OpenInteract2::Response::CGI|OpenInteract2::Response::CGI>: OpenInteract2::Response::CGI
+L<OpenInteract2::Response::CGI|OpenInteract2::Response::CGI>: Response handler using CGI
 
 =item *
 
-L<OpenInteract2::Response::LWP|OpenInteract2::Response::LWP>: OpenInteract2::Response::CGI
+L<OpenInteract2::Response::LWP|OpenInteract2::Response::LWP>: Response handler using LWP
 
 =item *
 
-L<OpenInteract2::Response::Standalone|OpenInteract2::Response::Standalone>: OpenInteract2::Response::Standalone
+L<OpenInteract2::Response::Standalone|OpenInteract2::Response::Standalone>: Standalone response handler, mostly for testing
 
 =item *
 

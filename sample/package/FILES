@@ -6,7 +6,7 @@
 # 'package_name' and 'class_name' template keys replaced.
 
 package.conf         --> package.conf
-package.pod          --> doc [% package_name %].pod
+package.pod-sample   --> doc [% package_name %].pod
 SQLInstall.pm-sample --> OpenInteract2 SQLInstall [% class_name %].pm
 Action.pm-sample     --> OpenInteract2 Action [% class_name %].pm
 spops.ini            --> conf spops.ini

@@ -1,31 +1,35 @@
 package OpenInteract2::Datasource::DBI;
 
-# $Id: DBI.pm,v 1.5 2003/06/11 02:51:16 lachoy Exp $
+# $Id: DBI.pm,v 1.7 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
-use Data::Dumper             qw( Dumper );
 use DBI                      qw();
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
-use OpenInteract2::Exception qw( oi_error );
-use OpenInteract2::Exception::Datasource;
+use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_READ_LEN => 32768;
 use constant DEFAULT_TRUNC_OK => 0;
 
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
+    my $log = get_logger( LOG_DS );
     unless ( ref $ds_info ) {
+        $log->error( "No data given to create DBI [$ds_name] handle" );
         oi_error "Cannot create connection without datasource info";
     }
     unless ( $ds_name ) {
-        LOG( LALL, 'WARNING: Correct usage of connect() is',
-             '$class->connect( $ds_name, \%ds_info ). Continuing...' );
+        $log->warn( 'Correct usage of connect() is',
+                    '$class->connect( $ds_name, \%ds_info ). ',
+                    'Continuing...' );
     }
 
     unless ( $ds_info->{driver_name} ) {
+        $log->error( "Required configuration key undefined ",
+                     "'datasource.$ds_name.driver_name'" );
         oi_error "Value for 'driver_name' must be defined in ",
                  "datasource [$ds_name]";
     }
@@ -37,18 +41,18 @@ sub connect {
     my $username = $ds_info->{username};
     my $password = $ds_info->{password};
 
-    DEBUG && LOG( LDEBUG, "Trying to connect to DBI with:\n",
-                  Dumper( $ds_info ) );
+    $log->is_debug &&
+        $log->debug( "Trying to connect to DBI with:",
+                     CTX->dump( $ds_info ) );
 
     my $db = DBI->connect( $dsn, $username, $password );
     unless ( $db ) {
-        OpenInteract2::Exception::Datasource->throw(
+        oi_datasource_error
                     "Error connecting: $DBI::errstr",
                     { datasource_name => $ds_name,
                       datasource_type => 'DBI',
-                      connect_params  => "$dsn , $username , $password" } );
+                      connect_params  => "$dsn , $username , $password" };
     }
-    DEBUG && LOG( LDEBUG, "DBI connection [$ds_name] made ok" );
 
     # We don't set this until here so we can control the format of the
     # error...
@@ -63,14 +67,20 @@ sub connect {
     if ( $ds_info->{trace_level} ) {
         $db->trace( $ds_info->{trace_level} );
     }
-
-    DEBUG && LOG( LDEBUG, "DBI Connection made ok for [$ds_name]" );
-
+    $log->is_debug &&
+        $log->debug( "Extra parameters [LongReadLen: $db->{LongReadLen}] ",
+                     "[LongTruncOk: $db->{LongTruncOk}] ",
+                     "[Trace: $ds_info->{trace_level}]" );
+    $log->is_info &&
+        $log->info( "DBI connection [$ds_name] made ok" );
     return $db;
 }
 
 sub disconnect {
     my ( $class, $handle ) = @_;
+    my $log = get_logger( LOG_DS );
+    $log->is_info &&
+        $log->info( "Disconnecting handle [$handle->{Name}]" );
     eval { $handle->disconnect };
     oi_error $@ if ( $@ );
 }
@@ -96,11 +106,11 @@ OpenInteract2::Datasource::DBI - Create DBI database handles
  driver_name   = Pg
  long_read_len = 65536
  long_trunc_ok = 0
-
+ 
  # Request the datasource 'main' from the context object (which in
  # turn requests it from the OpenInteract2::DatasourceManager object,
  # which in turn requests it from this class)
-
+ 
  my $dbh = CTX->datasource( 'main' );
  my $sth = $dbh->prepare( "SELECT * FROM urkel_fan" );
  $sth->execute;
@@ -225,14 +235,6 @@ tracing. As documented by L<DBI|DBI>, the levels are:
 Any errors encountered will throw an exception, usually of the
 L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
 variety.
-
-=head1 TO DO
-
-Nothing known.
-
-=head1 BUGS
-
-None known.
 
 =head1 SEE ALSO
 

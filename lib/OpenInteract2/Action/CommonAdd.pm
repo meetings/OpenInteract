@@ -1,11 +1,12 @@
 package OpenInteract2::Action::CommonAdd;
 
-# $Id: CommonAdd.pm,v 1.8 2003/06/11 02:43:31 lachoy Exp $
+# $Id: CommonAdd.pm,v 1.9 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
 
 sub display_add {
@@ -35,6 +36,8 @@ sub add {
     $self->_add_init_param;
     CTX->response->return_url( $self->param( 'c_add_return_url' ) );
 
+    my $log = get_logger( LOG_ACTION );
+
     my $object_class = $self->param( 'c_object_class' );
     my $object = $self->param( 'c_object' ) || $object_class->new;
 
@@ -63,7 +66,7 @@ sub add {
 
     eval { $object->save( \%save_options ) };
     if ( $@ ) {
-        LOG( LERROR, "Failed to create object: $@" );
+        $log->error( "Failed to create object: $@" );
         $self->param_add( error_msg => "Object creation failed: $@" );
         my $fail_task = $self->param( 'c_add_fail_task' );
         return $self->execute({ task => $fail_task });

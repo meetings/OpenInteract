@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: config_ini.t,v 1.10 2003/04/30 04:04:21 lachoy Exp $
+# $Id: config_ini.t,v 1.12 2003/07/01 17:15:16 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -73,8 +73,8 @@ ok( ! $@,
     'Read from file (server)' );
 is( ref $file_conf, 'OpenInteract2::Config::IniFile',
     'Correct object type  (server)' );
-is( $file_conf->{DEBUG}, 'ERROR',
-    'Global value read in correctly  (server)' );
+is( $file_conf->{promote_oi}, 'yes',
+    'Global value read in correctly (server)' );
 is( scalar keys %{ $file_conf->{datasource} }, 2,
     'Test hash read  (server)' );
 is( $file_conf->{mail}{smtp_host}, '127.0.0.1',

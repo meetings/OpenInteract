@@ -1,32 +1,37 @@
 package OpenInteract2::Request::Apache;
 
-# $Id: Apache.pm,v 1.8 2003/06/11 02:43:27 lachoy Exp $
+# $Id: Apache.pm,v 1.10 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
-
 use Apache::Request;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( apache );
 OpenInteract2::Request::Apache->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    $log->is_info &&
+        $log->info( "Creating Apache 1.x request" );
     unless ( ref $params->{apache} ) {
+        $log->error( "No 'apache' object for creating request" );
         oi_error "Cannot initialize the OpenInteract2::Request object - ",
                  "pass in an Apache request object in 'apache'";
     }
 
     my $apache = Apache::Request->new( $params->{apache} );
     $self->apache( $apache );
-    DEBUG && LOG( LDEBUG, "Created Apache::Request object and set" );
+    $log->is_debug &&
+        $log->debug( "Created Apache::Request object and set" );
 
     # Set the URI and parse it
 
@@ -34,6 +39,7 @@ sub init {
 
     # Setup the GET/SET params
 
+    my $num_param = 0;
     foreach my $field ( $self->apache->param() ) {
         my @values = $self->apache->param( $field );
         if ( scalar @values > 1 ) {
@@ -42,11 +48,14 @@ sub init {
         else {
             $self->param( $field, $values[0] );
         }
+        $num_param++;
     }
-    DEBUG && LOG( LDEBUG, "Set all parameters ok" );
+    $log->is_debug &&
+        $log->debug( "Set all parameters ok ($num_param)" );
 
     # Next set the uploaded files
 
+    my $num_uploads = 0;
     foreach my $upload ( $self->apache->upload() ) {
         my $oi_upload = OpenInteract2::Upload->new({
                               name         => $upload->name,
@@ -56,15 +65,17 @@ sub init {
                               filename     => $upload->filename,
                               tmp_name     => $upload->tempname });
         $self->_set_upload( $upload->name, $oi_upload );
+        $num_uploads++;
     }
-    DEBUG && LOG( LDEBUG, "Set all uploaded files ok" );
+    $log->is_debug &&
+        $log->debug( "Set all uploaded files ($num_uploads)" );
 
     # Then the various headers, properties, etc.
 
     my $head_in = $self->apache->headers_in();
-    $self->referer( $head_in->{Referer} );
+    $self->referer( $head_in->{'Referer'} );
     $self->user_agent( $head_in->{'User-Agent'} );
-    $self->cookie_header( $head_in->{Cookie} );
+    $self->cookie_header( $head_in->{'Cookie'} );
     $self->_parse_cookies;
 
     $self->create_session;
@@ -72,7 +83,8 @@ sub init {
     my $srv = $self->apache->server;
     $self->server_name( $srv->server_hostname );
     $self->remote_host( $self->apache->connection->remote_ip );
-    DEBUG && LOG( LDEBUG, "Set request and server properties ok" );
+    $log->is_info &&
+        $log->info( "Finished creating Apache 1.x request" );
     return $self;
 }
 

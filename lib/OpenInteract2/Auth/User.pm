@@ -1,17 +1,19 @@
 package OpenInteract2::Auth::User;
 
-# $Id: User.pm,v 1.6 2003/06/11 02:43:31 lachoy Exp $
+# $Id: User.pm,v 1.10 2003/07/03 05:37:08 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub get_user {
     my ( $class ) = @_;
     my $server_config = CTX->server_config;
     my ( $user, $user_id, $is_logged_in );
+    my $log = get_logger( LOG_AUTH );
 
     # Check to see if the user is in the session
 
@@ -23,7 +25,8 @@ sub get_user {
     else {
         $user_id ||= $class->get_user_id;
         if ( $user_id ) {
-            DEBUG && LOG( LDEBUG, "Found user ID [$user_id]; fetching user" );
+            $log->is_debug &&
+                $log->debug( "Found user ID [$user_id]; fetching user" );
             $user = eval { $class->fetch_user( $user_id ) };
 
             # If there's a failure fetching the user, we need to ensure that
@@ -35,7 +38,8 @@ sub get_user {
                 $class->fetch_user_failed( $user_id, $error );
             }
             else {
-                DEBUG && LOG( LDEBUG, "User found [$user->{login_name}]" );
+                $log->is_debug &&
+                    $log->debug( "User found [$user->{login_name}]" );
                 $class->check_first_login( $user );
                 $class->set_cached_user( $user, $user_refresh );
                 $is_logged_in++;
@@ -47,7 +51,8 @@ sub get_user {
         return ( $user, $is_logged_in );
     }
 
-    DEBUG && LOG( LDEBUG, "No user ID found in session. Finding login..." );
+    $log->is_debug &&
+        $log->debug( "No user ID found in session. Finding login..." );
 
     # If no user info found, check to see if the user logged in
 
@@ -66,7 +71,8 @@ sub get_user {
     # If not, create a nonpersisted 'empty' user
 
     else {
-        DEBUG && LOG( LDEBUG, "Creating the not-logged-in user." );
+        $log->is_debug &&
+            $log->debug( "Creating the not-logged-in user." );
         my $session = CTX->request->session;
         if ( $session ) {
             delete $session->{user_id};
@@ -81,19 +87,23 @@ sub get_user {
 
 sub get_cached_user {
     my ( $class, $user_refresh ) = @_;
+    my $log = get_logger( LOG_AUTH );
+
     return unless ( $user_refresh > 0 );
     my ( $user, $user_id );
     my $session = CTX->request->session;
     if ( $user = $session->{_oi_cache}{user} ) {
         if ( time < $session->{_oi_cache}{user_refresh_on} ) {
-            DEBUG && LOG( LDEBUG, "Got user from session ok" );
+            $log->is_debug &&
+                $log->debug( "Got user from session ok" );
         }
 
         # If we need to refresh the user object, pull the id out
         # so we know what to refresh...
 
         else {
-            DEBUG && LOG( LDEBUG, "User session cache expired" );
+            $log->is_debug &&
+                $log->debug( "User session cache expired" );
             $user_id = $user->id;
             delete $session->{_oi_cache}{user};
             delete $session->{_oi_cache}{user_refresh_on};
@@ -127,7 +137,8 @@ sub fetch_user {
 
 sub fetch_user_failed {
     my ( $class, $user_id, $error ) = @_;
-    LOG( LERROR, "Failed to fetch user [$user_id]: $error" );
+    my $log = get_logger( LOG_AUTH );
+    $log->error( "Failed to fetch user [$user_id]: $error" );
     CTX->request->session->{user_id} = undef;
 }
 
@@ -137,12 +148,13 @@ sub fetch_user_failed {
 
 sub login_user_from_input {
     my ( $class ) = @_;
+    my $log = get_logger( LOG_AUTH );
     my $server_config = CTX->server_config;
 
     my $login_field    = $server_config->{login}{login_field};
     my $password_field = $server_config->{login}{password_field};
     unless ( $login_field and $password_field ) {
-        LOG( LERROR, "No login/password field configured; please set ",
+        $log->error( "No login/password field configured; please set ",
                      "server configuration keys 'login.login_field' and ",
                      "'login.password_field'" );
         return undef;
@@ -151,22 +163,24 @@ sub login_user_from_input {
     my $request = CTX->request;
     my $login_name = $request->param( $login_field );
     unless ( $login_name ) {
-        LOG( LDEBUG, "No login name found" );
+        $log->is_debug &&
+            $log->debug( "No login name found" );
         return undef;
     }
-    DEBUG && LOG( LDEBUG, "Found login name [$login_name]" );
+    $log->is_debug &&
+        $log->debug( "Found login name [$login_name]" );
 
     my $user = eval { CTX->lookup_object( 'user' )
                          ->fetch_by_login_name( $login_name,
                                                 { return_single => 1,
                                                   skip_security => 1 } ) };
     if ( $@ ) {
-      LOG( LERROR, "Error fetching user by login name: $@" );
+      $log->error( "Error fetching user by login name: $@" );
     }
 
     # TODO: implement error handling/message passing here
     unless ( $user ) {
-        LOG( LWARN, "User with login [$login_name] not found." );
+        $log->warn( "User with login [$login_name] not found." );
         return undef;
     }
 
@@ -176,10 +190,11 @@ sub login_user_from_input {
 
     # TODO: implement error handling/message passing here
     unless ( $user->check_password( $password ) ) {
-        LOG( LWARN, "Password check for [$login_name] failed" );
+        $log->warn( "Password check for [$login_name] failed" );
         return undef;
     }
-    DEBUG && LOG( LDEBUG, "Passwords matched for UID ", $user->id );
+    $log->is_debug &&
+        $log->debug( "Passwords matched for UID ", $user->id );
 
     return $user;
 }
@@ -191,11 +206,14 @@ sub login_user_from_input {
 
 sub check_first_login {
     my ( $class, $user ) = @_;
+    my $log = get_logger( LOG_AUTH );
+
     return unless ( $user->{removal_date} );
 
     # blank out the removal date and put the user in the public group
 
-    DEBUG && LOG( LDEBUG, "First login for user! Do some cleanup." );
+    $log->is_debug &&
+        $log->debug( "First login for user! Do some cleanup." );
     $user->{removal_date} = undef;
 
     eval {
@@ -203,7 +221,7 @@ sub check_first_login {
         $user->make_public;
     };
     if ( $@ ) {
-        LOG( LERROR, "Failed to save new user info at first login: $@" );
+        $log->error( "Failed to save new user info at first login: $@" );
     }
 }
 
@@ -211,16 +229,24 @@ sub check_first_login {
 
 sub remember_login {
     my ( $class, $user ) = @_;
+    my $log = get_logger( LOG_AUTH );
+
     my $server_config = CTX->server_config;
     if ( $server_config->{login}{always_remember} ) {
-        DEBUG && LOG( LDEBUG, "Configured to always remember users" );
+        $log->is_debug &&
+            $log->debug( "Configured to always remember users" );
         return;
     }
 
     my $request = CTX->request;
     my $remember_field = $server_config->{login}{remember_field};
-    unless ( $remember_field and $request->param( $remember_field ) ) {
-        DEBUG && LOG( LDEBUG, "Not remembering user" );
+    my ( $do_remember );
+    if ( $remember_field ) {
+        $do_remember = $request->param( $remember_field );
+    }
+    unless ( $do_remember ) {
+        $log->is_debug &&
+            $log->debug( "Not remembering user" );
         $request->session->{expiration} = undef;
     }
 }
@@ -240,12 +266,15 @@ sub create_nologin_user {
 
 sub set_cached_user {
     my ( $class, $user, $user_refresh ) = @_;
+    my $log = get_logger( LOG_AUTH );
+
     return unless ( $user_refresh > 0 );
     my $session = CTX->request->session;
     $session->{_oi_cache}{user} = $user;
     $session->{_oi_cache}{user_refresh_on} = time + ( $user_refresh * 60 );
-    DEBUG && LOG( LDEBUG, "Set user to session cache, expires in ",
-                          "[$user_refresh] minutes" );
+    $log->is_debug &&
+        $log->debug( "Set user to session cache, expires in ",
+                     "[$user_refresh] minutes" );
 }
 
 
@@ -256,7 +285,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Auth::User - Base class for creating OpenInteract users
+OpenInteract2::Auth::User - Base class for creating OpenInteract users
 
 =head1 SYNOPSIS
 

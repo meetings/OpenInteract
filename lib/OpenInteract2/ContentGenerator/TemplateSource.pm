@@ -1,18 +1,21 @@
 package OpenInteract2::ContentGenerator::TemplateSource;
 
-# $Id: TemplateSource.pm,v 1.4 2003/06/11 02:43:30 lachoy Exp $
+# $Id: TemplateSource.pm,v 1.6 2003/07/01 05:28:51 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub identify {
     my ( $class, $template_source ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
 
     unless ( ref $template_source eq 'HASH' ) {
+        $log->error( "Template source not hashref: ", ref $template_source );
         oi_error "Template source description must be passed as hashref";
     }
 
@@ -22,29 +25,33 @@ sub identify {
         $source_type = 'NAME';
         $name        = $template_source->{name};
         $source      = $name;
-        DEBUG && LOG( LDEBUG, "Source template from name [$source]" );
+        $log->is_debug &&
+            $log->debug( "Source template from name [$source]" );
     }
 
     elsif ( $template_source->{text} ) {
-        $source_type = 'TEXT';
+        $source_type = 'STRING';
         $source      = ( ref $template_source->{text} eq 'SCALAR' )
                          ? $template_source->{text}
                          : \$template_source->{text};
         $name        = '_anonymous_';
-        DEBUG && LOG( LDEBUG, "Source template from raw text" );
+        $log->is_debug &&
+            $log->debug( "Source template from raw text" );
     }
 
     elsif ( $template_source->{filehandle} ) {
         $source_type = 'FILE';
         $source      = $template_source->{filehandle};
-        DEBUG && LOG( LDEBUG, "Source template from filehandle" );
+        $log->is_debug &&
+            $log->debug( "Source template from filehandle" );
     }
 
     elsif ( $template_source->{object} ) {
-        $source_type = 'TEXT';
+        $source_type = 'STRING';
         $source      = \$template_source->{object}{template};
         $name        = $template_source->{object}->create_name;
-        DEBUG && LOG( LDEBUG, "Source template from template object [$name]" );
+        $log->is_debug &&
+            $log->debug( "Source template from template object [$name]" );
     }
 
     # TODO: Using 'db' will be deprecated soon...
@@ -58,13 +65,14 @@ sub identify {
         $name        = join( '::', $template_source->{package},
                                    $template_source->{db} );
         $source      = $name;
-        DEBUG && LOG( LDEBUG, "Source template from db/pkg [$name]" );
+        $log->is_debug &&
+            $log->debug( "Source template from db/pkg [$name]" );
     }
 
     # Uh oh...
 
     else {
-        LOG( LERROR, "No template to process! Information given for ",
+        $log->error( "No template to process! Information given for ",
                      "source:\n", Dumper( $template_source ) );
         oi_error "No template to process!";
     }
@@ -105,7 +113,7 @@ OpenInteract2::ContentGenerator::TemplateSource - Common routines for loading co
      if ( $source_type eq 'NAME' ) {
          my ( $template, $filename, $modified ) =
                          SOURCE_CLASS->load_source( $source );
-         $source_type = 'TEXT';
+         $source_type = 'STRING';
          $source      = $template;
      }
      $template_config->{TYPE}   = $source_type;
@@ -136,7 +144,7 @@ Key B<name>: Set source type to 'NAME' and source to the value of the C<name> ke
 
 =item *
 
-Key B<text>: Set source type to 'TEXT' and source to a scalar
+Key B<text>: Set source type to 'STRING' and source to a scalar
 reference with the value of the C<text> key. If C<text> is already a
 reference it just copies the reference, otherwise it takes a reference
 to the text in the key.
@@ -148,7 +156,7 @@ filehandle in C<filehandle>.
 
 =item *
 
-Key B<object>: Set source type to 'TEXT' and source to a reference to
+Key B<object>: Set source type to 'STRING' and source to a reference to
 the content of the C<template> key of the
 L<OpenInteract2::SiteTemplate|OpenInteract2::SiteTemplate> object in
 C<object>.

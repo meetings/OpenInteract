@@ -1,23 +1,22 @@
 package OpenInteract2::Config::Base;
 
-# $Id: Base.pm,v 1.6 2003/06/11 02:43:30 lachoy Exp $
+# $Id: Base.pm,v 1.7 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor );
 use File::Basename           qw( dirname );
 use File::Spec               qw();
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log BASE_CONF_DIR BASE_CONF_FILE );
-use OpenInteract2::Context   qw( LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Base::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Base::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 my @CONFIG_FIELDS = qw( website_dir temp_lib_dir package_dir
                         config_type config_class config_dir config_file );
 my @FIELDS        = ( @CONFIG_FIELDS, 'filename' );
 OpenInteract2::Config::Base->mk_accessors( @FIELDS );
-
-sub DEBUG { return OpenInteract2::Config->DEBUG }
 
 ########################################
 # CLASS METHODS
@@ -53,19 +52,22 @@ sub new {
 
 sub read_config {
     my ( $class, $filename ) = @_;
+    my $log = get_logger( LOG_CONFIG );
     unless ( -f $filename ) {
+        $log->error( "Config file [$filename] does not exist" );
         oi_error "Cannot open [$filename] for base configuration: ",
                  "file does not exist";
     }
     eval { open( CONF, "< $filename" ) || die $! };
     if ( $@ ) {
+        $log->error( "Failed to open [$filename]: $@" );
         oi_error "Cannot open [$filename] for base configuration: $@";
     }
-
     my $vars = {};
     while ( <CONF> ) {
         chomp;
-        DEBUG && LOG( LDEBUG, "Config line read: $_" );
+        $log->is_debug &&
+            $log->debug( "Config line read: $_" );
         next if ( /^\s*\#/ );
         next if ( /^\s*$/ );
         s/^\s*//;
@@ -172,7 +174,7 @@ OpenInteract2::Config::Base - Represents a server base configuration
 =head1 SYNOPSIS
 
  # Sample base configuration
-
+ 
  website_dir      /path/to/mysite
  config_type      ini
  config_class     OpenInteract2::Config::IniFile
@@ -181,14 +183,14 @@ OpenInteract2::Config::Base - Represents a server base configuration
  package_dir      pkg
 
  # Open an existing base config
-
+ 
  my $bc = OpenInteract2::Config::Base->new({
                     website_dir => '/path/to/mysite' });
  my $bc = OpenInteract2::Config::Base->new({
                     filename => '/path/to/mysite/conf/base-alt.conf' });
 
  # Create a new one and write it with the default filename
-
+ 
  my $bc = OpenInteract2::Config::Base->new;
  $bc->website_dir( '/path/to/mysite' );
  $bc->config_type( 'ini' );

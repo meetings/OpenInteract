@@ -1,12 +1,12 @@
 package OpenInteract2::Config::GlobalOverride;
 
-# $Id: GlobalOverride.pm,v 1.2 2003/06/11 02:43:30 lachoy Exp $
+# $Id: GlobalOverride.pm,v 1.3 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use OpenInteract2::Config;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # CLASS METHODS
@@ -306,69 +306,69 @@ OpenInteract2::Config::GlobalOverride -- Process global override settings for a 
 =head1 SYNOPSIS
 
  ## ----------Sample of an override file----------
-
+ 
  [Global]
  override_type = spops
-
+ 
  # Add a new value to 'user.track'
-
+ 
  [user.track.finalize]
  action  = add
  value   = 1
-
+ 
  # Add two new entries to the ruleset for the 'news' object, giving
  # the system a hint as to what type of data it should be
-
+ 
  [news.rules_from]
  action  = add
  value   = OpenInteract2::RSSArticleSummarize
  value   = OpenInteract2::EditorApproval
  type    = list
-
+ 
  # Remove 'SPOPS::Secure' from 'page.isa' list
-
+ 
  [page.isa]
  action  = remove
  value   = SPOPS::Secure
-
+ 
  # Remove key and value for 'uid' from 'user.field_map' hash
-
+ 
  [user.field_map]
  action  = remove
  value   = uid
-
+ 
  # Remove the entire 'field_alter' hashref
  [user.field_alter]
  action  = remove
-
+ 
  # Replace 'SPOPS::DBI::MySQL with 'SPOPS::DBI::Pg' in all keys that
  # have an 'isa' entry
-
+ 
  [*.isa]
  action  = replace
  replace = SPOPS::DBI::MySQL
  value   = SPOPS::DBI::Pg
-
+ 
  # Replace 'SPOPS::DBI::MySQL with 'SPOPS::DBI::Sybase' in the
  # 'user.isa' list
-
+ 
  [user.isa]
  action  = replace
  replace = SPOPS::DBI::MySQL
  value   = SPOPS::DBI::Sybase
-
+ 
  ## ----------End sample override file----------
 
  ## Read in a configuration and apply the override file, saved for
  ## this example in global_override.ini
-
+ 
  my $config = OpenInteract2::Config->new(
                          'ini', { filename => 'server.ini' } );
  my $override_file = join( '/', $config->{dir}{config},
                                 'global_override.ini' );
  my $override = OpenInteract2::Config::GlobalOverride->new( $override_file );
  $override->apply_rules( $config );
-
+ 
  ## Values in $config are now modified based on the given rules
 
 =head1 DESCRIPTION
@@ -386,12 +386,18 @@ will modify any configuration value. You have three ways to do this:
 
 =over 4
 
-=item * B<add>: Add/overwrite a value to an existing list or hash.
+=item *
 
-=item * B<remove>: Remove a particular value from a list, or delete a
+B<add>: Add/overwrite a value to an existing list or hash.
+
+=item *
+
+B<remove>: Remove a particular value from a list, or delete a
 hash key.
 
-=item * B<replace>: Replace a value with another in a list.
+=item *
+
+B<replace>: Replace a value with another in a list.
 
 =back
 

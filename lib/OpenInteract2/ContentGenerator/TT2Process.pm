@@ -1,19 +1,20 @@
 package OpenInteract2::ContentGenerator::TT2Process;
 
-# $Id: TT2Process.pm,v 1.4 2003/06/11 02:43:30 lachoy Exp $
+# $Id: TT2Process.pm,v 1.7 2003/07/02 05:09:45 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::ContentGenerator::TemplateSource;
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::ContentGenerator::TT2Context;
 use OpenInteract2::ContentGenerator::TT2Plugin;
 use OpenInteract2::ContentGenerator::TT2Provider;
 use Template;
 
-$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
 use constant DEFAULT_CACHE_SIZE  => 75;
@@ -24,8 +25,9 @@ my ( $CUSTOM_VARIABLE_SUB, $CUSTOM_VARIABLE_NAME );
 ########################################
 # GENERATE CONTENT
 
-sub handler {
+sub process {
     my ( $class, $template_config, $template_vars, $template_source ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
     my $server_config = CTX->server_config;
 
     my ( $source_type, $source ) = SOURCE_CLASS->identify( $template_source );
@@ -45,6 +47,9 @@ sub handler {
         $name = '_anonymous_';
     }
 
+    $log->is_debug &&
+        $log->debug( "Processing template [$name]" );
+
     # Grab the template object and the OI plugin, making the OI plugin
     # available to every template
 
@@ -52,23 +57,27 @@ sub handler {
     $template_vars->{OI} = $template->context->plugin( 'OI' );
 
     if ( $CUSTOM_VARIABLE_SUB ) {
-        DEBUG && LOG( LDEBUG, "Running custom template variable ",
-                              "handler [$CUSTOM_VARIABLE_NAME]" );
+        $log->is_debug &&
+            $log->debug( "Running custom template variable ",
+                         "handler [$CUSTOM_VARIABLE_NAME]" );
         eval {
             $CUSTOM_VARIABLE_SUB->( $name, $template_vars )
         };
         if ( $@ ) {
-            LOG( LERROR, "Custom template handler [$CUSTOM_VARIABLE_NAME] ",
+            $log->error( "Custom template handler [$CUSTOM_VARIABLE_NAME] ",
                          "died; I'm going to keep processing. Error: $@" );
         }
         else {
-            DEBUG && LOG( LDEBUG, "Ran custom template variable handler ok" );
+            $log->is_debug &&
+                $log->debug( "Ran custom template variable handler ok" );
         }
     }
 
     my ( $html );
     $template->process( $source, $template_vars, \$html )
                     || oi_error "Cannot process template [$name]: ", $template->error();
+    $log->is_debug &&
+        $log->debug( "Processed template ok" );
     return $html;
 }
 
@@ -82,7 +91,9 @@ sub handler {
 
 sub initialize {
     my ( $class ) = @_;
-    DEBUG && LOG( LDEBUG, "Starting template object init" );
+    my $log = get_logger( LOG_TEMPLATE );
+    $log->is_debug &&
+        $log->debug( "Starting template object init" );
     my $server_config = CTX->server_config;
 
     $Template::Config::CONTEXT = 'OpenInteract2::ContentGenerator::TT2Context';
@@ -100,21 +111,23 @@ sub initialize {
     if ( my $init_class = $oi_tt_config->{custom_init_class} ) {
         eval "require $init_class";
         if ( $@ ) {
-            LOG( LERROR, "Custom init class [$init_class] not available; ",
+            $log->error( "Custom init class [$init_class] not available; ",
                          "continuing... Error: $@" );
         }
         else {
             my $init_method = $oi_tt_config->{custom_init_method}
                               || 'handler';
             my $init_desc = "$init_class\-\>$init_method";
-            DEBUG && LOG( LDEBUG, "Running custom template init: [$init_desc]" );
+            $log->is_debug &&
+                $log->debug( "Running custom template init: [$init_desc]" );
             eval { $init_class->$init_method( $tt_config ) };
             if ( $@ ) {
-                LOG( LERROR, "Failed custom template init [$init_desc]; ",
+                $log->error( "Failed custom template init [$init_desc]; ",
                              "continuing... Error: $@" );
             }
             else {
-                DEBUG && LOG( LDEBUG, "Custom template init ok" );
+                $log->is_debug &&
+                    $log->debug( "Custom template init ok" );
             }
         }
     }
@@ -126,7 +139,7 @@ sub initialize {
     if ( $custom_variable_class ) {
         eval "require $custom_variable_class";
         if ( $@ ) {
-            LOG( LERROR, "Custom variable class [$custom_variable_class]",
+            $log->error( "Custom variable class [$custom_variable_class]",
                          "not available [$@]. Continuing..." );
         }
         else {
@@ -159,7 +172,8 @@ sub initialize {
     # generator (so we can have multiple template objects)
 
     CTX->template( $template );
-    DEBUG && LOG( LINFO, "Template Toolkit object created properly ",
+    $log->is_info &&
+        $log->info( "Template Toolkit object created properly ",
                          "and assigned to CTX ok" );
     return;
 }
@@ -196,11 +210,13 @@ sub _init_tt_config {
 
 sub _package_template_config {
     my ( $class, $config ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
 
     # Find all the packages in this website
 
-    my $pkg_list  = CTX->packages;
-    DEBUG && LOG( LDEBUG, "Packages read ok for template init" );
+    my $pkg_list = CTX->packages;
+    $log->is_debug &&
+        $log->debug( "Packages read ok for template init" );
 
     # For each package in the site...
 
@@ -210,11 +226,12 @@ sub _package_template_config {
         # ... read in the template plugins
         foreach my $plugin_tag ( keys %{ $pkg->{template_plugin} } ) {
             my $plugin_class = $pkg->{template_plugin}{ $plugin_tag };
-            DEBUG && LOG( LDEBUG, "Template plugin [$plugin_tag] =>",
-                                  "[$pkg->{template_plugin}{ $plugin_tag }]" );
+            $log->is_debug &&
+                $log->debug( "Template plugin [$plugin_tag] =>",
+                             "[$pkg->{template_plugin}{ $plugin_tag }]" );
             eval "require $plugin_class";
             if ( $@ ) {
-                LOG( LERROR, "Plugin [$plugin_tag] [$plugin_class] from ",
+                $log->error( "Plugin [$plugin_tag] [$plugin_class] from ",
                              " package [$pkg->{name}] failed: $@" );
             }
             else {
@@ -237,29 +254,29 @@ OpenInteract2::ContentGenerator::TT2Process - Process Template Toolkit templates
 
  # NOTE: You will probably never deal with this class. It's don'e
  # behind the scenes for you in the '$action->generate_content' method
-
+ 
  # Specify an object by fully-qualified name (preferrred)
  my $proc_class = 'OpenInteract2::ContentGenerator::TT2Process';
- my $html = $proc_class->handler( { key => 'value' },
+ my $html = $proc_class->process( { key => 'value' },
                                   { name => 'my_pkg::this_template' } );
  
  # Directly pass text to be parsed (fairly rare)
  
  my $little_template = 'Text to replace -- here is my login name: ' .
                        '[% login.login_name %]';
- my $html = $proc_class->handler( {}, { key => 'value' },
+ my $html = $proc_class->process( {}, { key => 'value' },
                                   { text => $little_template } );
  
  # Pass the already-created object for parsing (rare)
  
  my $site_template_obj = CTX->template_class->fetch( 'base_main' );
- my $html = $proc_class->handler( {}, { key => 'value' },
+ my $html = $proc_class->process( {}, { key => 'value' },
                                   { object => $site_template_obj } );
 
 =head1 DESCRIPTION
 
 This class processes templates within OpenInteract. The main method is
-C<handler()> -- just feed it a template name and a whole bunch of keys
+C<process()> -- just feed it a template name and a whole bunch of keys
 and it will take care of finding the template (from a database,
 filesystem, or wherever) and generating the finished content for you.
 
@@ -328,7 +345,7 @@ something. To set the variable:
      $template_config->{SUNSET} = '7:13 AM';
  }
 
-Easy! Since this is a normal Perl handler, you can perform any actions
+Easy! Since this is a normal Perl method, you can perform any actions
 you like here. For instance, you can retrieve templates from a website
 via LWP, save them to your package template directory and process them
 via PROCESS/INCLUDE as you normally would.
@@ -340,7 +357,7 @@ than if it were being executed with every request.
 
 =head1 PROCESSING
 
-B<handler( \%template_params, \%template_variables, \%template_source )>
+B<process( \%template_params, \%template_variables, \%template_source )>
 
 Generate template content, given keys and values in
 C<\%template_variables> and a template identifier in
@@ -390,9 +407,9 @@ L<OpenInteract2::SiteTemplate|OpenInteract2::SiteTemplate>
 
 =head2 Custom Processing
 
-You have the opportunity to step in during the executing of C<handler()>
-with every request and set template variables. To do so, you need to
-define a handler and tell OI where it is.
+You have the opportunity to step in during the executing of
+C<process()> with every request and set template variables. To do so,
+you need to define a handler and tell OI where it is.
 
 To define the handler, just define a normal Perl class method that
 gets two arguments: the name of the current template (in
@@ -415,7 +432,7 @@ Either the 'custom_variable_method' or the default method name
 
 You can set (or, conceivably, remove) information bound for every
 template. Variables set via this method are available to the template
-just as if they had been passed in via the C<handler()> call.
+just as if they had been passed in via the C<process()> call.
 
 Example where we make a custom plugin (see C<initialize()> above)
 available to every template:

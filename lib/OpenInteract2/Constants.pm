@@ -1,11 +1,11 @@
 package OpenInteract2::Constants;
 
-# $Id: Constants.pm,v 1.6 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Constants.pm,v 1.7 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
 
-$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 # TODO: Are these used?
 
@@ -25,6 +25,28 @@ use constant LFATAL => 1;
 use constant LOFF   => 0;
 my @LOG_LEVEL = qw( LALL LDEBUG LINFO LWARN LERROR LFATAL LOFF );
 
+# Log4perl categories
+
+use constant LOG_OI        => 'OI2';
+use constant LOG_ACTION    => 'OI2.ACTION';
+use constant LOG_APP       => 'OI2.APP';
+use constant LOG_AUTH      => 'OI2.AUTH';
+use constant LOG_CACHE     => 'OI2.CACHE';
+use constant LOG_CONFIG    => 'OI2.CONFIG';
+use constant LOG_DS        => 'OI2.DATASOURCE';
+use constant LOG_INIT      => 'OI2.INITIALIZE';
+use constant LOG_REQUEST   => 'OI2.REQUEST';
+use constant LOG_RESPONSE  => 'OI2.RESPONSE';
+use constant LOG_SECURITY  => 'OI2.SECURITY';
+use constant LOG_SESSION   => 'OI2.SESSION';
+use constant LOG_SPOPS     => 'OI2.SPOPS';
+use constant LOG_TEMPLATE  => 'OI2.TEMPLATE';
+my @LOG_CATEGORY = qw(
+    LOG_OI LOG_ACTION LOG_APP LOG_AUTH LOG_CACHE LOG_CONFIG
+    LOG_DS LOG_INIT LOG_REQUEST LOG_RESPONSE LOG_SESSION
+    LOG_SECURITY LOG_SPOPS LOG_TEMPLATE
+);
+
 use constant BASE_CONF_DIR  => 'conf';
 use constant BASE_CONF_FILE => 'base.conf';
 my @FILE = qw( BASE_CONF_DIR BASE_CONF_FILE );
@@ -37,12 +59,12 @@ my @TEMPLATE_KEYS = qw( ACTION_KEY REQUEST_KEY RESPONSE_KEY );
 use constant SESSION_COOKIE => 'oi2ssn';
 
 @OpenInteract2::Constants::EXPORT_OK   = (
-        @OI_STATUS, @LOG_LEVEL, @FILE, @TEMPLATE_KEYS, 'SESSION_COOKIE',
+        @OI_STATUS, @LOG_LEVEL, @LOG_CATEGORY, @FILE, @TEMPLATE_KEYS, 'SESSION_COOKIE',
 );
 %OpenInteract2::Constants::EXPORT_TAGS = (
     'all'      => [ @OpenInteract2::Constants::EXPORT_OK ],
     'oi'       => [ @OI_STATUS ],
-    'log'      => [ @LOG_LEVEL ],
+    'log'      => [ @LOG_LEVEL, @LOG_CATEGORY ],
     'file'     => [ @FILE ],
     'template' => [ @TEMPLATE_KEYS ],
 );
@@ -58,27 +80,27 @@ OpenInteract2::Constants - Define codes used throughout OpenInteract
 =head1 SYNOPSIS
 
  # Just bring in a couple
-
- use OpenInteract2::Constants qw( OI_OK OI_ERROR LDEBUG );
-
+ 
+ use OpenInteract2::Constants qw( OI_OK OI_ERROR LOG_ACTION );
+ 
  # Bring in all OI status constants
-
+ 
  use OpenInteract2::Constants qw( :oi );
-
+ 
  # Bring in all logging constants
-
+ 
  use OpenInteract2::Constants qw( :log );
-
+ 
  # Open the gates, bring them all in
-
+ 
  use OpenInteract2::Constants qw( :all );
-
+ 
  # Using constants when generating content
-
+ 
  sub blah {
    return ( "I'm the man!", OI_OK );
  }
-
+ 
  sub barf {
    return ( "So it goes, I've failed", OI_ERROR );
  }

@@ -1,6 +1,6 @@
 package OpenInteract2::File;
 
-# $Id: File.pm,v 1.4 2003/06/11 02:43:32 lachoy Exp $
+# $Id: File.pm,v 1.5 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use File::Path;
@@ -8,7 +8,7 @@ use File::Spec;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 # If $filename exists in the website, return the full path; otherwise
 # undef
@@ -34,7 +34,7 @@ sub save_file {
         }
     }
 
-    eval { open( OUT, "> $full_filename" ) || die $! };
+    eval { open( OUT, '>', $full_filename ) || die $! };
     if ( $@ ) {
         oi_error "Cannot save file [$full_filename]: $@";
     }
@@ -162,22 +162,22 @@ OpenInteract2::File - Safe filesystem operations for OpenInteract
 =head1 SYNOPSIS
 
  use OpenInteract2::File;
-
+ 
  my $filename = OpenInteract2::File->create_filename( 'conf/server.ini' );
  my $filename = OpenInteract2::File->create_filename( 'uploads/myfile.exe' );
-
+ 
  # These two save to the same file
-
+ 
  my $filename = OpenInteract2::File->save_file( $fh, 'myfile.exe' );
  my $filename = OpenInteract2::File->save_file( $fh, 'uploads/myfile.exe', 'true' );
-
+ 
  # This one wants to write to the same file but doesn't pass a true
  # value for overwriting, so it writes to 'uploads/myfile_x1.exe'
-
+ 
  my $filename = OpenInteract2::File->save_file( $fh, 'uploads/myfile.exe' );
-
+ 
  # See if a particular file already exists
-
+ 
  if ( OpenInteract2::File->check_file( 'uploads/myfile.exe' ) ) {
      print "That file already exists!";
  }
@@ -230,7 +230,7 @@ C<create_filename()>.
 Note that you cannot rely on this method to ensure a file will be
 named the same with a successive call to C<save_file()>. For instance,
 in the following snippet C<$filename> is not guaranteed to be named
-'.../uploads/myfile.exe':
+C<.../uploads/myfile.exe>:
 
  if ( OpenInteract2::File->check_file( 'uploads/myfile.exe' ) ) {
      my $filename = OpenInteract2::File->save_file( $fh, 'uploads/myfile.exe' );

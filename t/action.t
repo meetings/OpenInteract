@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: action.t,v 1.11 2003/06/11 00:38:17 lachoy Exp $
+# $Id: action.t,v 1.13 2003/07/01 17:15:36 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -143,7 +143,7 @@ is_deeply( $named->security, \%named_security,
            '...all task security levels set' );
 is( $named->content_generator, 'TT',
     '...default property content_generator set' );
-is( $named->controller, 'main',
+is( $named->controller, 'tt-template',
     '...default property controller set' );
 
 # Create a named action with properties/parameters; check URLs

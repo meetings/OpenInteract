@@ -7,6 +7,7 @@ use OpenInteract2::Exception qw( oi_error );
 my @FIELDS = qw( old_content old_config transforms );
 __PACKAGE__->mk_accessors( @FIELDS );
 
+$OpenInteract2::Conversion::IniConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub new {
     my ( $class, $old_something ) = @_;

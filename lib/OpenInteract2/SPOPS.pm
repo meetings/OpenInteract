@@ -1,17 +1,17 @@
 package OpenInteract2::SPOPS;
 
-# $Id: SPOPS.pm,v 1.13 2003/06/10 17:01:25 lachoy Exp $
+# $Id: SPOPS.pm,v 1.15 2003/07/03 05:03:07 lachoy Exp $
 
 use strict;
-use Data::Dumper             qw( Dumper );
 use Digest::MD5              qw( md5_hex );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Util;
 use SPOPS::ClassFactory      qw( OK NOTIFY );
 
-$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 # TODO:
 #   - move object key stuff to a separate class
@@ -44,24 +44,32 @@ sub modify_spops_config {
     _config_security( $config );
     _config_creation_security( $config );
     _config_date_conversion( $config );
+    _config_fulltext( $config );
     _config_display_info( $config );
 }
 
 sub _config_security {
     my ( $config ) = @_;
+    my $log = get_logger( LOG_SPOPS );
     if ( defined $config->{is_secure} and $config->{is_secure} eq 'yes' ) {
-        DEBUG && LOG( LDEBUG, "Adding security to [$config->{class}]" );
+        $log->is_debug &&
+            $log->debug( "Adding security to ",
+                         "[$config->{key}: $config->{class}]" );
         unshift @{ $config->{isa} }, 'SPOPS::Secure';
     }
+    return;
 }
 
 sub _config_creation_security {
     my ( $config ) = @_;
+    my $log = get_logger( LOG_SPOPS );
+
     unless ( ref $config->{creation_security} eq 'HASH' ) {
         return;
     }
-    DEBUG && LOG( LDEBUG, "Checking 'creation_security' rules for ",
-                          "class $config->{class}" );
+    $log->is_debug &&
+        $log->debug( "Checking 'creation_security' rules for ",
+                     "[[$config->{key}: $config->{class}]" );
     my %create = ( u => $config->{creation_security}{user},
                    w => $config->{creation_security}{world} );
 
@@ -73,7 +81,8 @@ sub _config_creation_security {
         foreach my $group_pair ( @all_group_levels ) {
             my ( $gid, $gl ) = split /\s*:\s*/, $group_pair, 2;
             if ( $gid =~ /\D/ ) {
-                DEBUG && LOG( LDEBUG, "Group ID [$gid] not a #, changing" );
+                $log->is_debug &&
+                    $log->debug( "Group ID [$gid] not a #, changing" );
                 $gid = $default_objects->{ $gid };
             }
             $groups{ $gid } = $gl;
@@ -81,11 +90,16 @@ sub _config_creation_security {
     }
     $create{g} = \%groups;
     $config->{creation_security} = \%create;
-    DEBUG && LOG( LDEBUG, "Final security: ", Dumper( $config->{creation_security} ) );
+    $log->is_debug &&
+        $log->debug( "Final security: ",
+                     CTX->dump( $config->{creation_security} ) );
+    return;
 }
 
 sub _config_date_conversion {
     my ( $config ) = @_;
+    my $log = get_logger( LOG_SPOPS );
+
     my $DFK = 'convert_date_field';
     $config->{ $DFK } ||= [];
     unless ( ref $config->{ $DFK } eq 'ARRAY' ) {
@@ -95,17 +109,20 @@ sub _config_date_conversion {
     # First check to see if we have any date fields
 
     unless ( scalar @{ $config->{ $DFK } } > 0 ) {
-        DEBUG && LOG( LDEBUG, "No date fields in [$config->{class}]" );
+        $log->is_debug &&
+            $log->debug( "No date fields in [$config->{class}]" );
         return;
     }
 
-    DEBUG && LOG( LINFO, "Setting up [$config->{class}] to autoconvert ",
-                  "its date fields: ", join( ', ', @{ $config->{ $DFK } } ) );
+    $log->is_info &&
+        $log->info( "Setting up [$config->{class}] to autoconvert ",
+                    "its date fields: ", join( ', ', @{ $config->{ $DFK } } ) );
 
     $config->{convert_date_class} = 'DateTime';
     my %existing_rules = map { $_ => 1 } @{ $config->{rules_from} };
     unless ( $existing_rules{ 'SPOPS::Tool::DateConvert' } ) {
-        DEBUG && LOG( LDEBUG, "Adding date conversion tool to rules" );
+        $log->is_debug &&
+            $log->debug( "Adding date conversion tool to rules" );
         push @{ $config->{rules_from} }, 'SPOPS::Tool::DateConvert';
     }
 
@@ -113,13 +130,35 @@ sub _config_date_conversion {
 
     unless ( $config->{convert_date_format} ) {
         my $default_format = '%Y-%m-%d %H:%M:%S';
-        LOG( LWARN, "Class [$config->{class}] does not have a conversion ",
-                    "date format set. This is STRONGLY encouraged -- ",
-                    "please look at OpenInteract2::Manual::SPOPS under ",
-                    "'DATE CONVERSION' for more information. ",
-                    "(Using default '$default_format')" );
+        $log->warn( "SPOPS object [$config->{key}: $config->{class}] does ",
+                    "not have a conversion date format set. This is ",
+                    "STRONGLY encouraged -- please look at ",
+                    "'OpenInteract2::Manual::SPOPS' under 'DATE ",
+                    "CONVERSION' for more information. (Using default ",
+                    "'$default_format')" );
         $config->{convert_date_format} = $default_format;
     }
+    return;
+}
+
+sub _config_fulltext {
+    my ( $config ) = @_;
+    my $log = get_logger( LOG_SPOPS );
+    if ( defined $config->{is_searchable} and $config->{is_searchable} eq 'yes' ) {
+        if ( defined $config->{fulltext_field} ) {
+            $log->is_debug &&
+                $log->debug( "Adding fulltext indexing for ",
+                             "[$config->{key}: $config->{class}]" );
+            unshift @{ $config->{isa} }, 'OpenInteract2::FullText';
+        }
+        else {
+            $log->warn( "You set 'is_searchable' for [$config->{key}: ",
+                        "$config->{class}] but you didn't list any ",
+                        "fields in 'fulltext_field' so nothing will ",
+                        "be indexed." );
+        }
+    }
+    return;
 }
 
 # NOTE: This requires that the action table is already read in. The
@@ -143,6 +182,7 @@ sub _config_display_info {
         delete $display_info->{ACTION};
         delete $display_info->{TASK};
     }
+    return;
 }
 
 
@@ -165,6 +205,7 @@ sub ruleset_factory {
 
 sub save_object_key {
     my ( $self, $p ) = @_;
+    my $log = get_logger( LOG_SPOPS );
 
     # Don't create an object key if we're explicitly told not to
     return 1 if ( $self->CONFIG->{skip_object_key} || $p->{skip_object_key} );
@@ -177,7 +218,7 @@ sub save_object_key {
                                   field => [ qw/ object_key class object_id / ],
                                   value => [ $obj_key, ref( $self ), $self->id ] }) };
         if ( $@ ) {
-            LOG( LALL, "Cannot save object key: $@" );
+            $log->error( "Cannot save object key: $@" );
             return undef;
         }
     }
@@ -264,6 +305,8 @@ sub log_action {
 
 sub log_action_enter {
     my ( $self, $action, $id, $uid ) = @_;
+    my $log = get_logger( LOG_SPOPS );
+
     my $req = CTX->request;
     my $log_msg = 'no log message';
     if ( UNIVERSAL::isa( $req, 'OpenInteract2::Request' ) )  {
@@ -275,7 +318,8 @@ sub log_action_enter {
     }
     my $now = DateTime->now;
     my $class = ref $self || $self;
-    DEBUG && LOG( LDEBUG, "Log [$action] [$class] [$id] by [$uid] [$now]" );
+    $log->is_debug &&
+        $log->debug( "Log [$action] [$class] [$id] by [$uid] [$now]" );
     my $object_action = eval { CTX->lookup_object( 'object_action' )
                                   ->new({ class     => $class,
                                           object_id => $id,
@@ -285,7 +329,7 @@ sub log_action_enter {
                                           notes     => $log_msg })
                                   ->save() };
     if ( $@ ) {
-        LOG( LERROR, "Log entry failed: $@" );
+        $log->error( "Log entry failed: $@" );
         return undef;
     }
     return 1;
@@ -296,20 +340,22 @@ sub log_action_enter {
 
 sub fetch_creator {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_SPOPS );
 
     # Bail if it's not an already-existing object
+
     return undef  unless ( ref $self and $self->id );
     my $track = eval {
         CTX->lookup_object( 'object_action' )
            ->fetch_object_creation( $self )
     };
     if ( $@ ) {
-        LOG( LERROR, "Failed to retrieve object creator(s): $@" );
+        $log->error( "Failed to retrieve object creator(s): $@" );
         return undef;
     }
     my $creator = eval { $track->action_by_user };
     if ( $@ ) {
-        LOG( LERROR, "Error fetching creator: $@" );
+        $log->error( "Error fetching creator: $@" );
     }
     return $creator;
 }
@@ -339,6 +385,7 @@ sub is_creator {
 
 sub fetch_updates {
     my ( $self, $opt ) = @_;
+    my $log = get_logger( LOG_SPOPS );
 
     # Bail if it's not an already-saved object
 
@@ -351,10 +398,11 @@ sub fetch_updates {
                               column_group => 'base' } )
     };
     if ( $@ ) {
-        LOG( LERROR, "Cannot retrieve object updates: $@" );
+        $log->error( "Cannot retrieve object updates: $@" );
         return undef;
     }
-    DEBUG && LOG( LDEBUG, "Data from updates:\n", Dumper( $updates ) );
+    $log->is_debug &&
+        $log->debug( "Data from updates:\n", CTX->dump( $updates ) );
     return [ map { [ $_->{action_by}, $_->{action_on} ] } @{ $updates } ];
 }
 
@@ -429,6 +477,8 @@ sub global_group_current {
 
 sub notify {
     my ( $item, $p ) = @_;
+    my $log = get_logger( LOG_SPOPS );
+
     my $req = CTX->request;
     $p->{object} ||= [];
 
@@ -468,12 +518,11 @@ OBJECT
                                           message => $msg });
     };
     if ( $@ ) {
-        LOG( LERROR, "Failed to send email: $@" );
+        $log->error( "Failed to send email: $@" );
         return undef;
     }
     return 1;
 }
-
 
 1;
 

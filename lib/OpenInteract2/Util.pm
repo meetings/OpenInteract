@@ -1,17 +1,18 @@
 package OpenInteract2::Util;
 
-# $Id: Util.pm,v 1.7 2003/06/11 02:43:31 lachoy Exp $
+# $Id: Util.pm,v 1.8 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use DateTime;
+use Log::Log4perl            qw( get_logger );
 use Mail::Sendmail ();
 use MIME::Lite     ();
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Secure            qw( :level :verbose );
 
-$OpenInteract2::Util::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Util::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_SUBJECT        => 'Mail sent from OpenInteract';
 use constant DEFAULT_ATTACH_MESSAGE => 'Emailing attachments';
@@ -100,7 +101,7 @@ sub read_file_perl {
 sub send_email {
     my ( $class, $p ) = @_;
     return $class->_send_email_attachment( $p ) if ( $p->{attach} );
-
+    my $log = get_logger( LOG_OI );
     my %header_info = $class->_build_header_info( $p );
     my $smtp_host   = $class->_get_smtp_host( $p );
     my %mail = (
@@ -108,12 +109,16 @@ sub send_email {
         smtp    => $smtp_host,
         message => $p->{message},
     );
-    DEBUG && LOG( LINFO, "Trying to send to [$p->{email}]" );
-    DEBUG && LOG( LDEBUG, "Message being sent:\n$p->{message}" );
+    $log->is_info &&
+        $log->info( "Trying to send to [$p->{email}]" );
+    $log->is_debug &&
+        $log->debug( "Message being sent: $p->{message}" );
     eval { Mail::Sendmail::sendmail( %mail ) || die $Mail::Sendmail::error };
     if ( $@ ) {
         oi_error "Cannot send email. Error: $@";
     }
+    $log->is_info &&
+        $log->info( "Mail seems to have been sent ok" );
     return 1;
 }
 
@@ -178,26 +183,32 @@ sub _get_smtp_host {
 
 sub _clean_attachment_filename {
     my ( $class, $filename ) = @_;
-    DEBUG && LOG( LDEBUG, "Attachment filename begin [$filename]" );
+    my $log = get_logger( LOG_OI );
+    $log->is_debug &&
+        $log->debug( "Attachment filename begin [$filename]" );
 
     # First, see if they use an absolute. If so, strip off the leading
     # '/' and assume they meant the absolute website directory
 
     if ( $filename =~ s|\.\.||g ) {
-        DEBUG && LOG( LDEBUG, "File had '..'; now [$filename]" );
+        $log->is_debug &&
+            $log->debug( "File had '..'; now [$filename]" );
     }
 
     if ( $filename =~ s|^/+|| ) {
-        DEBUG && LOG( LDEBUG, "File started '/'; now [$filename]" );
+        $log->is_debug &&
+            $log->debug( "File started '/'; now [$filename]" );
     }
 
     my $website_dir = CTX->server_config->{dir}{website};
     my $cleaned_filename = File::Spec->catfile( $website_dir, $filename );
     if ( -f $cleaned_filename ) {
-        DEBUG && LOG( LDEBUG, "Existing file [$cleaned_filename]" );
+        $log->is_debug &&
+            $log->debug( "Existing file [$cleaned_filename]" );
         return $cleaned_filename;
     }
-    DEBUG && LOG( LDEBUG, "Nonexisting file [$cleaned_filename]" );
+    $log->is_debug &&
+        $log->debug( "Nonexisting file [$cleaned_filename]" );
     return undef;
 }
 
@@ -235,9 +246,9 @@ OpenInteract2::Util - Package of routines that do not really fit anywhere else
      warn "Mail not sent! Reason: $@";
 
  }
-
+ 
  # Send a mail message with an attachment from anywhere in the system
-
+ 
  eval { OpenInteract2::Util->send_mail({ to      => 'dingdong@nutty.com',
                                         from    => 'whynot@metoo.com',
                                         subject => 'wassup?',
@@ -247,11 +258,10 @@ OpenInteract2::Util - Package of routines that do not really fit anywhere else
      warn "Mail not sent! Reason: $@";
  }
 
-
 =head1 DESCRIPTION
 
 This class currently implments utilities for sending email. Note: In
-the future the mailing methods t may move into a separate class (e.g.,
+the future the mailing methods may move into a separate class (e.g.,
 C<OpenInteract2::Mailer>)
 
 =head1 MAIL METHODS

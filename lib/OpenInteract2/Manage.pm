@@ -1,18 +1,16 @@
 package OpenInteract2::Manage;
 
-# $Id: Manage.pm,v 1.17 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Manage.pm,v 1.21 2003/07/03 03:42:47 lachoy Exp $
 
 use strict;
 use base qw( Exporter Class::Factory Class::Observable );
-use Data::Dumper             qw( Dumper );
 use File::Spec;
-use OpenInteract2::Constants qw( LERROR );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
-use OpenInteract2::Exception qw( oi_error );
-use OpenInteract2::Exception::Parameter;
+use Log::Log4perl            qw( get_logger :levels );
+use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::Exception qw( oi_error oi_param_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 my $SYSTEM_PACKAGES = [ qw/ base
                             base_box
@@ -124,6 +122,7 @@ sub execute {
     eval { $self->run_task };
     my $error = $@;
     if ( $@ ) {
+        Carp::carp "Caught error: $@";
         $self->param( 'task_failed', 'yes' );
     }
     $self->tear_down_task;
@@ -155,10 +154,9 @@ sub check_required_parameters {
                            grep { ! $self->param( $_ ) }
                            @{ $required };
     if ( scalar keys %not_found_errors ) {
-        OpenInteract2::Exception::Parameter->throw(
-                    "A value for one or more required parameters was ",
-                    "not found.",
-                    { parameter_fail => \%not_found_errors } );
+        oi_param_error "A value for one or more required parameters ",
+                       "was not found.",
+                       { parameter_fail => \%not_found_errors };
     }
 }
 
@@ -458,16 +456,19 @@ sub setup_context {
     }
     my $base_config = OpenInteract2::Config::Base->new({
                               website_dir => $website_dir });
-    unless ( $self->param( 'debug' ) ) {
-        OpenInteract2::Context->_SET_DEBUG( LERROR );
+    if ( $self->param( 'debug' ) ) {
+        get_logger()->level( $DEBUG );
     }
     OpenInteract2::Context->create( $base_config, @params );
 }
 
-# This should register all the default tasks
+# This should register all the default tasks, but don't 'use' them or
+# we'll get some side effects...
 
 require OpenInteract2::Manage::Package;
 require OpenInteract2::Manage::Website;
+__PACKAGE__->register_factory_type(
+    create_source_dir => 'OpenInteract2::Manage::CreateSourceDirectory' );
 
 1;
 
@@ -524,6 +525,13 @@ OpenInteract2::Manage - Provide common functions and factory for management task
  sub list_param_required {}
  sub list_param_validate {}
  sub get_validate_sub    {}
+ 
+
+ # This task is strongly advised to implement these to let the outside
+ # world know about its purpose and parameters.
+ 
+ sub brief_description {}
+ sub get_param_description {}
 
 =head1 DESCRIPTION
 
@@ -835,6 +843,24 @@ B<init( @extra )>
 This is called within the C<new()> method. All extra parameters sent
 to C<new()> are passed to this method, since the main parameters have
 already been set in the object.
+
+B<brief_description()>
+
+Return a string a sentence or two long describing what the task does.
+
+B<get_param_description( $param_name )>
+
+Return a description for parameter C<$param_name>. Once you've
+exhausted the ones you want to describe be sure to pass the call back
+up to SUPER so other classes have a chance to describe parameters:
+
+ sub get_param_description {
+     my ( $self, $param_name ) = @_;
+     if ( $param_name eq 'my_param' ) {
+         return '...';
+     }
+     return $self->SUPER::get_param_description( $param_name );
+ }
 
 B<setup_task()>
 

@@ -1,21 +1,24 @@
 package OpenInteract2::Session;
 
-# $Id: Session.pm,v 1.10 2003/06/11 02:43:31 lachoy Exp $
+# $Id: Session.pm,v 1.13 2003/07/03 05:36:45 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log SESSION_COOKIE );
-use OpenInteract2::Context   qw( CTX DEBUG LOG DEPLOY_URL );
+use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 sub create {
     my ( $class, $session_id ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     my $session_config = CTX->server_config->{session_info};
     my @validation_errors = $class->_validate_config( $session_config );
     if ( scalar @validation_errors ) {
-        LOG( LERROR, join( "\n", @validation_errors ) );
+        $log->error( join( "\n", @validation_errors ) );
         oi_error "Errors in session configuration: ",
                  join( "\n", @validation_errors );
     }
@@ -24,22 +27,25 @@ sub create {
         $class->_create_session( $session_config, $session_id )
     };
     if ( $@ ) {
-        LOG( LERROR, "Error fetching session with ID [$session_id]: $@" );
+        $log->warn( "Error fetching session with ID [$session_id]: $@\n",
+                    "Continuing..." );
         OpenInteract2::Cookie->expire( SESSION_COOKIE );
-        oi_error $@;
+        return {};
     }
-    DEBUG && LOG( LDEBUG, "Retrieved session w/keys ",
-                          join( ', ', keys %{ $session } ) );
+    $log->is_debug &&
+        $log->debug( "Retrieved session w/keys ",
+                     join( ', ', keys %{ $session } ) );
 
     if ( $session_id ) {
 
         # Check to see if we should expire the session
 
         unless ( $class->is_session_valid( $session ) ) {
-            DEBUG && LOG( LINFO, "Session is expired; clearing out." );
+            $log->is_info &&
+                $log->info( "Session is expired; clearing out." );
             eval { tied( %{ $session } )->delete() };
             if ( $@ ) {
-                LOG( LWARN, "Caught error trying to remove expired session: $@\n",
+                $log->warn( "Caught error trying to remove expired session: $@\n",
                             "Continuing without problem since this just means",
                             "you'll have a stale session in your datastore" );
             }
@@ -55,21 +61,25 @@ sub create {
 
 sub is_session_valid {
     my ( $class, $session ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     return 1 unless ( $session->{timestamp} );
     my $expires_in = CTX->server_config->{session_info}{expires_in};
     return 1 unless ( $expires_in > 0 );
     my $last_refresh = ( time - $session->{timestamp} ) / 60;
     return 1 unless ( $last_refresh > $expires_in );
-    DEBUG && LOG( LINFO, "Session has expired. Last refresh was ",
-                         "[", sprintf( '%5.2f', $last_refresh ) , "] minutes ago at ",
-                         "[", scalar localtime( $session->{timestamp} ) , "]",
-                         "and threshold is [", $expires_in, "] minutes" );
+    $log->is_info &&
+        $log->info( "Session has expired. Last refresh was ",
+                    "[", sprintf( '%5.2f', $last_refresh ) , "] minutes ago at ",
+                    "[", scalar localtime( $session->{timestamp} ) , "]",
+                    "and threshold is [", $expires_in, "] minutes" );
     return undef;
 }
 
 
 sub save {
     my ( $class, $session ) = @_;
+    my $log = get_logger( LOG_SESSION );
 
     if ( tied %{ $session } ) {
         my %useful_session_keys = map { $_ => 1 } keys %{ $session };
@@ -85,13 +95,15 @@ sub save {
             $class->_save_session( $session, $is_new );
         }
         else {
-            DEBUG && LOG( LDEBUG, "Tied session found, not saving since ",
-                                  "it doesn't have useful info" );
+            $log->is_debug &&
+                $log->debug( "Tied session found, not saving since ",
+                             "it doesn't have useful info" );
         }
     }
     elsif ( ref $session eq 'HASH' ) {
         if ( scalar keys %{ $session } ) {
-            DEBUG && LOG( LINFO, "Create new session with data from hashref" );
+            $log->is_info &&
+                $log->info( "Create new session with data from hashref" );
             my $new_session = $class->_create_session;
             if ( $new_session ) {
                 foreach my $key ( keys %{ $session } ) {
@@ -100,18 +112,19 @@ sub save {
                 $class->_save_session( $new_session, 1 );
             }
             else {
-                LOG( LERROR, "No value returned from _create_session; ",
+                $log->error( "No value returned from _create_session; ",
                              "this shouldn't happen..." );
             }
         }
         else {
-            DEBUG && LOG( LINFO, "No data yet set to session hashref, ",
-                                 "skip save" );
+            $log->is_info &&
+                $log->info( "No data yet set to session hashref, ",
+                            "skip save" );
             return 1;
         }
     }
     else {
-        LOG( LWARN, "No session reference returned from request. ",
+        $log->warn( "No session reference returned from request. ",
                     "This should not happen...." );
     }
     return 1;
@@ -121,14 +134,23 @@ sub save {
 
 sub _save_session {
     my ( $class, $session, $is_new ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     $session->{timestamp} = time;
-    DEBUG && LOG( LDEBUG, "Saving tied session [New? $is_new] with keys ",
-                          join( ", ", keys %{ $session } ) );
+    $log->is_debug &&
+        $log->debug( "Saving tied session [New? $is_new] with keys ",
+                     join( ", ", keys %{ $session } ) );
     my $session_id = $session->{_session_id};
+
+    # Keep this here even though we may not need it since $session
+    # loses its magic (and possibly values) after it's untied
+
+    my $expiration = $class->_get_expiration( $session );
+
     untie %{ $session };
     if ( $is_new ) {
-        DEBUG && LOG( LINFO, "Sending cookie for new session" );
-        my $expiration = $class->_get_expiration( $session );
+        $log->is_info &&
+            $log->info( "Sending cookie for new session" );
         OpenInteract2::Cookie->create(
                               { name    => SESSION_COOKIE,
                                 value   => $session_id,
@@ -145,16 +167,20 @@ sub _save_session {
 
 sub _get_expiration {
     my ( $class, $session ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     my ( $expiration );
     if ( exists $session->{expiration} ) {
         $expiration = $session->{expiration};
-        DEBUG && LOG( LINFO, "Expiration for new session manually ",
-                             "set to [$expiration]" );
+        $log->is_info &&
+            $log->info( "Expiration for new session manually ",
+                        "set to [$expiration]" );
         delete $session->{expiration};
     }
     else {
         $expiration = CTX->server_config->{session_info}{expiration};
-        DEBUG && LOG( LINFO, "Expiration for new session set to default ",
+        $log->is_info &&
+            $log->info( "Expiration for new session set to default ",
                              "from config [$expiration]" );
     }
     return $expiration;

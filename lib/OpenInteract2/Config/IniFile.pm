@@ -1,14 +1,13 @@
 package OpenInteract2::Config::IniFile;
 
-# $Id: IniFile.pm,v 1.3 2003/06/11 02:43:30 lachoy Exp $
+# $Id: IniFile.pm,v 1.4 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Config );
-
 use OpenInteract2::Config::Ini;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use constant META_KEY => '_INI';
 
@@ -31,7 +30,7 @@ sub read_config {
     my $ini = eval { OpenInteract2::Config::Ini->new({
                                         content  => $params->{content},
                                         filename => $params->{filename} }) };
-    OpenInteract2::Exception->throw( $@ ) if ( $@ );
+    if ( $@ ) { oi_error $@ }
     return $ini;
 }
 

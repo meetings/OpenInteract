@@ -1,14 +1,15 @@
 #!/usr/bin/perl
 
-# $Id: clean_results.pl,v 1.1 2003/03/26 21:49:25 lachoy Exp $
+# $Id: clean_search_results.pl,v 1.1 2003/06/26 03:51:52 lachoy Exp $
 
 use strict;
 use Getopt::Long;
-use OpenInteract2::Context qw( CTX );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::ResultsManage;
-use OpenInteract2::Setup;
 
-use constant DEFAULT_REMOVAL_TIME => 60 * 30; # 30 minutes
+use constant DEFAULT_REMOVAL_MINUTES => 30;
 
 {
     my ( $OPT_minutes, $OPT_website_dir, $OPT_debug );
@@ -22,26 +23,30 @@ use constant DEFAULT_REMOVAL_TIME => 60 * 30; # 30 minutes
             "    Default minutes: 30\n";
     }
     my $ctx = OpenInteract2::Context->create(
-                              { website_dir => $OPT_website_dir } );
-    my $removal_time = ( $OPT_minutes )
-                         ? $OPT_minutes * 60 : DEFAULT_REMOVAL_TIME;
+                              { website_dir    => $OPT_website_dir },
+                              { initialize_log => 'yes' } );
+    my $log = get_logger( LOG_OI );
+    my $minutes = $OPT_minutes || DEFAULT_REMOVAL_MINUTES;
+    my $removal_time = $minutes * 60;
 
     my $results = OpenInteract2::ResultsManage->new();
     my $results_files = $results->get_all_result_filenames();
 
     my $now = time;
     foreach my $search_id ( @{ $results_files } ) {
-        DEBUG() && warn "Try search ID [$search_id]\n";
+        $log->debug( "Trying search ID [$search_id]" );
         my $meta_info = $results->get_meta( $search_id );
-        next unless ( ref $meta_info eq 'HASH' );
+        unless ( ref $meta_info eq 'HASH' ) {
+            $log->debug( "Skipping [$search_id], metadata not hash" );
+            next;
+        }
         if ( $now - $meta_info->{time} > $removal_time ) {
             $results->results_clear( $search_id );
-            $OPT_debug && warn "-- Removed result [$search_id] which ",
-                               " was originally searched ",
-                               scalar localtime( $meta_info->{time} ), "\n";
+            $log->info( "Removed result [$search_id] from ",
+                        scalar localtime( $meta_info->{time} ) );
         }
     }
-    $OPT_debug && warn "Cleanup of results complete\n";
+    $log->info( "Cleanup of results complete" );
 }
 
 __END__
@@ -80,7 +85,7 @@ L<OpenInteract2::Manual::SearchResults|OpenInteract2::Manual::SearchResults>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2003 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,24 +1,25 @@
 package OpenInteract2::Setup;
 
-# $Id: Setup.pm,v 1.15 2003/06/11 02:43:31 lachoy Exp $
+# $Id: Setup.pm,v 1.22 2003/07/02 15:47:00 lachoy Exp $
 
 use strict;
-use Data::Dumper            qw( Dumper );
-use File::Copy              qw( cp );
-use File::Basename          qw();
-use File::Path              qw();
+use File::Copy               qw( cp );
+use File::Basename           qw();
+use File::Path               qw();
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Config;
 use OpenInteract2::Config::Base;
 use OpenInteract2::ContentGenerator;
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::Filter;
 use OpenInteract2::Package;
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 use SPOPS::Initialize;
 
-$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_TEMP_LIB_DIR => 'templib';
 
@@ -88,6 +89,7 @@ sub read_packages {
 
 sub create_temp_lib {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_INIT );
     my $base_config = CTX->base_config;
     my $lib_dir = $base_config->temp_lib_dir || DEFAULT_TEMP_LIB_DIR;
 
@@ -98,8 +100,9 @@ sub create_temp_lib {
     # TODO: global_attribute???
     my $create_option = $params->{temp_lib_create};
     if ( -d $full_temp_lib_dir and $create_option ne 'create' ) {
-        DEBUG && LOG( LINFO, "Temp lib dir [$full_temp_lib_dir] exists; ",
-                      "option is not 'create' so modules not copied" );
+        $log->is_info &&
+            $log->info( "Temp lib dir [$full_temp_lib_dir] exists; ",
+                        "option is not 'create' so modules not copied" );
         return [];
     }
 
@@ -122,8 +125,9 @@ sub create_temp_lib {
 
     my ( @all_files );
     foreach my $package ( @{ $packages } ) {
-        DEBUG && LOG( LDEBUG, "Trying to copy files for package ",
-                      $package->name );
+        $log->is_debug &&
+            $log->debug( "Trying to copy files for package ",
+                         $package->name );
         my $package_dir = $package->directory;
         my $module_files = $package->get_module_files;
         foreach my $module_file_spec ( @{ $module_files } ) {
@@ -142,8 +146,9 @@ sub create_temp_lib {
             push @all_files, $dest_file;
         }
     }
-    DEBUG && LOG( LDEBUG, "Copied ", scalar @all_files, " modules ",
-                  "to [$full_temp_lib_dir]" );
+    $log->is_debug &&
+        $log->debug( "Copied ", scalar @all_files, " modules ",
+                     "to [$full_temp_lib_dir]" );
     return \@all_files;
 }
 
@@ -167,6 +172,7 @@ sub require_session_classes {
 
 sub read_action_table {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_INIT );
 
     # Grab the default action info from the server config. The local
     # action default info takes precedence, then this
@@ -181,26 +187,29 @@ sub read_action_table {
     my $packages = CTX->packages;
     foreach my $package ( @{ $packages } ) {
         my $package_id = join( '-', $package->name, $package->version );
-        DEBUG && LOG( LDEBUG, "Reading action data from $package_id" );
+        $log->is_debug &&
+            $log->debug( "Reading action data from $package_id" );
         my $filenames = $package->get_action_files;
+
 ACTIONFILE:
         foreach my $action_file ( @{ $filenames } ) {
-            DEBUG && LOG( LDEBUG, "Action file: $action_file" );
+            $log->is_debug &&
+                $log->debug( "Action file: $action_file" );
             my $full_action_path = $package->find_file( $action_file );
             my $action_ini = eval {
                 OpenInteract2::Config::Ini->new(
                                    { filename => $full_action_path });
             };
             if ( $@ ) {
-                LOG( LERROR, "Failed to read [$full_action_path]: $@" );
+                $log->error( "Failed to read [$full_action_path]: $@" );
                 next ACTIONFILE;
             }
             foreach my $action_name ( $action_ini->main_sections ) {
                 if ( $ACTION{ $action_name } ) {
                     # TODO: Throw an exception if this happens?
-                    LOG( LALL, "WARNING - Multiple actions defined for the ",
-                         "same name [$action_name]. Overwriting data from ",
-                         "[$ACTION{ $action_name }->{package_name}]" );
+                    $log->error( "WARNING - Multiple actions defined for ",
+                                 "the same name [$action_name]. Overwriting ",
+                                 "data from [$ACTION{ $action_name }->{package_name}]" );
                     delete $ACTION{ $action_name };
                 }
                 my $action_assign =
@@ -218,6 +227,8 @@ ACTIONFILE:
     }
     return \%ACTION;
 }
+
+# TODO: Move the consistency checks into OI2::Config:Action or OI2::Action?
 
 sub _assign_action_info {
     my ( $self, $action_name, $action_info, $global_defaults ) = @_;
@@ -254,6 +265,22 @@ sub _assign_action_info {
                     OpenInteract2::Util->verbose_to_level( $task_security );
             }
             $action_info->{security}{ $task } = int( $task_security );
+        }
+    }
+
+    # Ensure our caching parameters are in a consistent state (always
+    # an arrayref)
+
+    my $cache_params = $action_info->{cache_param};
+    if ( ref $cache_params eq 'HASH' ) {
+        foreach my $task ( keys %{ $cache_params } ) {
+            if ( ref $cache_params->{ $task } ne 'ARRAY' ) {
+                $cache_params->{ $task } = ( $cache_params->{ $task } )
+                                             ? [ $cache_params->{ $task } ] : [];
+            }
+
+            # Task parameters are always in the same order...
+            $cache_params->{ $task } = [ sort @{ $cache_params->{ $task } } ];
         }
     }
 
@@ -294,10 +321,21 @@ sub register_action_types {
 }
 
 ########################################
+# FILTERS
+
+# sets the filter registry in CTX
+
+sub initialize_action_filters {
+    my ( $self ) = @_;
+    OpenInteract2::Filter->initialize;
+}
+
+########################################
 # SPOPS
 
 sub read_spops_config {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_INIT );
     my $server_config = CTX->server_config;
 
     # This will become the full SPOPS config
@@ -307,27 +345,29 @@ sub read_spops_config {
     my $packages = CTX->packages;
     foreach my $package ( @{ $packages } ) {
         my $package_id = join( '-', $package->name, $package->version );
-        DEBUG && LOG( LDEBUG, "Reading SPOPS data from $package_id" );
+        $log->is_debug &&
+            $log->debug( "Reading SPOPS data from $package_id" );
         my $filenames = $package->get_spops_files;
 
 SPOPSFILE:
         foreach my $spops_file ( @{ $filenames } ) {
-            DEBUG && LOG( LDEBUG, "SPOPS file: $spops_file" );
+            $log->is_debug &&
+                $log->debug( "SPOPS file: $spops_file" );
             my $full_spops_path = $package->find_file( $spops_file );
             my $spops_ini = eval {
                 OpenInteract2::Config::Ini->new({ filename => $full_spops_path });
             };
             if ( $@ ) {
-                LOG( LERROR, "Failed to read [$full_spops_path]: $@" );
+                $log->error( "Failed to read [$full_spops_path]: $@" );
                 next SPOPSFILE;
             }
 
             foreach my $spops_key ( $spops_ini->main_sections ) {
                 if ( $SPOPS{ $spops_key } ) {
                     # TODO: Throw an exception if this happens?
-                    LOG( LALL, "WARNING - Multiple SPOPS objects defined ",
-                         "with the same key [$spops_key]. Overwriting data",
-                         "from [$SPOPS{ $spops_key }->{package_name}]" );
+                    $log->error( "WARNING - Multiple SPOPS objects defined ",
+                                 "with the same key [$spops_key]. Overwriting data ",
+                                 "from [$SPOPS{ $spops_key }->{package_name}]" );
                     delete $SPOPS{ $spops_key };
                 }
 
@@ -348,6 +388,10 @@ SPOPSFILE:
 
                 $self->_modify_spops_config_by_datasource( \%spops_assign );
                 $SPOPS{ $spops_key } = \%spops_assign;
+                $log->is_info &&
+                    $log->info( "Read in and modified SPOPS config ",
+                                "for object $spops_key: ",
+                                $spops_ini->{ $spops_key }{class} );
             }
         }
     }
@@ -377,8 +421,19 @@ sub _modify_spops_config_by_datasource {
 
 sub activate_spops_classes {
     my ( $self, $spops_config ) = @_;
+    my $log = get_logger( LOG_INIT );
+
     $spops_config ||= CTX->spops_config;
-    return SPOPS::Initialize->process({ config => $spops_config });
+    my $classes = SPOPS::Initialize->process({ config => $spops_config });
+    if ( ref $classes eq 'ARRAY' and scalar @{ $classes } ) {
+        $log->is_info &&
+            $log->info( "Initialized the following SPOPS classes: \n  ",
+                        join( "\n  ", @{ $classes } ) );
+    }
+    else {
+        $log->error( "No SPOPS classes initialized!" );
+    }
+    return $classes;
 }
 
 
@@ -420,10 +475,12 @@ sub check_datasources {
 
 sub read_aliases {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_INIT );
+
     my $server_config = CTX->server_config;
     unless ( ref $server_config->{system_alias} eq 'HASH' ) {
-        LOG( LALL, "There are no system aliases defined. This is ",
-                   "probably a very bad thing." );
+        $log->error( "There are no system aliases defined. This is ",
+                     "almost certainly a very bad thing." );
         return {};
     }
     my %aliases = ();
@@ -434,6 +491,18 @@ sub read_aliases {
     return \%aliases;
 }
 
+
+########################################
+# CONTROLLERS
+
+sub initialize_controller {
+    my ( $self ) = @_;
+    my $controllers = CTX->lookup_controller;
+    while ( my ( $name, $info ) = each %{ $controllers } ) {
+        OpenInteract2::Controller->register_factory_type( $name => $info->{class} );
+    }
+    OpenInteract2::Controller->initialize_default_actions;
+}
 
 ########################################
 # CONTENT GENERATORS
@@ -449,22 +518,33 @@ sub initialize_content_generator {
 
 sub create_cache {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_INIT );
+
     my $server_config = CTX->server_config;
     my $cache_info = $server_config->{cache_info};
-    unless ( $cache_info->{use} ) {
-        DEBUG && LOG( LDEBUG, "Cache not configured for usage" );
+    unless ( lc $cache_info->{use} eq 'yes' ) {
+        $log->is_debug &&
+            $log->debug( "Cache not configured for usage" );
         return undef;
     }
+
     my $cache_class = $cache_info->{class};
-    DEBUG && LOG( LDEBUG, "Creating cache with class [$cache_class]" );
+    $log->is_debug &&
+        $log->debug( "Creating cache with class [$cache_class]" );
     eval "require $cache_class";
     if ( $@ ) {
-        LOG( LERROR, "Cannot create cache -- error including cache class",
-             "[$cache_class]: $@" );
+        $log->error( "Cannot create cache -- error including cache ",
+                     "class [$cache_class]: $@" );
         return undef;
     }
-    my $cache = $cache_class->new();
-    DEBUG && LOG( LDEBUG, "Cache setup ok" );
+    my $cache = $cache_class->new( $cache_info->{data} );
+    $log->is_debug &&
+        $log->debug( "Cache setup ok" );
+
+    if ( $cache_info->{data}{cleanup} eq 'yes' ) {
+        $cache->purge;
+    }
+
     return $cache;
 }
 
@@ -474,6 +554,8 @@ sub create_cache {
 
 sub require_module {
     my ( $class, $params ) = @_;
+    my $log = get_logger( LOG_INIT );
+
     my @success = ();
     my $classes = [];
     if ( $params->{filename} ) {
@@ -493,7 +575,7 @@ sub require_module {
         next unless ( $in_class );
         eval "require $in_class";
         if ( $@ ) {
-            LOG( LALL, sprintf( "require error: %-40s: %s", $in_class, $@ ) );
+            $log->error( sprintf( "require error: %-40s: %s", $in_class, $@ ) );
         }
         else {
             push @success, $in_class;
@@ -703,6 +785,13 @@ referenced classes.
 
 Returns: Arrayref of all classes successfully required.
 
+B<initialize_action_filters()>
+
+Reads the C<conf/filter.ini> file and associates the named actions
+with the specified filters.
+
+Returns: nothing
+
 B<read_spops_config()>
 
 Reads in all available SPOPS class configurations from all installed
@@ -770,6 +859,11 @@ Example:
          CTX->alias( $type, $alias, $alias_to );
      }
  }
+
+B<initialize_controller()>
+
+Reads in all controllers from server configuration and registers them
+with L<OpenInteract2::Controller|OpenInteract2::Controller>.
 
 B<initialize_content_generator()>
 

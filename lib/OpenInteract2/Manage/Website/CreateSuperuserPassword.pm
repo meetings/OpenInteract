@@ -1,14 +1,14 @@
 package OpenInteract2::Manage::Website::CreateSuperuserPassword;
 
-# $Id: CreateSuperuserPassword.pm,v 1.2 2003/06/11 02:51:16 lachoy Exp $
+# $Id: CreateSuperuserPassword.pm,v 1.4 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
-use OpenInteract2::Context qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Utility;
 
-$OpenInteract2::Manage::Website::CreateSuperuserPassword::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::CreateSuperuserPassword::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 
 sub brief_description {

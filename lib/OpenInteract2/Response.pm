@@ -1,14 +1,15 @@
 package OpenInteract2::Response;
 
-# $Id: Response.pm,v 1.10 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Response.pm,v 1.11 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory Class::Accessor );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # ACCESSORS
@@ -41,7 +42,9 @@ sub get_current { return $RESPONSE_CLASS->get_current }
 
 sub new {
     my ( $class, @params ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
     unless ( $RESPONSE_CLASS ) {
+        $log->fatal( "No response implementation type set" );
         oi_error 'Before creating an OpenInteract2::Response object you ',
                  'must set the request type with "set_implementation_type()"';
     }
@@ -74,19 +77,26 @@ sub content_type {
 
 sub header {
     my ( $self, $name, $value ) = @_;
-    return $self->{_header} unless ( $name );
+    unless ( $name ) {
+        return $self->{_header};
+    }
+    my $log = get_logger( LOG_RESPONSE );
     if ( $value ) {
         $self->{_header}{$name} = $value;
-        DEBUG && LOG( LDEBUG, "Setting header [$name] to [$value]" );
+        $log->is_debug &&
+            $log->debug( "Setting header [$name] to [$value]" );
     }
     return $self->{_header}{$name};
 }
 
 sub remove_header {
     my ( $self, $name ) = @_;
-    return unless ( $name );
-    DEBUG && LOG( LDEBUG, "Removing header [$name] from response" );
-    return delete $self->{_header}{ $name };
+    my $log = get_logger( LOG_RESPONSE );
+    if ( $name ) {
+        $log->is_debug &&
+            $log->debug( "Removing header [$name] from response" );
+        return delete $self->{_header}{ $name };
+    }
 }
 
 
@@ -96,29 +106,36 @@ sub remove_header {
 
 sub cookie {
     my ( $self, $cookie ) = @_;
-    return [ values %{ $self->{_cookie} } ] unless ( $cookie );
+    my $log = get_logger( LOG_RESPONSE );
+    unless ( $cookie ) {
+        return [ values %{ $self->{_cookie} } ];
+    }
     unless ( UNIVERSAL::isa( $cookie, 'CGI::Cookie' ) ) {
-        LOG( LWARN, "Tried to add a 'cookie()' to the response without ",
+        $log->warn( "Tried to add a 'cookie()' to the response without ",
                     "passing a valid cookie object. (Must be a ",
                     "'CGI::Cookie' object or have it as a parent.)" );
         return;
     }
     my $name = $cookie->name;
     unless ( $name ) {
-        LOG( LWARN, "Cannot add cookie to response without a name; ",
+        $log->warn( "Cannot add cookie to response without a name; ",
                     "please ensure the 'CGI::Cookie' object set has a name" );
         return;
     }
-    DEBUG && LOG( LDEBUG, "Setting cookie [$name] to [$cookie]" );
+    $log->is_debug &&
+        $log->debug( "Setting cookie [$name] to [$cookie]" );
     $self->{_cookie}{ $name } = $cookie;
     return $cookie;
 }
 
 sub remove_cookie {
     my ( $self, $name ) = @_;
-    DEBUG && LOG( LDEBUG, "Removing cookie [$name] from response" );
-    return unless ( $name );
-    return delete $self->{_cookie}{ $name };
+    my $log = get_logger( LOG_RESPONSE );
+    if ( $name ) {
+        $log->is_debug &&
+            $log->debug( "Removing cookie [$name] from response" );
+        return delete $self->{_cookie}{ $name };
+    }
 }
 
 
@@ -130,13 +147,17 @@ sub save_session {
 
 sub set_file_info {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_RESPONSE );
     my $filename = $self->send_file;
-    return undef unless ( $filename );
+    unless ( $filename ) {
+        return undef;
+    }
     unless ( -f $filename ) {
         oi_error "Cannot set outbound file information for [$filename]: ",
                  "file does not exist";
     }
-    DEBUG && LOG( LDEBUG, "Set response information for file [$filename]" );
+    $log->is_debug &&
+        $log->debug( "Set response information for file [$filename]" );
     unless ( $self->header( 'Content-Length' ) ) {
         $self->header( 'Content-Length', (stat $filename)[7] );
     }

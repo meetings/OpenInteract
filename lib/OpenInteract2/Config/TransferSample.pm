@@ -5,11 +5,11 @@ use base qw( Class::Accessor );
 use File::Copy               qw( cp );
 use File::Spec;
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Template;
 
-$OpenInteract2::Config::TransferSample::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::TransferSample::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( source_dir file_spec files_copied );
 __PACKAGE__->mk_accessors( @FIELDS );

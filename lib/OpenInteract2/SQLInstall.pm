@@ -1,17 +1,17 @@
 package OpenInteract2::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.10 2003/06/10 17:01:25 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.11 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor );
-use Data::Dumper             qw( Dumper );
+use Log::Log4perl            qw( get_logger );
 use DateTime;
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Import;
 
-$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( package );
 OpenInteract2::SQLInstall->mk_accessors( @FIELDS );
@@ -21,19 +21,21 @@ my $DATA_DIR   = 'data';
 
 sub new_from_package {
     my ( $class, $package ) = @_;
+    my $log = get_logger( LOG_INIT );
+
     unless ( UNIVERSAL::isa( $package, 'OpenInteract2::Package' ) ) {
         oi_error "Cannot create SQL installer from item that is not a package";
     }
     my $install_class = $package->config->sql_installer;
     unless ( $install_class ) {
-        DEBUG && LOG( LWARN, "No SQL installer specified in config for ",
-                             $package->name );
+        $log->warn( "No SQL installer specified in config for ",
+                    $package->name );
         return undef;
     }
     eval "require $install_class";
     if ( $@ ) {
         oi_error "Failed to include SQL install class [$install_class] ",
-                 "specified in package ", $package->name, "-", $package->version;
+                 "specified in package ", $package->full_name;
     }
     return $install_class->new({ package => $package });
 }
@@ -965,7 +967,7 @@ For example, here's what such an implementation might look like:
                           skip_cache    => 1,
                           skip_log      => 1 }) };
      if ( $@ ) {
-         LOG( LERROR, "Failed to create superuser: $@" );
+         $log->error( "Failed to create superuser: $@" );
          $self->_set_state( $action_name,
                             undef,
                             "Failed to create admin user: $@",

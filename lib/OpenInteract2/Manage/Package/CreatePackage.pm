@@ -1,11 +1,11 @@
 package OpenInteract2::Manage::Package::CreatePackage;
 
-# $Id: CreatePackage.pm,v 1.9 2003/06/11 02:43:29 lachoy Exp $
+# $Id: CreatePackage.pm,v 1.10 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 
-$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub brief_description {
     return 'Create a new package, with most of the pieces filled in for you';
@@ -76,10 +76,10 @@ OpenInteract2::Manage::Package::CreatePackage - Create a sample package
 =head1 SYNOPSIS
 
  #!/usr/bin/perl
-
+ 
  use strict;
  use OpenInteract2::Manage;
-
+ 
  my $package_dir  = '/home/me/work/pkg';
  my $package_name = 'dev_package';
  my $source_dir   = '/home/httpd/OpenInteract-2.0';

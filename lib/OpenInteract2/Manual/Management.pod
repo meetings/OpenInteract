@@ -1,6 +1,6 @@
 =head1 NAME
 
-Managing OpenInteract2
+OpenInteract2::Manual::Management - Creating and using tasks to manage OpenInteract2
 
 =head1 SYNOPSIS
 

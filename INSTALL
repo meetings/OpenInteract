@@ -1,11 +1,6 @@
 INSTALLING OPENINTERACT 2
 =========================
 
-(NOTE: If you're upgrading from version 1 or earlier, please read the
-file 'UPGRADE' in this directory. The short news: there's no simple
-conversion, but you'll be gaining lots of functionality.)
-
-
 (1) Run the normal perl install
 
  perl Makefile.PL
@@ -13,14 +8,41 @@ conversion, but you'll be gaining lots of functionality.)
  make test (this may take a while...)
  make install
 
+You can also use Module::Build:
+
+ perl Build.PL
+ ./Build
+ ./Build test
+ ./Build install
+
 This procedure will install the base libraries. Normal Perl
 installation rules apply.
 
-OpenInteract2 uses a number of libraries, and all of them are readily
+OI2 comes with a number of files that need to be available for package
+authors and people creating websites. You can run:
+
+ $ oi2_manage create_source_dir --source_dir=/opt/OpenInteract2
+
+from the distribution directory to create it.
+
+UPGRADING FROM 1.x?
+--------------------
+
+DO NOT WORRY about modules overwriting. Everything is in the
+'OpenInteract2::' namespace so your existing 1.x libraries will be
+untouched. Also, please read 'perldoc
+OpenInteract2::Manual::Conversion' after you install. The short news:
+there's no simple conversion for everything, but you'll be gaining
+lots of functionality.
+
+DEPENDENCIES
+--------------------
+
+OpenInteract2 uses a number of libraries, all of them are readily
 available via CPAN. For those on Win32 systems without a compiler,
 most of them are also available via the PPM installation system. Some
-modules requiring compilation are not available via PPM and are
-available at:
+modules requiring compilation are not available via the standard PPM
+repository and are available at:
 
  http://openinteract.sourceforge.net/
 
@@ -28,45 +50,20 @@ Instructions for setup and download are located there as well.
 
 (2) Create a website
 
-Without changing directories from the directory where you unpacked the
-OpenInteract2 distribution, run:
-
- oi2_manage create_website --website_dir=/path/to/mysite \
-                           --source_dir=.
-
-You can also copy the 'sample/' and 'pkg/' directories to a separate,
-accessible directory and create a website with:
-
- oi2_manage create_website --website_dir=/path/to/mysite \
-                          --source_dir=/path/to/copied/dirs
-
-The 'oi2_manage' script should have been installed to a publically
-accessible place (e.g., '/usr/local/bin' or '/usr/bin') for you when
-you installed the rest of the library with 'make install'. If not,
-just copy the file 'script/oi2_manage' to an accessible place. (You
-can also just run 'script/oi2_manage install', but then 'oi2_manage'
-won't be accessible to manipulate future websites and configuration
-information. This makes life hard for you. Why do that?)
-
-That's it! Your website is created and future upgrades are just for
-individual package upgrades.
+See 'perldoc OpenInteract2::Manual::QuickStart' for instructions on
+getting a site running in just a few minutes!
 
 (3) Read up
 
-Check out the documentation: 
-
-1. INSTALL.website (in your new website's root directory): Tells you
-how to configure and start your new OpenInteract2 website. This
-document is also copied to the website directory when you create it.
-
-2. 'perldoc OpenInteract2::Manual' or, after finishing your website
-installation, go to the '/SystemDoc/' path and read it through your
-browser. In the manual you'll find information about administering
-OpenInteract2, notes about packages, what goes into creating a
-website, building/configuring Apache, how to create develop a package,
-and much more.
+Check out the documentation, starting with 'OpenInteract2::Manual',
+which has pointers to many other documents. Or, after finishing your
+website installation you can go to the '/SystemDoc/' path and read the
+docs through your browser. In the manual you'll find information about
+administering OpenInteract2, notes about packages, what goes into
+creating a website, building/configuring Apache, how to create develop
+a package, and much more.
 
 Good luck, and have fun!
 
 =========================
-$Id: INSTALL,v 1.2 2003/04/18 02:40:08 lachoy Exp $
+$Id: INSTALL,v 1.4 2003/06/30 14:43:48 lachoy Exp $

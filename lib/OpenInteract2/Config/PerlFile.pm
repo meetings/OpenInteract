@@ -1,19 +1,21 @@
 package OpenInteract2::Config::PerlFile;
 
-# $Id: PerlFile.pm,v 1.4 2003/06/11 02:43:30 lachoy Exp $
+# $Id: PerlFile.pm,v 1.5 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Config );
-use Data::Dumper            qw( Dumper );
-use File::Copy              qw( cp );
+use Data::Dumper             qw( Dumper );
+use File::Copy               qw( cp );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub read_config {
     my ( $class, $params ) = @_;
+    my $log = get_logger( LOG_CONFIG );
 
     my ( $raw_config );
 
@@ -22,8 +24,9 @@ sub read_config {
     }
     elsif ( $params->{filename} ) {
         $class->is_file_valid( $params->{filename} );
-        DEBUG && LOG( LDEBUG, "Reading configuration from ",
-                      "[$params->{filename}]" );
+        $log->is_debug &&
+            $log->debug( "Reading configuration from ",
+                         "[$params->{filename}]" );
         eval { open( CONF, "< $params->{filename}" ) || die $! };
         if ( $@ ) {
             oi_error "Error trying to open config [$params->{filename}]: $@";
@@ -44,7 +47,8 @@ sub read_config {
         }
     }
 
-    DEBUG && LOG( LDEBUG, "Structure of config:\n", Dumper( $data ) );
+    $log->is_debug &&
+        $log->debug( "Structure of config:\n", Dumper( $data ) );
     return $data;
 }
 
@@ -52,6 +56,7 @@ sub read_config {
 
 sub save_config {
     my ( $self, $filename ) = @_;
+    my $log = get_logger( LOG_CONFIG );
 
     # TODO: Where does {config_file} property come from? should we set
     # it in read_config?
@@ -70,7 +75,8 @@ sub save_config {
         cp( $filename, $backup_filename )
             || oi_error "Cannot copy to backup: $!";
     }
-    DEBUG && LOG( LDEBUG, "Trying to save configuration to [$filename]" );
+    $log->is_debug &&
+        $log->debug( "Trying to save configuration to [$filename]" );
     eval { open( CONF, "> $filename" ) || die $! };
     if ( $@ ) {
         oi_error "Error trying to write [$filename]: $@";

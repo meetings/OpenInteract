@@ -1,29 +1,34 @@
 package OpenInteract2::Request::Standalone;
 
-# $Id: Standalone.pm,v 1.4 2003/06/11 02:43:26 lachoy Exp $
+# $Id: Standalone.pm,v 1.6 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 use Sys::Hostname;
 
-$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my ( $CURRENT );
 
 sub init {
     my ( $self, $props ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    $log->is_info &&
+        $log->info( "Creating Standalone request" );
 
     $self->_set_property_defaults( $props );
 
     # This will die if any problems found
     $self->_check_properties( $props );
 
-    DEBUG && LOG( LDEBUG, "OI URL: [$props->{url}]" );
+    $log->is_debug &&
+        $log->debug( "Full OI URL [$props->{url}]" );
     $self->_set_url( $props->{url} );
 
     # Then the various headers, properties, etc.
@@ -44,15 +49,27 @@ sub init {
 
     $self->server_name( $props->{server_name} );
     $self->remote_host( $props->{remote_host} );
-    DEBUG && LOG( LDEBUG, "Set request and server properties ok" );
+    $log->is_debug &&
+        $log->debug( "Set request and server properties ok" );
 
+    my $num_param = 0;
     foreach my $field ( keys %{ $props->{param} } ) {
         $self->param( $field, $props->{param}{ $field } );
+        $num_param++;
     }
+    $log->is_debug &&
+        $log->debug( "Set parameters ok ($num_param)" );
+
+    my $num_upload = 0;
     foreach my $field ( keys %{ $props->{upload} } ) {
         $self->_set_upload( $field, $props->{upload}{ $field } );
+        $num_upload++;
     }
-    DEBUG && LOG( LDEBUG, "Set parameters and file uploads ok" );
+    $log->is_debug &&
+        $log->debug( "Set uploads ok ($num_upload)" );
+
+    $log->is_info &&
+        $log->info( "Finished creating Standalone request" );
 
     return $CURRENT = $self;
 }

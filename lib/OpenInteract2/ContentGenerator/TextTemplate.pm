@@ -1,40 +1,64 @@
 package OpenInteract2::ContentGenerator::TextTemplate;
 
-# $Id: TextTemplate.pm,v 1.2 2003/06/11 02:43:30 lachoy Exp $
+# $Id: TextTemplate.pm,v 1.6 2003/07/02 05:09:52 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::ContentGenerator::TemplateSource;
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Template;
+
+$OpenInteract2::ContentGenerator::TextTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use constant SOURCE_CLASS => 'OpenInteract2::ContentGenerator::TemplateSource';
 
 sub initialize {
-    # no-op
+    my $log = get_logger( LOG_INIT );
+    $log->is_info &&
+        $log->info( "Called initialize() for Text::Template CG (no-op)" );
 }
 
 sub process {
     my ( $class, $template_config, $template_vars, $template_source ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
+
+    # TODO: Check for cached content...
+
     my ( $source_type, $source ) = SOURCE_CLASS->identify( $template_source );
     if ( $source_type eq 'NAME' ) {
         my ( $template, $filename, $modified ) =
                         SOURCE_CLASS->load_source( $source );
-        $source_type = 'TEXT';
+        $source_type = 'STRING';
         $source      = $template;
+        $log->is_debug &&
+            $log->debug( "Loading from name $source" );
+    }
+    else {
+        $log->is_debug &&
+            $log->debug( "Loading from source $source_type" );
     }
     $template_config->{TYPE}   = $source_type;
-    $template_config->{SOURCE} = $source;
+    $template_config->{SOURCE} = ( ref $source eq 'SCALAR' )
+                                   ? $$source : $source;
     my $template = Text::Template->new( %{ $template_config } );
     unless ( $template ) {
-        oi_error "Failed to create template parsing object: ",
-                 $Text::Template::ERROR;
+        my $msg = "Failed to create template parsing object: " .
+                  $Text::Template::ERROR;
+        $log->error( $msg );
+        oi_error $msg;
     }
     my $content = $template->fill_in( HASH => $template_vars );
     unless ( $content ) {
-        oi_error "Failed to fill in template: $Text::Template::ERROR";
+        my $msg = "Failed to fill in template: $Text::Template::ERROR";
+        $log->error( $msg );
+        oi_error $msg ;
     }
+
+    # TODO: Cache content before returning
+
+    return $content;
 }
 
 1;

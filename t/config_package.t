@@ -2,6 +2,8 @@
 
 # $Id: config_package.t,v 1.6 2003/06/10 04:48:59 lachoy Exp $
 
+# TODO: Add check for 'filter'
+
 use strict;
 use lib 't/';
 require 'utils.pl';

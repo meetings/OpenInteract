@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: manage_list_packages.t,v 1.3 2003/06/11 00:38:17 lachoy Exp $
+# $Id: manage_list_packages.t,v 1.8 2003/07/03 05:28:26 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -28,9 +28,9 @@ is( scalar @status, 14,
 my @names    = qw( base base_box base_error base_group base_page
                    base_security base_template base_theme base_user
                    full_text news lookup object_activity system_doc );
-my @versions = qw( 2.02 2.01 2.02 2.01 2.04
-                   2.01 3.00 2.01 2.03
-                   2.01 2.01 2.00 2.02 2.00 );
+my @versions = qw( 2.03 2.02 2.04 2.02 2.05
+                   2.02 3.02 2.02 2.04
+                   2.03 2.03 2.01 2.03 2.01 );
 for ( my $i = 0; $i < scalar @names; $i++ ) {
     is( $status[$i]->{name}, $names[$i],
         "Package " . ($i + 1) . " name correct ($names[$i])" );

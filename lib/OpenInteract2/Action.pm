@@ -1,18 +1,18 @@
 package OpenInteract2::Action;
 
-# $Id: Action.pm,v 1.24 2003/06/11 02:43:33 lachoy Exp $
+# $Id: Action.pm,v 1.32 2003/07/02 15:06:53 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor Class::Observable Class::Factory Exporter );
-
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log :template );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_security_error );
 use OpenInteract2::Util;
 use Scalar::Util             qw( blessed );
 use SPOPS::Secure            qw( :level );
 
-$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.32 $ =~ /(\d+)\.(\d+)/);
 
 use constant CACHE_CLASS_KEY => 'class_cache_track';
 
@@ -31,7 +31,7 @@ my %PROPS = map { $_ => 1 }
             qw( request response controller
                 action_type class method task task_default
                 content_generator security_level security_required security
-                url_alt url_none
+                url_alt url_none template_source
                 cache_expire cache_param
                 task_valid task_invalid );
 __PACKAGE__->mk_accessors( keys %PROPS );
@@ -51,10 +51,13 @@ sub new {
     my ( $class, $item, $props ) = @_;
     my ( $self );
 
+    my $log = get_logger( LOG_ACTION );
+
     # Pass in another action...
     if ( blessed( $item ) ) {
-        DEBUG && LOG( LDEBUG, "Creating new action from existing action ",
-                              "named [", $item->name, "] [", ref $item, "]" );
+        $log->is_debug &&
+            $log->debug( "Creating new action from existing action ",
+                         "named [", $item->name, "] [", ref $item, "]" );
         $self = bless( {}, ref( $item ) );
         $self->property_assign( $item->property );
         $self->param_assign( $item->param );
@@ -67,14 +70,16 @@ sub new {
 
     # ...or action info
     elsif ( ref $item eq 'HASH' ) {
-        DEBUG && LOG( LDEBUG, "Creating new action from action info ",
-                              "with name [$item->{name}]" );
+        $log->is_debug &&
+            $log->debug( "Creating new action from action info with name ",
+                         "[$item->{name}]" );
         return $class->_create_from_config( $item, $props );
     }
 
     # ...or a name
     elsif ( $item ) {
-        DEBUG && LOG( LDEBUG, "Creating new action from name [$item]" );
+        $log->is_debug &&
+            $log->debug( "Creating new action from name [$item]" );
 
         # This will throw an error if the action cannot be found
         my $action_info = CTX->lookup_action_info( $item );
@@ -98,23 +103,28 @@ sub _create_from_config {
     $props ||= {};
     my $name = lc $action_info->{name};
     my $impl_class = $action_info->{class};
+    my $log = get_logger( LOG_ACTION );
+
     if ( $impl_class ) {
         unless ( $CLASSES_USED{ $impl_class } ) {
             eval "require $impl_class";
             if ( $@ ) {
-                oi_error "Cannot include library [$impl_class]: $@";
+                my $msg = "Cannot include library [$impl_class]: $@";
+                $log->error( $msg );
+                oi_error $msg;
             }
             $CLASSES_USED{ $impl_class }++;
         }
     }
     elsif ( my $action_type = $action_info->{action_type} ) {
         $impl_class = $class->get_factory_class( $action_type );
-        DEBUG && LOG( LDEBUG, "Got class [$impl_class] from action ",
-                              "type [$action_type]" );
+        $log->debug &&
+            $log->debug( "Got class [$impl_class] from action ",
+                         "type [$action_type]" );
     }
     unless ( $impl_class ) {
-        LOG( LERROR, "Implementation class not found for action [$name] ",
-                     "[class: $action_info->{class}] ",
+        $log->error( "Implementation class not found for action ",
+                     "[$name] [class: $action_info->{class}] ",
                      "[type: $action_info->{action_type}]" );
         oi_error "Action configuration for $name has no 'class' ",
                  "or 'action_type' defined";
@@ -146,6 +156,8 @@ sub init { return $_[0] }
 
 sub execute {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     $params ||= {};
 
     # All properties and parameters passed in become part of the
@@ -162,21 +174,42 @@ sub execute {
         $self->task( $self->find_task );
     }
 
+    # These checks will die if they fail -- let the error bubble up
+
     $self->check_task_validity;
+    $log->is_debug &&
+        $log->debug( "Task is valid, continuing" );
+
     $self->check_security;
+    $log->is_debug &&
+        $log->debug( "Task security checked, continuing" );
 
-    # TODO: Check existing cache here so tasks don't have to...
-
-    # Give tasks a chance to initialize the parameters for caching
-    #$self->_initialize_cache_params;
-
-    # Check and return if found
-    #my $cached_content = $self->check_cache;
-    #return $cached_content if ( $cached_content );
+    # Check cache and return if found
+    my $cached_content = $self->_check_cache;
+    if ( $cached_content ) { return $cached_content }
+    $log->is_debug &&
+        $log->debug( "Cached data not found, continuing" );
 
     my $method_ref = $self->find_task_method;
+    $log->is_debug &&
+        $log->debug( "Found task method ok, running" );
+
     my $content = eval { $self->$method_ref };
-    $content = $@ if ( $@ );
+    if ( $@ ) {
+        $log->warn( "Caught error from task: $@" );
+        $content = $@;
+    }
+    else {
+        $log->is_debug &&
+            $log->debug( "Task executed ok, excuting filters" );
+        $self->notify_observers( 'filter', \$content );
+
+        $log->is_debug &&
+            $log->debug( "Filters ran ok, saving to cache" );
+        if ( my $cache_expire = $self->_is_using_cache ) {
+            $self->_set_cached_content( $content, $cache_expire );
+        }
+    }
     return $content;
 }
 
@@ -224,22 +257,32 @@ sub find_task {
 sub check_task_validity {
     my ( $self ) = @_;
     my $check_task = lc $self->task;
+    my $log = get_logger( LOG_ACTION );
+
     unless ( $check_task ) {
-        oi_error "No task defined, cannot check validity";
+        my $msg = "No task defined, cannot check validity";
+        $log->error( $msg );
+        oi_error $msg;
     }
     if ( $check_task =~ /^_/ ) {
+        $log->error( "Task $check_task invalid, cannot begin with ",
+                     "underscore" );
         oi_error "Tasks may not begin with an underscore";
     }
 
     # See if task has been specified in valid/invalid list
 
     my $is_invalid = grep { $check_task eq $_ } @{ $self->task_invalid || [] };
-    oi_error "Task is forbidden" if ( $is_invalid );
-
+    if ( $is_invalid ) {
+        $log->error( "Task $check_task explicitly forbidden in config" );
+        oi_error "Task is forbidden";
+    }
     my $task_valid = $self->task_valid || [];
     if ( scalar @{ $task_valid } ) {
-        return if grep { $check_task eq $_ } @{ $task_valid };
-        oi_error "Task is not specified in action property 'task_valid'";
+        unless ( grep { $check_task eq $_ } @{ $task_valid } ) {
+            $log->error( "Valid tasks enumerated and $check_task not member" );
+            oi_error "Task is not specified in action property 'task_valid'";
+        }
     }
 }
 
@@ -253,22 +296,29 @@ sub check_task_validity {
 sub find_task_method {
     my ( $self ) = @_;
     my $task = $self->task;
+    my $log = get_logger( LOG_ACTION );
+
     if ( my $method = $ACTION_TASK_METHODS{ $self->name }->{ $task } ) {
+        $log->is_debug &&
+            $log->debug( "Cached method found for task $task" );
         return $method
     }
 
     foreach my $method_try ( ( 'handler', $task ) ) {
         if ( $PROPS{ $method_try } ) {
-            LOG( LERROR, "PLEASE NOTE: You tried to execute the action task ",
+            $log->error( "PLEASE NOTE: You tried to execute the action task ",
                          "[$task] but this is one of the action properties. ",
                          "No content will be returned for this task." );
             next;
         }
         if ( my $method = $self->can( $method_try ) ) {
             $ACTION_TASK_METHODS{ $self->name }->{ $task } = $method;
+            $log->is_debug &&
+                $log->debug( "Stored method in cache for task $task" );
             return $method;
         }
     }
+    $log->error( "Cannot find method for task $task" );
     oi_error "Cannot find valid method in [", ref( $self ), "] for task [$task]";
 }
 
@@ -280,9 +330,12 @@ sub find_task_method {
 
 sub check_security {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     unless ( $self->is_secure ) {
-        DEBUG && LOG( LINFO, "Action not secured, assign default ",
-                             "security and skip security check" );
+        $log->is_info &&
+            $log->info( "Action not secured, assign default security and ",
+                        "skip security check" );
         $self->security_level( DEFAULT_ACTION_SECURITY );
         return;
     }
@@ -299,8 +352,9 @@ sub check_security {
 
 
     unless ( defined $required_level ) {
-        DEBUG && LOG( LINFO, "Assigned security level WRITE to task ",
-                             "[$task] since security requirement not found" );
+        $log->is_info &&
+            $log->info( "Assigned security level WRITE to task ",
+                        "[$task] since security requirement not found" );
         $required_level = SEC_LEVEL_WRITE;
     }
 
@@ -312,8 +366,8 @@ sub check_security {
     if ( $required_level > $action_level ) {
         my $msg = join( '', "Security check for [", $self->name, "] ",
                             "[$task] failed" );
-        DEBUG && LOG( LERROR, "$msg [required: $required_level] ",
-                              "[found: $action_level]" );
+        $log->error( "$msg [required: $required_level] ",
+                     "[found: $action_level]" );
         oi_security_error $msg,
                           { security_required => $required_level,
                             security_found    => $action_level };
@@ -326,13 +380,17 @@ sub check_security {
 
 sub find_security_level {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     unless ( $self->is_secure ) {
-        DEBUG && LOG( LDEBUG, "Action ", $self->name, " not secured, ",
-                              "assigning default level." );
+        $log->is_debug &&
+            $log->debug( "Action ", $self->name, " not secured, ",
+                         "assigning default level." );
         return $self->security_level( DEFAULT_ACTION_SECURITY );
     }
     my $action_security = $self->security;
     unless ( ref $action_security eq 'HASH' ) {
+        $log->error( "Secure action, no security configuration" );
         oi_error "Configuration error: action is secured but no ",
                  "security requirements configured";
     }
@@ -341,8 +399,11 @@ sub find_security_level {
                               object_id => '0' })
     };
     if ( $@ ) {
+        $log->error( "Error in check_security: $@" );
         oi_error "Cannot lookup authorization for action: $@";
     }
+    $log->is_debug &&
+        $log->debug( "Found security level $found_level" );
     return $self->security_level( $found_level );
 }
 
@@ -353,56 +414,116 @@ sub find_security_level {
 
 sub generate_content {
     my ( $self, $content_params, $source, $template_params ) = @_;
-    DEBUG && LOG( LDEBUG, "Generating content for [", $self->name, "]" );
-    my ( $gen_class, $gen_method, $gen_sub ) =
-                    CTX->content_generator( $self->content_generator );
-    $content_params->{ ACTION_KEY() } = $self;
+    my $log = get_logger( LOG_ACTION );
 
-# TODO: Need these?
-#    $content_params->{REQUEST}  = $self->request;
-#    $content_params->{RESPONSE} = $self->response;
+    $log->is_debug &&
+        $log->debug( "Generating content for [", $self->name, "]" );
 
-    my $content = $gen_class->$gen_sub( $template_params,
-                                        $content_params,
-                                        $source );
+    $content_params->{ACTION} = $self;
 
-    # Save content to cache
+    # If source wasn't specified see if it's found in
+    # 'template_source'
 
-    if ( my $cache_expire = $self->is_using_cache ) {
-        my $key = $self->_create_cache_key();
-        my $cache = CTX->cache;
-        if ( $cache ) {
-            $cache->set({ key    => $key,
-                          data   => $content,
-                          expire => $cache_expire });
-            my $tracking = $cache->get({ key => CACHE_CLASS_KEY }) || {};
-            my $class = ref( $self );
-            push @{ $tracking->{ $class } }, $key;
-            DEBUG && LOG( LDEBUG, "Adding cache key [$key] to ",
-                                  "class [$class]" );
-            $cache->set({ key  => CACHE_CLASS_KEY,
-                          data => $tracking });
+    unless ( $source ) {
+        my $task = $self->task;
+        if ( my $source_info = $self->template_source ) {
+            unless ( ref $source_info eq 'HASH' ) {
+                my $msg = "No template source specified in config, " .
+                          "no source returned for task '$task'";
+                $log->error( $msg );
+                oi_error $msg;
+            }
+            my $task_template_source = $source_info->{ $task };
+            unless ( $task_template_source ) {
+                my $msg = "No template source in config for task '$task'";
+                $log->error( $msg );
+                oi_error $msg;
+            }
+            $log->is_debug &&
+                $log->debug( "Found template source from action ",
+                             "[$task_template_source] config" );
+            $source = { name => $task_template_source };
+        }
+        else {
+            my $msg = "No template source specified in config, " .
+                      "no source returned for task '$task'";
+            $log->error( $msg );
+            oi_error $msg;
         }
     }
+
+    my $generator = CTX->content_generator( $self->content_generator );
+    my $content = $generator->execute( $template_params,
+                                       $content_params,
+                                       $source );
 
     return $content;
 }
 
 
-sub is_using_cache {
+########################################
+# CACHING
+
+# Subclasses override
+
+sub initialize_cache_params { return undef }
+
+# Since we can't be sure what's affected by a change that would prompt
+# this call, just clear out all cache entries for this action. (For
+# instance, if a news object is removed we don't want to keep
+# displaying the old copy in the listing.)
+
+sub clear_cache {
+    my ( $self  ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
+    my $cache = CTX->cache;
+    return unless ( $cache );
+
+    my $class = ref( $self );
+    $log->is_info &&
+        $log->info( "Trying to clear cache for items in class [$class]" );
+    my $tracking = $cache->get({ key => CACHE_CLASS_KEY });
+    unless ( ref $tracking eq 'HASH' and scalar keys %{ $tracking } ) {
+        $log->is_info &&
+            $log->info( "Nothing yet tracked, nothing to clear" );
+        return;
+    }
+
+    my $num_cleared = 0;
+    my $keys = $tracking->{ $class } || [];
+    foreach my $cache_key ( @{ $keys } ) {
+        $log->is_debug &&
+            $log->debug( "Clearing key [$cache_key]" );
+        $cache->clear({ key => $cache_key });
+        $num_cleared++;
+    }
+    $tracking->{ $class } = [];
+    $cache->set({ key  => CACHE_CLASS_KEY,
+                  data => $tracking });
+    $log->is_debug &&
+        $log->debug( "Tracking data saved back" );
+    $log->is_info &&
+        $log->info( "Finished clearing cache for [$class]" );
+    return $num_cleared;
+}
+
+
+sub _is_using_cache {
     my ( $self ) = @_;
     my $expire = $self->cache_expire;
     return ( $expire ) ? $expire->{ $self->task } : undef;
 }
 
 
-sub check_cache {
+sub _check_cache {
     my ( $self ) = @_;
-    return undef unless ( $self->is_using_cache );
-    my $cache_key = $self->_create_cache_key;
-    return undef unless ( $cache_key );
+    return undef unless ( $self->_is_using_cache );   # ...not using cache
+    return undef if ( CTX->request->auth_is_admin );  # ...is admin
     my $cache = CTX->cache;
-    return undef unless ( $cache );
+    return undef unless ( $cache );                   # ...no cache available
+    my $cache_key = $self->_create_cache_key;
+    return undef unless ( $cache_key );               # ...no cache key
     return $cache->get({ key => $cache_key });
 }
 
@@ -410,43 +531,73 @@ sub check_cache {
 sub _create_cache_key {
     my ( $self ) = @_;
     my $key = join( '-', ref( $self ), $self->task );
-    my $cache_param = $self->cache_param_by_task;
+    my $cache_param = $self->_cache_param_by_task;
     unless ( scalar @{ $cache_param } > 0 ) {
         return $key;
     }
 
-    # TODO: Should we check request here? When we check the cache
-    # we're calling _initialize_cache_params() to give each task the
-    # opportunity to sync up with the request... checking the action
-    # AND the request seems peek-a-boo
+    my $set_cache_params = $self->initialize_cache_params;
+    my $request = CTX->request;
 
     foreach my $param_name ( @{ $cache_param } ) {
-        my $value = $self->param( $param_name );
+        my $value = $set_cache_params->{ $param_name }
+                    || $self->param( $param_name )
+                    || $request->param( $param_name )
+                    || $self->_get_cache_default_param( $param_name );
         $key .= ";$param_name=$value";
     }
     return $key;
 }
 
+my %CACHE_PARAM_DEFAULTS = map { $_ => 1 } qw( user_id theme_id );
 
-# ALWAYS return an arrayref, even if it's empty, and always return
-# items in the SAME ORDER
+sub _get_cache_default_param {
+    my ( $self, $param_name ) = @_;
+    return undef unless ( $CACHE_PARAM_DEFAULTS{ $param_name } );
+    my $request = CTX->request;
+    if ( $param_name eq 'user_id' ) {
+        return $request->auth_user->id;
+    }
+    elsif ( $param_name eq 'theme_id' ) {
+        return $request->theme->id;
+    }
+}
 
-sub cache_param_by_task {
+sub _set_cached_content {
+    my ( $self, $content, $expiration ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
+    my $cache = CTX->cache;
+    return unless ( $cache );
+
+    my $key = $self->_create_cache_key();
+    $cache->set({ key    => $key,
+                  data   => $content,
+                  expire => $expiration });
+
+    # Now set the tracking data so we can expire when needed
+
+    my $tracking = $cache->get({ key => CACHE_CLASS_KEY }) || {};
+    my $class = ref( $self );
+    push @{ $tracking->{ $class } }, $key;
+    $log->is_debug &&
+        $log->debug( "Adding cache key [$key] to class [$class]" );
+    $cache->set({ key  => CACHE_CLASS_KEY,
+                  data => $tracking });
+}
+
+# ALWAYS return an arrayref, even if it's empty; order is ensured at
+# startup (see OI2::Setup::_assign_action_info)
+
+sub _cache_param_by_task {
     my ( $self ) = @_;
     my $task = $self->task;
     return [] unless ( $task );
     my $params = $self->cache_param;
     return [] unless ( ref $params eq 'HASH' );
-
-    # TODO: Run this at OI2 startup so that cache params are always in
-    # a consistent state
-
-    if ( ref $params->{ $task } ne 'ARRAY' ) {
-        $params->{ $task } = ( $params->{ $task } )
-                               ? [ $params->{ $task } ] : [];
-    }
     return $params->{ $task };
 }
+
 
 ########################################
 # PROPERTIES
@@ -638,33 +789,43 @@ sub create_url {
 
 sub get_dispatch_urls {
     my ( $self ) = @_;
-    DEBUG && LOG( LDEBUG, "Find dispatch URLs for [", $self->name, "]" );
+    my $log = get_logger( LOG_ACTION );
+
+    $log->is_debug &&
+        $log->debug( "Find dispatch URLs for [", $self->name, "]" );
     my $no_urls = $self->url_none;
     if ( defined $no_urls and $no_urls =~ /^\s*(yes|true)\s*$/ ) {
-        DEBUG && LOG( LDEBUG, "...has no URL" );
+        $log->is_debug && $log->debug( "...has no URL" );
         return [];
     }
     my @urls = ();
     if ( $self->url ) {
         push @urls, $self->url;
-        DEBUG && LOG( LDEBUG, "...has spec URL [", $self->url, "]" );
+        $log->is_debug &&
+            $log->debug( "...has spec URL [", $self->url, "]" );
     }
     else {
         push @urls, lc $self->name,
                     uc $self->name,
                     ucfirst lc $self->name;
-        DEBUG && LOG( LDEBUG, "...has named URLs [",
-                      join( '] [', @urls ), ']' );
+        $log->is_debug &&
+            $log->debug( "...has named URLs [", join( '] [', @urls ), ']' );
     }
     if ( $self->url_alt ) {
         my @alternates = ( ref $self->url_alt eq 'ARRAY' )
                            ? @{ $self->url_alt }
                            : ( $self->url_alt );
         push @urls, @alternates;
-        DEBUG && LOG( LDEBUG, "...has alternate URLs [",
-                      join( '] [', @alternates ), ']' );
+        $log->is_debug &&
+            $log->debug( "...has alt URLs [", join( '] [', @alternates ), ']' );
     }
     return \@urls;
+}
+
+# Cleanup after ourselves
+sub DESTROY {
+    my ( $self ) = @_;
+    $self->delete_observers;
 }
 
 ########################################
@@ -689,7 +850,7 @@ OpenInteract2::Action - Represent and dispatch actions
  # checked. (Previously you had to subclass SPOPS::Secure.)
  
  [news]
- class             = OpenInteract2::Handler::News
+ class             = OpenInteract2::Action::News
  is_secure         = yes
  content_generator = TT
  
@@ -721,7 +882,7 @@ OpenInteract2::Action - Represent and dispatch actions
  # invalid.
  
  [newsuk]
- class             = OpenInteract2::Handler::News
+ class             = OpenInteract2::Action::News
  is_secure         = no
  news_from         = uk
  content_generator = TT
@@ -737,7 +898,7 @@ OpenInteract2::Action - Represent and dispatch actions
  # the URL '/SoapNews'.
  
  [news_rpc]
- class             = OpenInteract2::Handler::News
+ class             = OpenInteract2::Action::News
  is_secure         = yes
  content_generator = SOAP
  url               = SoapNews
@@ -791,6 +952,18 @@ OpenInteract2::Action - Represent and dispatch actions
  # Run the action and return the content
  return $action->execute;
 
+ # IN AN ACTION
+ 
+ sub change_some_object {
+     my ( $self ) = @_;
+     # ... do the changes ...
+ 
+     # Clear out cache entries for this action so we don't have stale
+     # content being served up
+ 
+     $self->clear_cache;
+ }
+
 =head1 DESCRIPTION
 
 The Action object is a core piece of the OpenInteract framework. Every
@@ -813,9 +986,9 @@ all operate on 'news' objects:
  use strict;
  use base qw( OpenInteract2::Action );
  
- sub list { return "Lots of news in the last week" }
- sub show { return "This is the show task!" }
- sub edit { return "Editing..." }
+ sub latest  { return "Lots of news in the last week" }
+ sub display { return "This is the display task!" }
+ sub add     { return "Adding..." }
  
  1;
 
@@ -823,20 +996,23 @@ Here is how you would call them, assuming that this action is mapped
 to the 'news' key:
 
  my $action = CTX->lookup_action( 'news' );
- $action->task( 'list' );
+ $action->task( 'latest' );
  print $action->execute;
  # Lots of news in the last week
  
- $action->task( 'show' );
+ $action->task( 'display' );
  print $action->execute;
- # This is the show task!
+ # This is the display task!
  
- $action->task( 'edit' );
+ $action->task( 'add' );
  print $action->execute;
- # Editing...
+ # Adding...
 
 You can also create your own dispatcher by defining the method
 'handler' in your action class. For instance:
+
+TODO: This won't work, will it? Won't we just keep calling 'handler'
+again and again?
 
  package My::News;
  
@@ -847,16 +1023,20 @@ You can also create your own dispatcher by defining the method
      my ( $self ) = @_;
      my $task = $self->task;
      my $language = CTX->user->language;
+     my ( $new_task );
      if ( $task eq 'list' and $language eq 'es' ) {
-         return $self->list_spanish;
+         $new_task = 'list_spanish';
      }
      elsif ( $task eq 'list' and $language eq 'ru' ) {
-         return $self->list_russian;
+         $new_task = 'list_russian';
+     }
+     elsif ( $task eq 'list' ) {
+         $new_task = 'list_english';
      }
      else {
-         return $self->list_english;
+         $new_task = $task;
      }
-     return $self->$task();
+     return $self->execute({ task => $new_task });
  }
  
  sub list_spanish { return "Lots of spanish news in the last week" }
@@ -889,16 +1069,16 @@ To use our example above, assume we have configured the action with
 the following:
 
  [news]
- class        = OpenInteract2::Handler::News
- task_valid   = list
- task_valid   = show
+ class        = OpenInteract2::Action::News
+ task_valid   = latest
+ task_valid   = display
 
-Then the 'edit' task will not be valid. You could also explicitly
-forbid the 'edit' task from being executed with:
+Then the 'add' task will not be valid. You could also explicitly
+forbid the 'add' task from being executed with:
 
  [news]
- class        = OpenInteract2::Handler::News
- task_invalid = edit
+ class        = OpenInteract2::Action::News
+ task_invalid = add
 
 See discussion of C<find_task()> and C<check_task_validity()> for more
 information.
@@ -915,8 +1095,38 @@ To use an action type, you just need to specify it in your
 configuration:
 
  [foo]
- action_type       = foo_type
- is_secure         = yes
+ action_type  = lookup
+ ...
+
+Each action type has configuration entries it uses. Here's what the
+full declaration for a lookup action might be:
+
+ [foo]
+ action_type  = lookup
+ object_key   = foo
+ title        = Foo Listing
+ field_list   = foo
+ field_list   = bar
+ label_list   = A Foo
+ label_list   = A Bar
+ size_list    = 25
+ size_list    = 10
+ order        = foo
+ url_none     = yes
+
+Action types are declared in the server configuration under the
+'action_types' key. OI2 ships with:
+
+ [action_types]
+ template_only = OpenInteract2::Action::TemplateOnly
+ lookup        = OpenInteract2::Action::LookupEdit
+
+If you'd like to add your own type you just need to add the name and
+class to the list. It will be picked up at the next server start. You
+can also add them programmatically using C<register_factory_type()>
+(inherited from L<Class::Factory|Class::Factory>):
+
+ OpenInteract2::Action->register_factory_type( mytype => 'My::Action::Type' );
 
 =head2 Action Properties vs. Parameters
 
@@ -965,6 +1175,13 @@ into a handler as the second argument. For instance:
                            error_msg  => $error_msg,
                            status_msg => $status_msg });
  
+ # also: pass parameters plus a property in last statement
+ 
+ return $action->execute({ object     => $foo,
+                           error_msg  => $error_msg,
+                           status_msg => $status_msg,
+                           task       => 'show' });
+ 
  sub show {
      my ( $self ) = @_;
      if ( $self->param( 'error_msg' ) ) {
@@ -973,22 +1190,30 @@ into a handler as the second argument. For instance:
      }
  }
 
-=head2 Observable Actions
+=head1 OBSERVABLE ACTIONS
+
+=head2 What does it mean?
 
 All actions are B<observable>. This means that any number of classes,
 objects or subroutines can register themselves with a type of action
-and be activated when that action publishes a notification. This is
-all very abstract, so here is a scenario:
+and be activated when that action publishes a notification. It's a
+great way to decouple an object from other functions that want to
+operate on that object's results. The observed object (in this case,
+the action) doesn't know how many observers there are, or even if any
+exist at all.
 
-Existing action: Register a new user
+=head2 Observable Scenario
 
-Notification published: When new user confirms registration.
+That is all very abstract, so here is a scenario:
 
-Desired outcome: Add the publish the user name and email address to
-various services within the website network. This is done via an
-asynchronous message published to each site in the network. The
-network names are stored in a server configuration variable
-'network_queue_server'.
+B<Existing action>: Register a new user
+
+B<Notification published>: When new user confirms registration.
+
+B<Desired outcome>: Add the user name and email address to various
+services within the website network. This is done via an asynchronous
+message published to each site in the network. The network names are
+stored in a server configuration variable 'network_queue_server'.
 
 How to implement:
 
@@ -1008,11 +1233,11 @@ How to implement:
      }
  }
  
- OpenInteract2::Handler::NewUser->add_observer( __PACKAGE__ );
+ OpenInteract2::Action::NewUser->add_observer( __PACKAGE__ );
 
 And the action would notify all observers like this:
 
- package OpenInteract2::Handler::NewUser;
+ package OpenInteract2::Action::NewUser;
  
  # ... other methods here ...
  
@@ -1028,14 +1253,71 @@ And the action would notify all observers like this:
 
 And in the documentation for the package 'base_user' (since this
 action lives there), you would have information about what
-notifications are published by the C<OpenInteract2::Handler::NewUser>
+notifications are published by the C<OpenInteract2::Action::NewUser>
 action.
+
+=head2 Built-in Observations
+
+B<filter>
+
+Filters can register themselves as observers and get passed a
+reference to content. A filter can transform the content in any manner
+it requires. The observation is posted just before the content is
+cached, so if the action's content is cacheable any modifications will
+become part of the cache.
+
+Here's an example:
+
+ package OpenInteract2::WikiFilter;
+ 
+ use strict;
+ 
+ sub update {
+     my ( $class, $action, $type, $content ) = @_;
+     return unless ( $type eq 'filter' );
+ 
+     # Note: $content is a scalar REFERENCE
+ 
+     $class->_transform_wiki_words( $content );
+ }
+
+You can register filters via the server-wide C<conf/filter.ini>
+file. Here's how you'd register the above filter to work on the 'news'
+and 'page' actions.
+
+ [filters wiki]
+ class = OpenInteract2::WikiFilter
+ 
+ [filter_action]
+ news  = wiki
+ page  = wiki
+
+The general configuration to declare a filter is:
+
+ [filters filtername]
+ observation-type = value
+
+The observation types are 'class', 'object' and 'sub' (see
+L<Class::Observable|Class::Observable> for what these mean and how
+they're setup), so you could have:
+
+ [filters foo_obj]
+ object = OpenInteract2::FooFilter
+ 
+ [filters foo_sub]
+ sub    = OpenInteract2::FooFilter::other_sub
+ 
+ [filter_action]
+ news   = foo_obj
+ page   = foo_sub
+
+Most of the time you'll likely use 'class' since it's the easiest.
 
 =head1 MAPPING URL TO ACTION
 
 In OI 1.x the name of an action determined what URL it responded
-to. This was simple but inflexible. This version gives you the option
-of decoupling the name and URL and allowing each action to respond to
+to. This was simple but inflexible. OI 2.x gives you the option of
+decoupling the name and URL and allowing each action to respond to
 multiple URLs as well.
 
 The default behavior is to respond to URLs generated from the action
@@ -1203,10 +1485,13 @@ because the default always puts the lowercased entry first.
 
 =head1 GENERATING CONTENT FOR ACTION
 
-Actions always return content. The content is normally generated by
-passing data to some sort of template processor along with the
-template to use. The template processor passes the data to the
-template and returns the result.
+Actions B<always> return content. That content might be what's
+expected, it might be an error message, or it might be the result of
+another action. Normally the content is generated by passing data to
+some sort of template processor along with the template to use. The
+template processor passes the data to the template and returns the
+result. But there's nothing that says you can't just manually return a
+string :-)
 
 The template processor is known as a 'content generator', since it
 does not need to use templates at all. OpenInteract maintains a list
@@ -1233,11 +1518,11 @@ And not care about how the object will get displayed. So this action
 could be declared in both of the following ways:
 
  [news]
- class             = OpenInteract2::Handler::News
+ class             = OpenInteract2::Action::News
  content_generator = TT
  
  [shownews]
- class             = OpenInteract2::Handler::News
+ class             = OpenInteract2::Action::News
  task              = show
  return_parameter  = news
  content_generator = SOAP
@@ -1255,23 +1540,35 @@ news object off to the SOAP content generator, which will take the
 =head2 Caching
 
 Another useful feature that comes from having the content generated in
-a central location is that your content can be cached transparently.
-
-TODO: fill this in
+a central location is that your content can be cached
+transparently. Caching is done entirely in actions but is sizable
+enough to be documented elsewhere. Please see
+L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching> for
+the lowdown.
 
 =head1 PROPERTIES
 
 You can set any of the properties with a method call. Examples are
 given for each.
 
-B<request>: The L<OpenInteract2::Request|OpenInteract2::Request>
-associated with the current request.
+B<request> (object)
 
-B<response>: The L<OpenInteract2::Response|OpenInteract2::Response>
-associated with the current response.
+TODO: May go away
 
-B<name>: The name of this action. This is normally used to lookup
-information from the action table.
+The L<OpenInteract2::Request|OpenInteract2::Request> associated with
+the current request.
+
+B<response> (object)
+
+TODO: May go away
+
+The L<OpenInteract2::Response|OpenInteract2::Response> associated with
+the current response.
+
+B<name> ($)
+
+The name of this action. This is normally used to lookup information
+from the action table.
 
 This property is read-only -- it is set by the constructor when you
 create a new action, but you cannot change it after the action is
@@ -1281,10 +1578,12 @@ Example:
 
  print "Action name: ", $action->name, "\n";
 
-B<url>: URL used for this action. This is frequently the same as
-B<name>, but you can override it in the action configuration. Note
-that this is B<not> the fully qualified URL -- you need the
-C<create_url()> method for that.
+B<url> ($)
+
+URL used for this action. This is frequently the same as B<name>, but
+you can override it in the action configuration. Note that this is
+B<not> the fully qualified URL -- you need the C<create_url()> method
+for that.
 
 This property is read-only -- it is set by the constructor when you
 create a new action, but you cannot change it after the action is
@@ -1297,10 +1596,11 @@ Example:
 
  print "You requested ", $action->url, " within the application."
 
-B<url_none>: Set to 'yes' to tell OI that you do not want this action
-accessible via a URL. This is often done for boxes and other
-template-only actions. See L<MAPPING URL TO ACTION> for more
-information.
+B<url_none> (bool)
+
+Set to 'yes' to tell OI that you do not want this action accessible
+via a URL. This is often done for boxes and other template-only
+actions. See L<MAPPING URL TO ACTION> for more information.
 
 Example:
 
@@ -1311,8 +1611,10 @@ Example:
  weight   = 5
  url_none = yes
 
-B<url_alt>: A number of other URLs this action can be accessible
-by. See L<MAPPING URL TO ACTION> for more information.
+B<url_alt> (\@)
+
+A number of other URLs this action can be accessible by. See L<MAPPING
+URL TO ACTION> for more information.
 
 Example:
 
@@ -1321,8 +1623,10 @@ Example:
  url_alt  = Nouvelles
  url_alt  = Noticias
 
-B<action_type>: The type of action this is. Action types can provide
-default tasks, output filters, etc. This is not required.
+B<action_type> ($)
+
+The type of action this is. Action types can provide default tasks,
+output filters, etc. This is not required.
 
 Example:
 
@@ -1330,10 +1634,15 @@ Example:
  $action->action_type( 'directory_handler' );
  $action->action_type( 'template_only' );
 
-B<task>: What task should this action run? Generally this maps to a
-subroutine name, but the action can optionally provide its own
-dispatching mechanism which maps the task in a different manner. (See
-L<Action Tasks> above for more information.)
+See L<Action Types> above for how to specify the action types actions
+can use.
+
+B<task> ($)
+
+What task should this action run? Generally this maps to a subroutine
+name, but the action can optionally provide its own dispatching
+mechanism which maps the task in a different manner. (See L<Action
+Tasks> above for more information.)
 
 Example:
 
@@ -1343,9 +1652,11 @@ Example:
      return $action->execute;
  }
 
-B<content_generator>: A named content generator. Your server
-configuration can have a number of content generators defined, and
-this property should contain the name of one.
+B<content_generator> ($)
+
+Name of a content generator. Your server configuration can have a
+number of content generators defined; this property should contain the
+name of one.
 
 Example:
 
@@ -1356,8 +1667,73 @@ Example:
 The property is frequently inherited from the default action, so you
 may not see it explicitly declared in the action table.
 
-B<is_secure>: Whether to check security for this action. True is
-indicated by 'yes', false by 'no' (or anything else).
+B<template_source> (\%)
+
+You have the option to specify your template source in the
+configuration. This is required if using multiple content generators
+for the same subroutine. (Actually, this is not true unless all your
+content generators can understand the specified template source. This
+will probably never happen given the sheer variety of templating
+systems on the planet.)
+
+This B<will not work> in place of required parameters for the common
+actions, see
+L<OpenInteract2::Action::Common|OpenInteract2::Action::Common>.
+
+Example, not using 'template_source'. First the action configuration:
+
+ [foo]
+ class = OpenInteract2::Action::Foo
+ content_generator = TT
+
+Now the action:
+
+ sub mytask {
+     my ( $self ) = @_;
+     my %params = ( foo => 'bar', baz => [ 'this', 'that' ] );
+     return $self->generate_content( \%params,
+                                     { name => 'foo::mytask_template' } );
+ }
+
+Example using 'template_source'. First the configuration:
+
+ [foo]
+ class = OpenInteract2::Action::Foo
+ content_generator = TT
+ ...
+ 
+ [foo template_source]
+ mytask = foo::mytask_template
+
+And now the action:
+
+ sub mytask {
+     my ( $self ) = @_;
+     my %params = ( foo => 'bar', baz => [ 'this', 'that' ] );
+     return $self->generate_content( \%params );
+ }
+
+What this gives us is the ability to swap out B<via configuration> a
+separate display mechanism. For instance, I could specify the same
+class in a different action but use a different content generator:
+
+ [fooprime]
+ class = OpenInteract2::Action::Foo
+ content_generator = Wimpy
+ 
+ [fooprime template_source]
+ mytask = foo::mytask_wimpy_template
+
+So now the following URLs will reference the same code but have the
+content generated by separate processes:
+
+ /foo/mytask/
+ /fooprime/mytask/
+
+B<is_secure> (bool)
+
+Whether to check security for this action. True is indicated by 'yes',
+false by 'no' (or anything else).
 
 The return value is not the same as the value set. It returns a true
 value (1) if the action is secured (if set to 'yes'), a false one (0)
@@ -1374,8 +1750,10 @@ Example:
      }
  }
 
-B<security_required>: If the action is using security, what level is
-required for the action to successfully execute.
+B<security_required> (bool)
+
+If the action is using security, what level is required for the action
+to successfully execute.
 
 Example:
 
@@ -1391,9 +1769,11 @@ Example:
 (Note: you will never need to do this since the
 C<find_security_level()> method does this (and more) for you.)
 
-B<security_level>: This is the security level found or set for this
-action and task. If you set this beforehand then the action dispatcher
-will not check it for you:
+B<security_level> ($)
+
+This is the security level found or set for this action and task. If
+you set this beforehand then the action dispatcher will not check it
+for you:
 
 Example:
 
@@ -1414,16 +1794,20 @@ Example:
                     security_level => SEC_LEVEL_WRITE });
  return $action->execute;
 
-B<task_valid>: An arrayref of valid tasks for this action.
+B<task_valid> (\@)
+
+An arrayref of valid tasks for this action.
 
 Example:
 
  my $ok_tasks = $action->task_valid;
  print "Tasks for this action: ", join( ', ', @{ $ok_tasks } ), "\n";
 
-B<task_invalid>: An arrayref of invalid tasks for this action. Note
-that the action dispatcher will B<never> execute a task with a leading
-underscore (e.g., '_find_records');
+B<task_invalid> (\@)
+
+An arrayref of invalid tasks for this action. Note that the action
+dispatcher will B<never> execute a task with a leading underscore
+(e.g., '_find_records');
 
 Example:
 
@@ -1512,32 +1896,13 @@ Examples:
                                             task => 'list' } );
  
  # Create a new type of action on the fly
+ # TODO: will this work?
  
  my $action = OpenInteract2::Action->new(
                     { name         => 'foo',
                       class        => 'OpenInteract2::Action::FooAction',
                       task_default => 'drink',
                       soda         => 'Jolt' } );
-
-B<register_action_type( $type, $class )>
-
-TODO: Do we still need this? It might be a good idea to keep to allow
-on-the-fly action creation but still allow some structure...
-
-Let the main action class know about a custom action type. Once the
-type is registered you can create new actions of that type:
-
- OpenInteract2::Action->register_action_type( 'mytype', 'My::Action' );
- my $action = OpenInteract2::Action->new( 'test',
-                                         { action_type => 'mytype',
-                                           task        => 'show' });
- $action->execute;
-
-Even though the action name 'test' might not be in the action table,
-the action knows what class to use since you have registered and use
-the type 'mytype'.
-
-Returns: The class registered
 
 =head2 Object Methods
 
@@ -1547,7 +1912,7 @@ This method allows action subclasses to perform any additional
 initialization required. Note that before this method is called from
 C<new()> all of the properties and parameters from C<new()> have been
 set into the object whether you've created it using a name or by
-cloning anouther action.
+cloning another action.
 
 If you define this you B<must> call C<SUPER::init()> so that all
 parent classes have a chance to perform initialization as well.
@@ -1641,19 +2006,21 @@ Example:
 
 =head2 Object Execution Methods
 
-B<execute( \%params )>
+B<execute( \%vars )>
 
 Generate content for this action and task. If the task has an error it
 can generate error content and C<die> with it; it can also just C<die>
 with an error message, but that's not very helpful to your users.
 
-The C<\%params> argument will set properties and parameters (via
+The C<\%vars> argument will set properties and parameters (via
 C<property_assign()> and C<param_assign()>) before generating the
 content.
 
 Returns: content generated by the action
 
 B<forward( $new_action )>
+
+TODO: may get rid of this
 
 Forwards execution to C<$new_action>.
 
@@ -1667,6 +2034,26 @@ Examples:
      my $list_action = CTX->lookup_action( 'object_list' );
      return $self->forward( $list_action );
  }
+
+B<clear_cache()>
+
+Most caching is handled for you using configuration declarations and
+callbacks in C<execute()>. The one part that cannot be easily
+specified is when objects change. If your action is using caching then
+you'll probably need to call C<clear_cache()> whenever you modify
+objects whose content may be cached. "Probably" because your app may
+not care that some stale data is served up for a little while.
+
+For instance, if you're caching the latest news items and add a new
+one you don't want your 'latest' listing to miss the entry you just
+added. So you clear out the old cache entries and let them get rebuilt
+on demand.
+
+Since we don't want to create a crazy dependency graph of data that's
+eventually going to expire anyway, we just remove all cache entries
+generated by this class.
+
+Returns: number of cache entries removed
 
 B<find_task()>
 
@@ -1787,9 +2174,13 @@ required an exception is thrown.
 
 =head2 Object Content Methods
 
-B<generate_content( \%content_params, \%template_source, [ \%template_params ] )>
+B<generate_content( \%content_params, [ \%template_source ], [ \%template_params ] )>
 
 This is used to generate content for an action.
+
+The information in C<\%template_source> is only optional if you've
+specified the source in your action configuration. See the docs for
+property B<template_source> for more information.
 
 TODO: fill this in
 
@@ -1868,11 +2259,11 @@ the context-sensitve new value of the parameter C<$name>.
 
 B<param_add( $key, @values )>
 
-Adds the values C<@value> to the parameter C<$key>. If there is a
-value already set for C<$key>, or if you pass multiple values, it's
-turned into an array reference and C<@values> C<push>ed onto the
-end. If there is no value already set and you only pass a single value
-it acts like the call to C<param( $key, $value )>.
+Adds (rather than replaces) the values C<@value> to the parameter
+C<$key>. If there is a value already set for C<$key>, or if you pass
+multiple values, it's turned into an array reference and C<@values>
+C<push>ed onto the end. If there is no value already set and you only
+pass a single value it acts like the call to C<param( $key, $value )>.
 
 This is useful for potentially multivalue parameters, such as the
 often-used 'error_msg' and 'status_msg'. You can still access the
@@ -1914,10 +2305,6 @@ This will overwrite existing action parameters if they are not already
 defined.
 
 Returns: nothing
-
-=head1 BUGS
-
-None known.
 
 =head1 TO DO
 

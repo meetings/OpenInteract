@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: manage_create_website.t,v 1.3 2003/06/11 00:38:17 lachoy Exp $
+# $Id: manage_create_website.t,v 1.6 2003/07/01 17:14:51 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -33,7 +33,7 @@ is( ref $task, 'OpenInteract2::Manage::Website::Create',
 
 my @status = eval { $task->execute };
 ok( ! $@, 'Task executed' );
-is( scalar @status, 96,
+is( scalar @status, 97,
     'Number of status messages' );
 
 # Look at the directories we should have created and see they're there
@@ -54,13 +54,13 @@ is( first_dir( $site_dir ), 'cache',
     'First dir in top-level' );
 is( last_dir( $site_dir ), 'uploads',
     'Last dir in top-level' );
-is( count_files( $site_dir ), 1,
+is( count_files( $site_dir ), 0,
     "Number of top-level files" );
 is( count_dirs( File::Spec->catdir( $site_dir, 'cache' ) ), 2,
     'Number of directories in cache/' );
 
 my $site_conf_dir = File::Spec->catdir( $site_dir, 'conf' );
-is( count_files( $site_conf_dir ), 10,
+is( count_files( $site_conf_dir ), 12,
     "Number of files in conf/" );
 is( first_file( $site_conf_dir ), 'base.conf',
     "First file in conf/" );

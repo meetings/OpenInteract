@@ -8,6 +8,83 @@ Each package maintains its own changelog. These changes are not
 mentioned here except to note the package version changes with
 successive OI2 releases.
 
+=head1 1.99_01
+
+=head2 Major Changes
+
+=over 4
+
+=item *
+
+Log4perl is now used for all logging. This is a major change in how
+OI2 presents its state to you, allowing you far more flexibility than
+you previously had.
+
+=item *
+
+B<Lots> of documentation additions and updates.
+
+=item *
+
+Different content generators than the Template Toolkit exist and can
+be used. They're not as featureful (e.g., nothing similar to the TT
+plugin) but may be useful when porting applications. They are
+C<Text::Template> (using
+L<OpenInteract2::ContentGenerator::TextTemplate|OpenInteract2::ContentGenerator::TextTemplate>)
+and C<HTML::Template> (using
+L<OpenInteract2::ContentGenerator::HtmlTemplate|OpenInteract2::ContentGenerator::HtmlTemplate>).
+
+You can find examples of using them in the 'news' package -- look at
+the bottom of the conf/action.ini file to enable the different actions.
+
+=item *
+
+The controller has been decoupled from the content generator. Each
+controller is B<associated> with a content generator, but a content
+generator doesn't map to a single controller. (This probably doesn't
+make sense to anybody who didn't read the code or try to use a
+different content generator, but trust me that it's better.)
+
+=item *
+
+OpenInteract2 now has content filters. And they're easy! A filter is
+just an observer (see L<Class::Observable|Class::Observable>) that
+catches 'filter' observations and has an opportunity to modify the
+content generated before it's optionally cached.
+
+=item *
+
+...which leads to caching of action content, now implemented. It's
+mostly transparent to your action as long as the cached content
+doesn't depend on any non-request parameters. (See
+L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching> for
+lots of info.)
+
+=item *
+
+OpenInteract2::Exception now uses Exception::Class rather than
+SPOPS::Exception, and E::C is a depdendency.
+
+=item *
+
+The standalone daemon (C<oi2_daemon>) respects the C<OPENINTERACT2>
+environment variable and will use it to find the server configuration
+and the daemon configuration if unspecified.
+
+=back
+
+=head2 Minor changes
+
+Too many small fixes and improvements to note, sorry. As we stabilize
+to 2.0 this will get explicit.
+
+=head2 Broken stuff
+
+Full text searching doesn't seem to work. A number of other actions
+have not been fully tested by hand, much less in an automated fashion.
+
+Also, tests for other areas of the system are lagging.
+
 =head1 1.99_00, 10 June 2003
 
 This is the first BETA release. DO NOT run production systems on it.

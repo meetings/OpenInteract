@@ -1,18 +1,15 @@
 package OpenInteract2::Config;
 
-# $Id: Config.pm,v 1.6 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Config.pm,v 1.7 2003/06/24 03:35:37 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
-
-my ( $DEBUG );
-sub SET_DEBUG { $DEBUG = $_[1] }
-sub DEBUG     { return $DEBUG }
+$OpenInteract2::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 ##############################
 # CLASS METHODS
@@ -41,7 +38,9 @@ sub is_file_valid {
 
 sub read_file {
     my ( $class, $filename ) = @_;
-    DEBUG && LOG( LDEBUG, "Config trying to read file [$filename]" );
+    my $log = get_logger( LOG_CONFIG );
+    $log->is_debug &&
+        $log->debug( "Config trying to read file [$filename]" );
     open( CONF, '<', $filename )
           || oi_error "Cannot open [$filename] for reading: $!";
     my @lines = <CONF>;
@@ -56,10 +55,16 @@ sub read_file {
 sub translate_dirs {
     my ( $self ) = @_;
     return unless ( ref $self->{dir} eq 'HASH' );
-    return if ( $self->{dir}{_IS_TRANSLATED_} );
+    my $log = get_logger( LOG_CONFIG );
+    if ( $self->{dir}{_IS_TRANSLATED_} ) {
+        $log->is_info &&
+            $log->info( "Directories already translated, no action" );
+        return;
+    }
     my $site_dir = $self->{dir}{website};
     $site_dir =~ s/(\\|\/)$//;
     unless ( $site_dir ) {
+        $log->error( "The config key 'dir.website' must be defined" );
         oi_error "Define 'dir->website' before continuing";
     }
 
@@ -71,7 +76,8 @@ sub translate_dirs {
         }
         my $full_path = File::Spec->catdir( @pieces );
         $self->{dir}{ $dir_type } = $full_path;
-        DEBUG && LOG( LDEBUG, "Set $dir_type = $full_path" );
+        $log->is_debug &&
+            $log->debug( "Set $dir_type = $full_path" );
     }
     return $self->{dir}{_IS_TRANSLATED_} = 1;
 }

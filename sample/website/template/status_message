@@ -1,5 +1,5 @@
 [%- IF NOT status_msg;
-    status_msg = OI.action.param( 'status_msg' ) || OI.request.message( 'status_msg' );
+    status_msg = OI.action_param( 'status_msg' ) || OI.request.message( 'status_msg' );
     END -%]
 
 [%- IF status_msg -%]
@@ -23,7 +23,7 @@
   </td></tr>
   <tr><td>
     [% FOREACH status = status_msg -%]
-    <font color="[% status_font_color %]">[% status %]</font>
+    <p>[% theme.bullet %] <font color="[% status_font_color %]">[% status %]</font></p>
     [% END -%]
   </td></tr>
 

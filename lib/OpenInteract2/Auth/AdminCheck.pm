@@ -1,22 +1,26 @@
 package OpenInteract2::Auth::AdminCheck;
 
-# $Id: AdminCheck.pm,v 1.3 2003/06/11 02:43:31 lachoy Exp $
+# $Id: AdminCheck.pm,v 1.5 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub is_admin {
     my ( $class, $user, $is_logged_in, $groups ) = @_;
+    my $log = get_logger( LOG_AUTH );
     unless ( $is_logged_in ) {
-        DEBUG && LOG( LDEBUG, "User not logged in: NOT admin" );
+        $log->is_debug &&
+            $log->debug( "User not logged in: NOT admin" );
         return 0;
     }
     my $server_config = CTX->server_config;
     if ( $user->id eq $server_config->{default_objects}{superuser} ) {
-        DEBUG && LOG( LDEBUG, "User is superuser: IS admin" );
+        $log->is_debug &&
+            $log->debug( "User is superuser: IS admin" );
         return 1;
     }
 
@@ -25,7 +29,8 @@ sub is_admin {
     foreach my $group ( @{ $groups } ) {
         my $group_id = $group->id;
         if ( $group_id eq $site_admin_id or $group_id eq $supergroup_id ) {
-            DEBUG && LOG( LDEBUG, "User in group [$group_id]: IS admin" );
+            $log->is_debug &&
+                $log->debug( "User in group [$group_id]: IS admin" );
             return 1;
         }
     }
@@ -38,7 +43,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Auth::AdminCheck - See whether user is admin
+OpenInteract2::Auth::AdminCheck - See whether user is admin
 
 =head1 SYNOPSIS
 

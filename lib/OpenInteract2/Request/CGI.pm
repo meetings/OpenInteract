@@ -1,16 +1,17 @@
 package OpenInteract2::Request::CGI;
 
-# $Id: CGI.pm,v 1.10 2003/06/11 02:43:27 lachoy Exp $
+# $Id: CGI.pm,v 1.12 2003/06/25 16:47:53 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
 use CGI;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG CTX );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( cgi );
 OpenInteract2::Request::CGI->mk_accessors( @FIELDS );
@@ -19,6 +20,9 @@ my ( $CURRENT );
 
 sub init {
     my ( $self, $params ) = @_;
+    my $log = get_logger( LOG_REQUEST );
+    $log->is_info &&
+        $log->info( "Creating CGI request" );
     if ( $params->{cgi} ) {
         $self->cgi( $params->{cgi} );
     }
@@ -29,11 +33,13 @@ sub init {
     my $cgi = $self->cgi;
 
     my $base_url = $cgi->script_name;
-    DEBUG && LOG( LDEBUG, "Deployed under: [$base_url]" );
+    $log->is_info &&
+        $log->info( "Deployed under: [$base_url]" );
     CTX->assign_deploy_url( $base_url );
 
     my $full_url = join( '', $base_url, $cgi->path_info );
-    DEBUG && LOG( LDEBUG, "OI URL: [$full_url]" );
+    $log->is_debug &&
+        $log->debug( "Full OI URL [$full_url]" );
     $self->_set_url( $full_url );
 
     # Then the various headers, properties, etc.
@@ -47,13 +53,14 @@ sub init {
 
     $self->server_name( $cgi->server_name );
     $self->remote_host( $cgi->remote_host );
-    DEBUG && LOG( LDEBUG, "Set request and server properties ok" );
 
     # See if there are any uploads among the parameters. (Note: only
     # supporting a single upload per fieldname right now...)
 
     my @fields = $cgi->param;
 
+    my $num_param = 0;
+    my $num_upload = 0;
     foreach my $field ( @fields ) {
         my @items = $cgi->param( $field );
         next unless ( scalar @items );
@@ -69,6 +76,7 @@ sub init {
                                    filehandle   => $upload,
                                    filename     => $cgi->tmpFileName( $upload ) });
                 $self->_set_upload( $field, $oi_upload );
+                $num_upload++;
             }
         }
 
@@ -80,9 +88,14 @@ sub init {
             else {
                 $self->param( $field, $items[0] );
             }
+            $num_param++;
         }
     }
-    DEBUG && LOG( LDEBUG, "Set parameters and file uploads ok" );
+    $log->is_debug &&
+        $log->debug( "Set parameters ($num_param) and file ",
+                     "uploads ($num_upload)" );
+    $log->is_info &&
+        $log->info( "Finished creating CGI request" );
     return $CURRENT = $self;
 }
 

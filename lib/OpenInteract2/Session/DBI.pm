@@ -1,22 +1,26 @@
 package OpenInteract2::Session::DBI;
 
-# $Id: DBI.pm,v 1.5 2003/06/11 02:43:26 lachoy Exp $
+# $Id: DBI.pm,v 1.6 2003/06/24 03:35:39 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Session );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_config, $session_id ) = @_;
+    my $log = get_logger( LOG_SESSION );
+
     my $impl_class      = $session_config->{impl_class};
     my $session_params  = $session_config->{params} || {};
     my $datasource_name = $session_config->{datasource};
 
-    DEBUG && LOG( LINFO, "Trying to fetch DBI session [ID: $session_id] ",
+    $log->is_info &&
+        $log->info( "Trying to fetch DBI session [ID: $session_id] ",
                          "[DS: $datasource_name] [Impl: $impl_class]" );
     $session_params->{Handle} = CTX->datasource( $datasource_name );
 
@@ -25,7 +29,8 @@ sub _create_session {
 
     if ( $impl_class =~ /MySQL$/ ) {
         $session_params->{LockHandle} = $session_params->{Handle};
-        DEBUG && LOG( LDEBUG, "Using MySQL session store, with LockHandle parameter" );
+        $log->is_debug &&
+            $log->debug( "Using MySQL session store, with LockHandle parameter" );
     }
 
     my %session = ();

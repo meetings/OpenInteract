@@ -1,18 +1,16 @@
 package OpenInteract2::ContentGenerator::TT2Provider;
 
-# $Id: TT2Provider.pm,v 1.3 2003/06/11 02:43:30 lachoy Exp $
+# $Id: TT2Provider.pm,v 1.4 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Template::Provider );
 use Digest::MD5;
 use File::Spec;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::ContentGenerator::TT2Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
-
-# This module has too much debugging so we use our own to filter out entries
-use constant MYDEBUG                      => 0;
+$OpenInteract2::ContentGenerator::TT2Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
 use constant DEFAULT_TEMPLATE_EXTENSION   => 'template';
@@ -35,16 +33,19 @@ use constant STAT   => 5;
 
 sub fetch {
 	my ( $self, $text ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
 	my ( $name );
 
 	# if scalar or glob reference, then get a unique name to cache by
 
 	if ( ref( $text ) eq 'SCALAR' ) {
-		MYDEBUG && LOG( LDEBUG, "anonymous template passed in" );
+		$log->is_debug &&
+            $log->debug( "anonymous template passed in" );
 		$name = $self->_get_anon_name( $text );
 	}
     elsif ( ref( $text ) eq 'GLOB' ) {
-		MYDEBUG && LOG( LDEBUG, "GLOB passed in to fetch" );
+		$log->is_debug &&
+            $log->debug( "GLOB passed in to fetch" );
         $name = $self->_get_anon_name( $text );
     }
 
@@ -54,8 +55,9 @@ sub fetch {
     # any invalid characters (e.g., '../../../etc/passwd')
 
     else {
-        MYDEBUG && LOG( LDEBUG, "info passed in [$text] is site filename or ",
-                              "package::template; will check file system" );
+        $log->is_debug &&
+            $log->debug( "info passed in [$text] is site filename or ",
+                         "package::template; will check file system" );
         $name = $text;
         undef $text;
         eval { $self->_validate_template_name( $name ) };
@@ -78,7 +80,8 @@ sub fetch {
         $compile_name =~ s/::/-/g;
 		$compile_file = File::Spec->catfile( $self->{COMPILE_DIR},
                                              $compile_name . $ext );
-        MYDEBUG && LOG( LDEBUG, "compiled output filename [$compile_file]" );
+        $log->is_debug &&
+            $log->debug( "compiled output filename [$compile_file]" );
 	}
 
     my ( $data, $error );
@@ -86,7 +89,8 @@ sub fetch {
 	# caching disabled (cache size is 0) so load and compile but don't cache
 
 	if ( $self->{SIZE} == 0 ) {
-		MYDEBUG && LOG( LDEBUG, "fetch template [$name] [caching disabled]" );
+		$log->is_debug &&
+            $log->debug( "fetch template [$name] [caching disabled]" );
 		( $data, $error ) = $self->_load( $name, $text );
         ( $data, $error ) = $self->_compile( $data, $compile_file ) unless ( $error );
         $data = $data->{data}                                       unless ( $error );
@@ -95,8 +99,9 @@ sub fetch {
 	# cached entry exists, so refresh slot and extract data
 
     elsif ( $name and ( my $cache_slot = $self->{LOOKUP}{ $name } ) ) {
-		MYDEBUG && LOG( LDEBUG, "fetch template [$name] ",
-                             "[cached (limit: $self->{SIZE})]" );
+		$log->is_debug &&
+            $log->debug( "fetch template [$name] ",
+                         "[cached (limit: $self->{SIZE})]" );
 		( $data, $error ) = $self->_refresh( $cache_slot );
 		$data = $cache_slot->[ DATA ] unless ( $error );
 	}
@@ -104,8 +109,9 @@ sub fetch {
 	# nothing in cache so try to load, compile and cache
 
     else {
-		MYDEBUG && LOG( LDEBUG, "fetch template ( $name ) ",
-                             "[uncached (limit: $self->{SIZE})]" );
+		$log->is_debug &&
+            $log->debug( "fetch template ( $name ) ",
+                         "[uncached (limit: $self->{SIZE})]" );
 		( $data, $error ) = $self->_load( $name, $text );
 		( $data, $error ) = $self->_compile( $data, $compile_file ) unless ( $error );
 		$data = $self->_store( $name, $data )                       unless ( $error );
@@ -130,7 +136,9 @@ sub fetch {
 
 sub _load {
     my ( $self, $name, $content ) = @_;
-	MYDEBUG && LOG( LDEBUG, "_load(@_[1 .. $#_])" );
+    my $log = get_logger( LOG_TEMPLATE );
+	$log->is_debug &&
+        $log->debug( "_load(@_[1 .. $#_])" );
 
     # If no name, $self->{TOLERANT} being true means we can decline
     # safely. Otherwise return an error. We might modify this in the
@@ -141,12 +149,14 @@ sub _load {
 
     unless ( defined $name ) {
         if ( $self->{TOLERANT} ) {
-            MYDEBUG && LOG( LDEBUG, "No name passed in and TOLERANT set, ",
-                                 "so decline" );
+            $log->is_debug &&
+                $log->debug( "No name passed in and TOLERANT set, ",
+                             "so decline" );
             return ( undef, Template::Constants::STATUS_DECLINED );
         }
-        MYDEBUG && LOG( LDEBUG, "No name passed in and TOLERANT not set ",
-                             "so return error" );
+        $log->is_debug &&
+            $log->debug( "No name passed in and TOLERANT not set ",
+                         "so return error" );
         return ( "No template", Template::Constants::STATUS_ERROR );
     }
 
@@ -157,7 +167,8 @@ sub _load {
     # propogate that reference through to processing, etc.
 
     if ( ref( $content ) eq 'SCALAR' ) {
-        MYDEBUG && LOG( LDEBUG, "Nothing to load: template is scalar ref." );
+        $log->is_debug &&
+            $log->debug( "Nothing to load: template is scalar ref." );
         return ({ name => $name,
                   text => $$content,
                   time => time,
@@ -165,7 +176,8 @@ sub _load {
     }
 
     if ( ref( $content ) eq 'GLOB' ) {
-        MYDEBUG && LOG( LDEBUG, "Load template from glob (file) ref" );
+        $log->is_debug &&
+            $log->debug( "Load template from glob (file) ref" );
         local $/ = undef;
         return ({ name => 'file handle',
                   text => <$content>,
@@ -197,8 +209,10 @@ sub _load {
 
 sub _refresh {
 	my ( $self, $slot ) = @_;
+    my $log = get_logger( LOG_TEMPLATE );
 
-    MYDEBUG && LOG( LDEBUG, "_refresh([ @$slot ])" );
+    $log->is_debug &&
+        $log->debug( "_refresh([ @$slot ])" );
 
     # If the cache time has expired reload the entry
 
@@ -208,7 +222,8 @@ sub _refresh {
                          || DEFAULT_MAX_CACHE_TIME;
 	my ( $data, $error );
 	if ( ( $slot->[ DATA ]->{time} - time ) > $max_cache_time ) {
-        MYDEBUG && LOG( LDEBUG, "Refresh cache for: $slot->[ NAME ]" );
+        $log->is_debug &&
+            $log->debug( "Refresh cache for: $slot->[ NAME ]" );
         ( $data, $error ) = $self->_load( $slot->[ NAME ] );
         ( $data, $error ) = $self->_compile( $data )  unless ( $error );
         unless ( $error ) {
@@ -294,9 +309,10 @@ OpenInteract2::ContentGenerator::TT2Provider - Retrieve templates for the Templa
 =head1 DESCRIPTION
 
 B<NOTE>: As shown above, you need to use
-L<OpenInteract2::ContentGenerator::TT2Context> as a context for your templates
-since our naming scheme ('package::name') collides with the TT naming
-scheme for specifying a prefix before a template.
+L<OpenInteract2::ContentGenerator::TT2Context|OpenInteract2::ContentGenerator::TT2Context>
+as a context for your templates since our naming scheme
+('package::name') collides with the TT naming scheme for specifying a
+prefix before a template.
 
 This package is a provider for the Template Toolkit while running
 under OpenInteract. Being a provider means that TT hands off any
@@ -312,7 +328,7 @@ the object itself.
 
 B<fetch( $text )>
 
-Overrides C<Template::Provider>.
+Overrides L<Template::Provider|Template::Provider>.
 
 Uses C<$text> to somehow retrieve a template. The actual work to
 retrieve a template is done in C<_load()>, although this method

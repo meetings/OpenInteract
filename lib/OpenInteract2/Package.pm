@@ -1,6 +1,6 @@
 package OpenInteract2::Package;
 
-# $Id: Package.pm,v 1.18 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Package.pm,v 1.20 2003/06/26 11:16:25 lachoy Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor );
@@ -13,8 +13,9 @@ use File::Copy               qw( cp );
 use File::Path               ();
 use File::Spec;
 use File::Temp               qw( tempdir );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::Package;
 use OpenInteract2::Config::PackageChanges;
 use OpenInteract2::Config::Readonly;
@@ -23,7 +24,7 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 
-$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract2::Package::EXPORT_OK = qw( DISTRIBUTION_EXTENSION );
 
 use constant DISTRIBUTION_EXTENSION => 'zip';
@@ -141,6 +142,11 @@ sub _read_info_from_dir {
 ########################################
 # PROPERTIES
 
+sub full_name {
+    my ( $self ) = @_;
+    return join( '-', $self->name, $self->version );
+}
+
 # Get the changelog
 
 sub get_changes {
@@ -252,13 +258,16 @@ sub _check_file_validity {
 
 sub install {
     my ( $class, $params ) = @_;
+    my $log = get_logger( LOG_OI );
+
     my $repository = $class->_install_get_repository( $params );
     my $package_file = $params->{package_file};
     unless ( -f $package_file ) {
         oi_error "Valid package file must be specified in 'package_file'";
     }
-    DEBUG && LOG( LDEBUG, "Install info - [File: $package_file] ",
-                  "[Website dir: ", $repository->website_dir, "]" );
+    $log->is_debug &&
+        $log->debug( "Install info - [File: $package_file] ",
+                     "[Website dir: ", $repository->website_dir, "]" );
 
     my $pwd = File::Spec->rel2abs( File::Spec->curdir );
 
@@ -292,16 +301,19 @@ sub install {
         oi_error "Cannot unpack the distribution into its final ",
                  "directory [$full_package_dir]: $@";
     }
-    DEBUG && LOG( LINFO, "Unpacked package into [$full_package_dir] ok" );
+    $log->is_info &&
+        $log->info( "Unpacked package into [$full_package_dir] ok" );
 
     my $installed_package = $class->new({ directory  => $full_package_dir,
                                           repository => $repository });
     $installed_package->installed_date( scalar( localtime ) );
     my $copied_files = $installed_package->_install_copy_files;
-    DEBUG && LOG( LINFO, "Copied package files to website ok" );
+    $log->is_info &&
+        $log->info( "Copied package files to website ok" );
 
     $repository->add_package( $installed_package );
-    DEBUG && LOG( LINFO, "Saved repository with new package ok." );
+    $log->is_info &&
+        $log->info( "Saved repository with new package ok." );
 
     undef $tmp_package;
     chdir( $pwd );
@@ -641,6 +653,8 @@ sub _install_copy_files {
 
 sub _install_package_files_to_website {
     my ( $self, $base_files, $dest_files ) = @_;
+    my $log = get_logger( LOG_OI );
+
     $dest_files ||= [];
     my $website_dir = $self->repository->website_dir;
     my $package_dir = File::Spec->rel2abs( $self->directory );
@@ -685,7 +699,7 @@ sub _install_package_files_to_website {
         }
     };
     if ( $@ ) {
-        LOG( LERROR, "Caught error copying files to website: $@" );
+        $log->error( "Caught error copying files to website: $@" );
         foreach my $filename ( @copy_files ) {
             unlink( $filename )
                     || warn "Cannot cleanup [$filename]: $!";
@@ -836,7 +850,7 @@ sub _export_check_manifest {
 
 sub _export_archive_package {
     my ( $self ) = @_;
-    my $package_id = join( '-', $self->name, $self->version );
+    my $package_id = $self->full_name;
     my $export_dir = File::Spec->rel2abs( $package_id );
     if ( -d $export_dir ) {
         oi_error "Directory [$export_dir] already exists. Please ",
@@ -1144,7 +1158,8 @@ sub _check_manifest {
     my %missing_s = ( action => 'Files missing from MANIFEST' );
     if ( scalar @missing ) {
         $missing_s{is_ok}   = 'no';
-        $missing_s{message} = 'Files not found from MANIFEST: ' . join( ", ", @missing );
+        $missing_s{message} = 'Files not found from MANIFEST: ' .
+                              join( ", ", @missing );
     }
     else {
         $missing_s{is_ok}   = 'yes';
@@ -1155,7 +1170,8 @@ sub _check_manifest {
     my %extra_s = ( action => 'Extra files not in MANIFEST' );
     if ( scalar @extra ) {
         $extra_s{is_ok}   = 'no';
-        $extra_s{message} = 'Files not in MAIFEST found: ' . join( ', ', @extra );
+        $extra_s{message} = 'Files not in MAIFEST found: ' .
+                            join( ', ', @extra );
     }
     else {
         $extra_s{is_ok}   = 'yes';
@@ -1377,6 +1393,15 @@ Creates an MD5 digest of the contents in C<$package_file>. (See
 L<Digest::MD5|Digest::MD5> for what this means.)
 
 =head2 Object Methods
+
+B<full_name()>
+
+Returns a string with the package name and version:
+
+ $package->name( 'foo' );
+ $package->version( '1.52' );
+ print "Name: ", $package->full_name;
+ # Name: foo-1.52
 
 B<get_files( [ $force_read ] )>
 

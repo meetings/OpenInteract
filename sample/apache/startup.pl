@@ -3,6 +3,7 @@
 use strict;
 use Apache::OpenInteract2;
 use Apache::OpenInteract2::HttpAuth;
+use Log::Log4perl;
 use OpenInteract2::Config::Base;
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context;
@@ -10,6 +11,7 @@ use OpenInteract2::Context;
 my $BASE_CONFIG_FILE = '[% website_dir %]/conf/base.conf';
 
 {
+    Log::Log4perl::init( '[% website_dir %]/conf/log4perl.conf' );
     my $base_config = OpenInteract2::Config::Base->new(
                               { filename => $BASE_CONFIG_FILE } );
     my $ctx = OpenInteract2::Context->create(

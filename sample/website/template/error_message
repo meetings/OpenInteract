@@ -1,5 +1,5 @@
 [%- IF NOT error_msg;
-    error_msg = OI.action.param( 'error_msg' ) || OI.request.message( 'error_msg' );
+    error_msg = OI.action_param( 'error_msg' ) || OI.request.message( 'error_msg' );
     END -%]
 
 [%- IF error_msg -%]

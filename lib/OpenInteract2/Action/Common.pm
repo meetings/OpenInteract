@@ -1,14 +1,15 @@
 package OpenInteract2::Action::Common;
 
-# $Id: Common.pm,v 1.8 2003/06/07 17:24:04 lachoy Exp $
+# $Id: Common.pm,v 1.11 2003/06/26 14:11:02 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_security_error );
 
-$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 $OpenInteract2::Action::Common::AUTOLOAD  = '';
 
 my %COMMON_TASKS = (
@@ -29,19 +30,27 @@ sub AUTOLOAD {
     my ( $self ) = @_;
     my $request = $OpenInteract2::Action::Common::AUTOLOAD;
     $request =~ s/.*://;
+    my $log = get_logger( LOG_ACTION );
+
     if ( my $msg = $COMMON_TASKS{ $request } ) {
         return sprintf( $msg, $self->name );
     }
     elsif ( $request =~ /^_/ ) {
         my $msg = sprintf( "Private function '%s' not found in action %s.",
                            $request, $self->name );
-        LOG( LWARN, $msg );
+        $log->warn( $msg );
         return $msg;
     }
     else {
         my $msg = sprintf( "Task '%s' not available in action %s",
                            $request, $self->name );
-        LOG( LWARN, $msg );
+        # cut down on noise in log messages...
+        if ( $request eq 'DESTROY' ) {
+            $log->is_debug && $log->debug( $msg );
+        }
+        else {
+            $log->warn( $msg );
+        }
         return $msg
     }
 }
@@ -60,14 +69,17 @@ sub _common_error_template {
 sub _common_set_defaults {
     my ( $self, $defaults ) = @_;
     return unless ( ref $defaults eq 'HASH' );
+    my $log = get_logger( LOG_ACTION );
     my $tag = join( ' -> ', $self->name, $self->task );
     while ( my ( $key, $value ) = each %{ $defaults } ) {
         if ( $self->param( $key ) ) {
-            DEBUG && LOG( LDEBUG, "NOT settting default for [$tag]: [$key], value ",
-                                  "already exists [", $self->param( $key ), "]" );
+            $log->is_debug &&
+                $log->debug( "NOT settting default for [$tag]: [$key], value ",
+                             "already exists [", $self->param( $key ), "]" );
         }
         else {
-            DEBUG && LOG( LDEBUG, "Setting default for [$tag]: [$key] [$value]" );
+            $log->is_debug &&
+                $log->debug( "Setting default for [$tag]: [$key] [$value]" );
             $self->param( $key, $value );
         }
     }
@@ -80,8 +92,9 @@ sub _common_set_defaults {
 sub _common_check_object_class {
     my ( $self ) = @_;
     my $object_type = $self->param( 'c_object_type' );
+    my $log = get_logger( LOG_ACTION );
     unless ( $object_type ) {
-        DEBUG && LOG( LWARN, "No object type specified" );
+        $log->warn( "No object type specified" );
         my $msg = join( '', "Object type is undefined. How can we know ",
                             "what to search or return? Please set it in ",
                             "your action configuration using the key ",
@@ -91,7 +104,7 @@ sub _common_check_object_class {
     }
     my $object_class = eval { CTX->lookup_object( $object_type ) };
     if ( $@ or ! $object_class ) {
-        DEBUG && LOG( LWARN, "No object class for [$object_type]" );
+        $log->warn( "No object class for [$object_type]" );
         my $msg = join( '', "Class for given object type '$object_type' ",
                             "is undefined. Maybe a typo in your action ",
                             "configuration using the key c_object_type." );
@@ -104,10 +117,12 @@ sub _common_check_object_class {
 
 sub _common_check_id_field {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $object_class = $self->param( 'c_object_class' );
     my $id_field = eval { $object_class->id_field };
     if ( ! $id_field or $@ ) {
-        DEBUG && LOG( LWARN, "No ID field for [$object_class]" );
+        $log->warn( "No ID field for [$object_class]" );
         my $msg = join( '', "Object ID field is undefined. We cannot know ",
                             "how to fetch an existing object without it. ",
                             "Please define the key 'id_field' in your ",
@@ -121,6 +136,8 @@ sub _common_check_id_field {
 
 sub _common_check_id {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $id_field = $self->param( 'c_id_field' );
     my $id = $self->param( 'c_id' );
     if ( ! defined $id and $id_field ) {
@@ -132,7 +149,7 @@ sub _common_check_id {
         $self->param( c_id => $id );
     }
     else {
-        DEBUG && LOG( LWARN, "No ID found in action/request [$id_field]" );
+        $log->warn( "No ID found in action/request [$id_field]" );
         my $msg = join( '', "No value found in action parameters or ",
                             "request for ID field [$id_field]." );
         $self->param_add( error_msg => $msg );
@@ -143,11 +160,13 @@ sub _common_check_id {
 
 sub _common_check_template_specified {
     my ( $self, @template_params ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $num_errors = 0;
     for ( @template_params ) {
         next unless ( $_ );
         unless ( $self->param( $_ ) ) {
-            DEBUG && LOG( LWARN, "No value in template parameter [$_]" );
+            $log->warn( "No value in template parameter [$_]" );
             my $msg = join( '', "No template found in '$_' key. This " .
                                 "template is mandatory for the task to ",
                                 "function." );
@@ -160,10 +179,12 @@ sub _common_check_template_specified {
 
 sub _common_check_param {
     my ( $self, @params ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $num_errors = 0;
     for ( @params ) {
         unless ( $self->param( $_ ) ) {
-            DEBUG && LOG( LWARN, "No value in parameter [$_]" );
+            $log->warn( "No value in parameter [$_]" );
             my $msg = join( '', "Action parameter '$_' is undefined but ",
                                 "required for the task to function." );
             $self->param_add( error_msg => $msg );
@@ -180,14 +201,16 @@ sub _common_assign_properties {
     my ( $self, $object, $fields ) = @_;
     my $request = CTX->request;
 
+    my $log = get_logger( LOG_ACTION );
     my @standard = ( ref $fields->{standard} eq 'ARRAY' )
                      ? @{ $fields->{standard} } : ( $fields->{standard} );
     foreach my $field ( @standard ) {
         next unless ( $field );
-        LOG( LDEBUG, "Setting standard [$field] in object from request" );
+        $log->is_debug &&
+            $log->debug( "Setting standard [$field] in object from request" );
         eval { $object->{ $field } = $request->param( $field ) };
         if ( $@ ) {
-            LOG( LWARN, "Failed to set object value for [$field]: $@" );
+            $log->warn( "Failed to set object value for [$field]: $@" );
         }
     }
 
@@ -195,10 +218,11 @@ sub _common_assign_properties {
                      ? @{ $fields->{toggled} } : ( $fields->{toggled} );
     foreach my $field ( @toggled ) {
         next unless ( $field );
-        LOG( LDEBUG, "Setting toggled [$field] in object from request" );
+        $log->is_debug &&
+            $log->debug( "Setting toggled [$field] in object from request" );
         eval { $object->{ $field } = $request->param_toggled( $field ) };
         if ( $@ ) {
-            LOG( LWARN, "Failed to set object toggle for [$field]: $@" );
+            $log->warn( "Failed to set object toggle for [$field]: $@" );
         }
     }
 
@@ -206,13 +230,14 @@ sub _common_assign_properties {
                      ? @{ $fields->{date} } : ( $fields->{date} );
     foreach my $field ( @date ) {
         next unless ( $field );
-        LOG( LDEBUG, "Setting date [$field] in object from request" );
+        $log->is_debug &&
+            $log->debug( "Setting date [$field] in object from request" );
         eval {
             $object->{ $field }= $request->param_date(
                                        $field, $fields->{date_format} )
         };
         if ( $@ ) {
-            LOG( LWARN, "Failed to set object date for [$field]: $@" );
+            $log->warn( "Failed to set object date for [$field]: $@" );
         }
     }
 
@@ -220,13 +245,14 @@ sub _common_assign_properties {
                      ? @{ $fields->{datetime} } : ( $fields->{datetime} );
     foreach my $field ( @datetime ) {
         next unless ( $field );
-        LOG( LDEBUG, "Setting datetime [$field] in object from request" );
+        $log->is_debug &&
+            $log->debug( "Setting datetime [$field] in object from request" );
         eval {
             $object->{ $field } = $request->param_datetime(
                                        $field, $fields->{datetime_format} )
         };
         if ( $@ ) {
-            LOG( LWARN, "Failed to set object datetime for [$field]: $@" );
+            $log->warn( "Failed to set object datetime for [$field]: $@" );
         }
     }
     return $object;
@@ -238,17 +264,21 @@ sub _common_assign_properties {
 
 sub _common_fetch_object {
     my ( $self, $id ) = @_;
+    my $log = get_logger( LOG_ACTION );
+
     my $object_class = $self->param( 'c_object_class' );
     $id ||= $self->param( 'c_id' );
     unless ( $id ) {
-        DEBUG && LOG( LINFO, "No ID found, returning new object" );
+        $log->is_info &&
+            $log->info( "No ID found, returning new object" );
         return $object_class->new;
     }
-    DEBUG && LOG( LDEBUG, "Trying to fetch [$object_class: $id]" );
+    $log->is_debug &&
+        $log->debug( "Trying to fetch [$object_class: $id]" );
     my $object = eval { $object_class->fetch( $id ) };
     if ( $@ ) {
         my $error = $@;
-        DEBUG && LOG( LERROR, "Caught exception fetching object: $@" );
+        $log->error( "Caught exception fetching object: $@" );
         if ( $error->isa( 'SPOPS::Exception::Security' ) ) {
             my $msg = "Security violation: you do not have rights to " .
                       "retrieve the requested object.";

@@ -1,36 +1,36 @@
 package OpenInteract2::Cache::File;
 
-# $Id: File.pm,v 1.3 2003/06/11 02:43:31 lachoy Exp $
+# $Id: File.pm,v 1.6 2003/07/01 03:57:52 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Cache );
 use Cache::FileCache;
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my $DEFAULT_SIZE   = 2000000;  # 10 MB -- max size of cache
 my $DEFAULT_EXPIRE = 86400;    # 1 day
 
 sub initialize {
-    my ( $self ) = @_;
+    my ( $self, $cache_conf ) = @_;
+    my $log = get_logger( LOG_CACHE );
 
     # Allow values that are passed in to override anything
     # set in the config object
 
-    my $server_config = CTX->server_config;
-    my $cache_dir = $server_config->{dir}{cache_content};
-    unless ( -d $cache_dir ) {
-        warn "Sorry, I cannot create a filesystem cache without a ",
-             "valid directory. (Given [$cache_dir])\n";
+    unless ( -d $cache_conf->{dir} ) {
+        $log->error( "Cannot create a filesystem cache without a valid ",
+                     "directory. (Given: $cache_conf->{dir})" );
         return undef;
     }
 
-    my $cache_info     = $server_config->{cache_info}{data};
-    my $max_size       = $cache_info->{max_size};
-    my $default_expire = $cache_info->{default_expire};
-    my $cache_depth    = $cache_info->{directory_depth};
+    my $cache_dir      = $cache_conf->{dir};
+    my $max_size       = $cache_conf->{max_size};
+    my $default_expire = $cache_conf->{default_expire};
+    my $cache_depth    = $cache_conf->{directory_depth};
 
     # If a value isn't set, use the default from the class
     # configuration above.
@@ -38,9 +38,10 @@ sub initialize {
     $max_size       ||= $DEFAULT_SIZE;
     $default_expire ||= $DEFAULT_EXPIRE;
 
-    DEBUG && LOG( LINFO, "Using the following cache settings ",
-                         "[Dir $cache_dir] [Size $max_size] ",
-                         "[Expire $default_expire] [Depth $cache_depth]" );
+    $log->is_info &&
+        $log->info( "Using the following cache settings ",
+                    "[Dir $cache_dir] [Size $max_size] ",
+                    "[Expire $default_expire] [Depth $cache_depth]" );
     return Cache::FileCache->new({ default_expires_in => $default_expire,
                                    max_size           => $max_size,
                                    cache_root         => $cache_dir,
@@ -80,13 +81,46 @@ OpenInteract2::Cache::File -- Implement caching in the filesystem
 Subclass of L<OpenInteract2::Cache|OpenInteract2::Cache> that uses the
 filesystem to cache objects.
 
-=head1 TO DO
+=head1 METHODS
 
-Nothing known.
+B<initialize( \%config )>
 
-=head1 BUGS
+Creates a new L<Cache::FileCache|Cache::FileCache> object for later
+use, initializing it with the values from C<\%config> -- this
+corresponds to the data under C<cache_info.data> in your server
+configuration. Here's what you can set:
 
-None known.
+=over 4
+
+=item *
+
+B<directory> (required)
+
+Root directory of cache. Must be writable by the user who owns the
+server process.
+
+=item *
+
+B<max_size> (optional)
+
+Max size of the cache, in bytes. (Default: 2000000 about 10MB)
+
+=item *
+
+B<default_expire> (optional)
+
+Number of seconds the cached item should be valid. (Default: 86400, or
+one day)
+
+=item *
+
+B<directory_depth> (optional)
+
+If you cache a B<lot> of content set this to '2' or '3' so the cache
+doesn't create too many files in a single directory, which can foul up
+some filesystems.
+
+=back
 
 =head1 COPYRIGHT
 

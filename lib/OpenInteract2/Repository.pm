@@ -1,17 +1,18 @@
 package OpenInteract2::Repository;
 
-# $Id: Repository.pm,v 1.10 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Repository.pm,v 1.11 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor );
+use Log::Log4perl            qw( get_logger );
 use Data::Dumper             qw( Dumper );
 use File::Spec;
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package;
 
-$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract2::Repository::EXPORT_OK = qw( REPOSITORY_FILE );
 
 use constant REPOSITORY_FILE => 'repository.ini';
@@ -238,12 +239,14 @@ sub _read_repository {
 
 sub _save_repository {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_OI );
+
     my $ini_file = $self->repository_file;
     my $tmp_ini_file = "$ini_file.tmp";
     if ( -f $tmp_ini_file ) {
-        unlink( $tmp_ini_file )
-                    || LOG( LWARN, "Failed to remove old tmp file; ",
-                                   "will overwrite. Error: $!" );
+        unlink( $tmp_ini_file ) ||
+            $log->warn( "Failed to remove old tmp file; will overwrite. ",
+                        "Error: $!" );
     }
     my $ini = OpenInteract2::Config::Ini->new();
     foreach my $pkg_info ( @{ $self->_package_info } ) {
@@ -256,9 +259,9 @@ sub _save_repository {
     }
     eval { $ini->write_file( $tmp_ini_file ) };
     if ( $@ ) {
-        unlink( $tmp_ini_file )
-                    || LOG( LERROR, "Failed to remove tmp file after ",
-                                    "save failure: $!" );
+        unlink( $tmp_ini_file ) ||
+            $log->error( "Failed to remove tmp file after save ",
+                         "failure: $!" );
         oi_error "Failed to write new repository. Error: $@. ",
                  "Existing repository untouched.";
     }

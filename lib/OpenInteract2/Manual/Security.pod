@@ -1,6 +1,6 @@
 =head1 NAME
 
-Security in OpenInteract
+OpenInteract2::Manual::Security - Security in OpenInteract2
 
 =head1 SYNOPSIS
 
@@ -26,17 +26,17 @@ B<Data security>
 Action security specifies whether a particular user can generally
 accomplish a particular task. Data security determines whether the
 user can perform a particular action on a particular object, or even
-see the object at all. The distinction between the two is important,
-because the two are implemented in a unified fashion. This method of
-implementation is a good thing, but it might be confusing to
-newcomers.
+see the object at all. The distinction between the two is important
+for application programmers, but they're implemented in a unified
+fashion. This method of implementation is a good thing but it might be
+confusing to newcomers.
 
 =head1 IMPLEMENTATION
 
 Every SPOPS class can have security implemented by setting the
 configuration key C<is_secure> to 'yes'.
 
-B<MOTE>: This is different than OI 1.x where you had to place
+B<NOTE>: This is different than OI 1.x where you had to place
 L<SPOPS::Secure|SPOPS::Secure> in the 'isa' configuration key.
 
 Removing security from the class is as simple as setting C<is_secure>
@@ -48,16 +48,17 @@ the actual security objects that were previously created.
 Here's an idea of how the table for security objects is setup (using
 PostgreSQL syntax):
 
- CREATE TABLE security (
-  sid          int not null,
-  object_id    varchar(200) not null,
-  class        varchar(20) not null,
-  scope        char(1) not null,
-  scope_id     varchar(16) not null default 'world',
-  level        char(1) not null,
-  primary key  ( sid ),
-  unique       ( object_id, class, scope, scope_id )
- )
+    CREATE TABLE security (
+     sid          int not null,
+     object_id    varchar(200) not null,
+     class        varchar(20) not null,
+     scope        char(1) not null,
+     scope_id     varchar(16) not null default 'world',
+     level        char(1) not null,
+     primary key  ( sid ),
+     unique       ( object_id, class, scope, scope_id )
+    )
+
 
 Some notes on this table:
 
@@ -91,8 +92,8 @@ only be when we specify a scope of 'w'
 =item *
 
 B<level>: 1 (none) | 4 (read) | 8 (write) (actual numbers not final;
-use the exported constants from the L<SPOPS::Secure|SPOPS::Secure>
-manpage)
+use the exported constants specified by
+L<SPOPS::Secure|SPOPS::Secure>.)
 
 =back
 
@@ -128,9 +129,10 @@ OpenInteract2 already does this for you.)
 For instance, when you do a simple fetch on a class that has
 implemented security:
 
- my $file = eval {
-     OpenInteract2::MyFileClass->fetch( $id )
- };
+    my $file = eval {
+        OpenInteract2::MyFileClass->fetch( $id )
+    };
+
 
 SPOPS first ensures that the current user can READ it before fetching
 it. It does so by checking the permissions that have been previously
@@ -142,15 +144,16 @@ user, or whatever you want.
 
 You can check for this as follows:
 
- my $file = eval {
-     OpenInteract2::MyFileClass->fetch( $id )
- };
- if ( $@->isa( 'SPOPS::Exception::Security' ) ) {
-     warn "You do not have permission to look at item $id";
- }
- else {
-     warn "Error when trying to retrieve item $id: $@";
- }
+    my $file = eval {
+        OpenInteract2::MyFileClass->fetch( $id )
+    };
+    if ( $@->isa( 'SPOPS::Exception::Security' ) ) {
+        warn "You do not have permission to look at item $id";
+    }
+    else {
+        warn "Error when trying to retrieve item $id: $@";
+    }
+
 
 Similarly, if you try to retrieve a group of objects, SPOPS will only
 return those objects for which the current user has READ (or higher)
@@ -158,15 +161,16 @@ permission. You can determine which objects the user has WRITE access
 to by inspecting the object property {tmp_security_level}, which is
 always set by the C<fetch()> method. For instance:
 
- my $file = eval {
-     OpenInteract2::MyFileClass->fetch( $id )
- };
- if ( $obj->{tmp_security_level} == SEC_LEVEL_READ ) { 
-    warn "User has READ access";
- }
- elsif ( $obj->{tmp_security_level} == SEC_LEVEL_WRITE ) { 
-    warn "User has WRITE access";
- }
+    my $file = eval {
+        OpenInteract2::MyFileClass->fetch( $id )
+    };
+    if ( $obj->{tmp_security_level} == SEC_LEVEL_READ ) { 
+       warn "User has READ access";
+    }
+    elsif ( $obj->{tmp_security_level} == SEC_LEVEL_WRITE ) { 
+       warn "User has WRITE access";
+    }
+
 
 If you try to write (create, update or remove) an object, SPOPS ensures
 that the current user has permission to do so. Note that while updating
@@ -201,14 +205,16 @@ permission for the 'Site Admin' group.
 Here's how to setup default security in an INI file found in the
 C<base_user> package:
 
- [user]
- class  = OpenInteract2::User
- ...
+  [user]
+  class     = OpenInteract2::User
+  is_secure = yes
+  ...
+  
+  [user creation_security]
+  user   = 
+  group  = site_admin_group:WRITE
+  world  = READ
 
- [user creation_security]
- user   = 
- group  = site_admin_group:WRITE
- world  = READ
 
 So here we've declared that every 'user' object created by the system
 will have READ permission for the world and WRITE permission for the
@@ -219,22 +225,27 @@ should have WRITE access to all instances of the 'document' SPOPS
 object. First, declare the group and its ID (we'll assume '5' for our
 example) in your server configuration:
 
- [default_objects]
- ...
- public_group     = 2
- site_admin_group = 3
- content_admin_group = 5
+  [default_objects]
+  ...
+  public_group        = 2
+  site_admin_group    = 3
+  content_admin_group = 5
+  
+
 
 Then set the relevant SPOPS 'creation_security' key:
 
- [document]
- class  = OpenInteract2::Document
- ...
+  [document]
+  class     = OpenInteract2::Document
+  is_secure = yes
+  ...
+  
+  [document creation_security]
+  user   = 
+  group  = content_admin_group:WRITE
+  world  = READ
+  
 
- [document creation_security]
- user   = 
- group  = content_admin_group:WRITE
- world  = READ
 
 =head1 FUTURE WORK
 

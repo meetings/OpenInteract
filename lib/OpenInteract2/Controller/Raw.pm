@@ -1,28 +1,37 @@
 package OpenInteract2::Controller::Raw;
 
-# $Id: Raw.pm,v 1.5 2003/06/11 02:43:29 lachoy Exp $
+# $Id: Raw.pm,v 1.8 2003/07/01 19:03:29 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Controller );
-use OpenInteract2::Context   qw( DEBUG LOG );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
+$OpenInteract2::Controller::Raw::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+
 sub execute {
     my ( $self ) = @_;
+    my $log = get_logger( LOG_ACTION );
     my $action = $self->initial_action;
-    DEBUG && LOG( LDEBUG, 'Executing top-level action [', $action->name,
-                          "] with task [", $action->task, "]" );
+    $log->is_debug &&
+        $log->debug( 'Executing top-level action [', $action->name, "] ",
+                     "with task [", $action->task, "]" );
+
+    # TODO: needed anymore?
     $action->request( $self->request );
     $action->response( $self->response );
     my $content = eval { $action->execute };
     if ( $@ ) {
-        LOG( LERROR, "Caught exception generating content: $@" );
+        $log->error( "Caught exception generating content: $@" );
         $content = $@;
     }
     else {
-        DEBUG && LOG( LDEBUG, "Generated content ok" );
+        $log->is_debug &&
+            $log->debug( "Generated content ok" );
     }
+    # We don't need no steenkeng content generator!
     $self->response->content( \$content );
     return $self;
 }

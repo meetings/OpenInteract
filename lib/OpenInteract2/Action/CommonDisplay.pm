@@ -1,15 +1,18 @@
 package OpenInteract2::Action::CommonDisplay;
 
-# $Id: CommonDisplay.pm,v 1.6 2003/06/11 02:43:31 lachoy Exp $
+# $Id: CommonDisplay.pm,v 1.7 2003/06/24 03:35:38 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
+use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX DEBUG LOG );
+use OpenInteract2::Context   qw( CTX );
 
 sub display {
     my ( $self ) = @_;
     $self->_display_init_param;
+
+    my $log = get_logger( LOG_ACTION );
 
     my $fail_task = $self->param( 'c_display_fail_task' );
     my $object = eval { $self->_common_fetch_object };
@@ -29,13 +32,15 @@ sub display {
         unless ( $status =~ /^\s*(y|yes|1|true)\s*$/i ) {
             my $object_class = $self->param( 'c_object_class' );
             my $id           = $self->param( 'c_id' );
-            DEBUG && LOG( LINFO, "Object [$object_class] [$id] failed ",
-                                 "'active' check [Status: $status]" );
+            $log->is_info &&
+                $log->info( "Object [$object_class] [$id] failed ",
+                            "'active' check [Status: $status]" );
             $self->param_add( error_msg => "This object is currently " .
                                            "inactive. Please check later." );
             return $self->execute({ task => $fail_task });
         }
-        DEBUG && LOG( LDEBUG, "Object passed 'active' check" );
+        $log->is_debug &&
+            $log->debug( "Object passed 'active' check" );
     }
 
     # Set both 'object' and the object type equal to the object so the

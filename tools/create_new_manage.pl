@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: create_new_manage.pl,v 1.4 2003/04/19 13:35:11 lachoy Exp $
+# $Id: create_new_manage.pl,v 1.5 2003/07/03 03:54:58 lachoy Exp $
 
 # create_new_manage.pl
 #   Create skeleton module for new management task.
@@ -57,17 +57,30 @@ sub sample {
     return <<'SAMPLE';
 package OpenInteract2::Manage::%%TYPE%%::%%CLASS%%;
 
-# $Id: create_new_manage.pl,v 1.4 2003/04/19 13:35:11 lachoy Exp $
+# $Id: create_new_manage.pl,v 1.5 2003/07/03 03:54:58 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::%%TYPE%% );
 use OpenInteract2::Context qw( CTX DEBUG LOG );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::%%TYPE%%::%%CLASS%%::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::%%TYPE%%::%%CLASS%%::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
+sub brief_description {
+    return "Describe your task in a sentence or two.";
+}
 
-sub list_param_required {
+sub get_param_description {
+    my ( $self, $param_name ) = @_;
+    if ( $param_name eq 'myparam' ) {
+        return "This is the description for 'myparam.' Adding a " .
+               "description for your parameters makes for a much " .
+               "more usable task. Your users will love you!";
+    }
+    return $self->SUPER::get_param_description( $param_name );
+}
+
+sub list_param_require {
     return [];
 }
 

@@ -1,29 +1,92 @@
 package OpenInteract2::Exception;
 
-# $Id: Exception.pm,v 1.6 2003/06/11 02:43:32 lachoy Exp $
+# $Id: Exception.pm,v 1.9 2003/06/25 16:50:21 lachoy Exp $
 
 use strict;
-use base qw( SPOPS::Exception Exporter );
-use OpenInteract2::Exception::Security;
+use Carp qw( carp );
 
-$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
-@OpenInteract2::Exception::EXPORT_OK = qw( oi_error oi_security_error );
+$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
-my @FIELDS = qw( oi_package );
-OpenInteract2::Exception->mk_accessors( @FIELDS );
+# Declare some of our exceptions
 
-sub get_fields { return ( $_[0]->SUPER::get_fields(), @FIELDS ) }
+use Exception::Class (
+   'OpenInteract2::Exception::Application' => {
+      isa         => 'OpenInteract2::Exception',
+      description => 'Generic application errors',
+      fields      => [ 'oi_package' ],
+   },
+   'OpenInteract2::Exception::Datasource' => {
+      isa         => 'OpenInteract2::Exception',
+      description => 'Datasource errors',
+      fields      => [ 'datasource_name', 'datasource_type', 'connect_params' ],
+   },
+   'OpenInteract2::Exception::Parameter' => {
+      isa         => 'OpenInteract2::Exception',
+      description => 'Parameter not found or invalid',
+      fields      => [ 'parameter_fail' ],
+   },
+);
 
-sub oi_error          {
-    unshift @_, __PACKAGE__;
-    goto &SPOPS::Exception::throw;
+@OpenInteract2::Exception::ISA = qw( Exporter Exception::Class::Base );
+@OpenInteract2::Exception::EXPORT_OK = qw(
+    oi_error oi_app_error oi_datasource_error oi_param_error oi_security_error
+);
+
+require OpenInteract2::Exception::Security;
+
+# Exported shortcuts
+
+sub oi_error {
+#    carp "throwing oi_error...";
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( __PACKAGE__,
+                                         message => $msg, %params );
+}
+
+sub oi_app_error {
+#    carp "throwing oi_app_error...";
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( 'OpenInteract2::Exception::Application',
+                                         message => $msg, %params );
+}
+
+sub oi_datasource_error {
+#    carp "throwing oi_datasource_error...";
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( 'OpenInteract2::Exception::Datasource',
+                                         message => $msg, %params );
+}
+
+sub oi_param_error {
+#    carp "throwing oi_param_error...";
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( 'OpenInteract2::Exception::Parameter',
+                                         message => $msg, %params );
 }
 
 sub oi_security_error {
-    unshift @_, 'OpenInteract2::Exception::Security';
-    goto &SPOPS::Exception::throw;
+#    carp "throwing oi_security_error...";
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( 'OpenInteract2::Exception::Security',
+                                         message => $msg, %params );
 }
 
+# Override 'throw' so we can massage the message and parameters into
+# the right format for E::C
+
+sub throw {
+    my $class = shift @_;
+    my ( $msg, %params ) = _massage( @_ );
+    goto &Exception::Class::Base::throw( $class, message => $msg, %params );
+}
+
+sub _massage {
+    my @items = @_;
+    my %params = ( ref $items[-1] eq 'HASH' )
+                   ? %{ pop( @items ) } : ();
+    my $msg    = join( '', @items );
+    return ( $msg, %params );
+}
 
 1;
 
@@ -36,77 +99,129 @@ OpenInteract2::Exception - Base class for exceptions in OpenInteract
 =head1 SYNOPSIS
 
  # Standard usage
-
+ 
  unless ( $user->check_password( $entered_password ) ) {
    OpenInteract2::Exception->throw( 'Bad login' );
  }
-
+ 
  # Pass a list of strings to form the message
-
+ 
  unless ( $user->check_password( $entered_password ) ) {
-   OpenInteract2::Exception->throw( 'Bad login', $object->login_attemplated )
+   OpenInteract2::Exception->throw( 'Bad login', $object->login_attempted )
  }
-
- # Using the exported shortcut
-
+ 
+ # Using an exported shortcut
+ 
  use OpenInteract2::Exception qw( oi_error );
- oi_error( "Bad login", $object->login_attempted );
-
- # Get all errors in a particular request
-
- my @errors = OpenInteract2::Exception->get_stack;
- print "Errors found during request:\n";
- foreach my $e ( @errors ) {
-    print "ERROR: ", $e->message, "\n";
- }
-
- # Also get this information from the OpenInteract2::Context:
-
- CTX->throw( 'Bad login' );
-
- my $errors = CTX->get_exceptions;
- CTX->clear_exceptions;
+ oi_error "Bad login", $object->login_attempted;
+ 
+ use OpenInteract2::Exception qw( oi_security_error );
+ oi_security_error "Action failed due to security requirements",
+                   { security_required => SEC_LEVEL_WRITE,
+                     security_found    => SEC_LEVEL_READ };
 
 =head1 DESCRIPTION
 
 First, you should probably look at
-L<SPOPS::Exception|SPOPS::Exception> for more usage examples, why we
+L<Exception::Class|Exception::Class> for more usage examples, why we
 use exceptions, what they are intended for, etc.
 
-This is the base class for all OpenInteract exceptions. It only adds a
-single optional field to the L<SPOPS::Exception|SPOPS::Exception>
-class, but more importantly it allows you to distinguish between
-errors percolating from the data layer and errors in the application
-server.
+This is the base class for all OpenInteract exceptions. It declares a
+handful of exceptions and provides shortcuts to make raising an
+exception easier and more readable.
 
-It also adds a shortcut for throwing errors via the exported routine
-C<oi_error>.
+=head1 METHODS
 
-=head1 PROPERTIES
+B<throw( @msg, [ \%params ])>
 
-In addition to the properties outlined in
-L<SPOPS::Exception|SPOPS::Exception>, this object has:
+This overrides B<throw()> from L<Exception::Class|Exception::Class> to
+add a little syntactic sugar. Instead of:
 
-B<oi_package>
+ $exception_class->throw( message => 'This is my very long error message that I would like to pass',
+                          param1  => 'Param1 value',
+                          param2  => 'Param2 value' );
 
-List the OpenInteract package from which the exception was
-thrown. This is completely optional, for informational purposes only.
+You can use:
 
-=head1 BUGS
+ $exception_class->throw( 'This is my very long error message ',
+                          'that I would like to pass',
+                          { param1 => 'Param1 value',
+                            param2 => 'Param2 value' } );
 
-None known.
+And everything will work the same. Combined with the L<SHORTCUTS> this
+makes for very readable code.
 
-=head1 TO DO
+=head1 DECLARED EXCEPTION CLASSES
 
-Nothing known.
+B<OpenInteract2::Exception::Application>
+
+Used for generic application errors.
+
+Extra fields:
+
+=over 4
+
+=item *
+
+B<oi_package> ($) (Optional)
+
+Package from which the error was thrown.
+
+=back
+
+B<OpenInteract2::Exception::Datasource>
+
+Used for errors related to datasources.
+
+Extra fields:
+
+=over 4
+
+=item *
+
+B<datasource_name> ($) (Optional)
+
+Name of the datasource causing the error.
+
+=item *
+
+B<datasource_type> ($) (Optional)
+
+Type of datasource causing the error -- 'DBI', 'LDAP', etc.
+
+=item *
+
+B<connect_params> (\%) (Optional)
+
+Parameters used to connect. NOTE: There may be sensitive information
+(such as passwords) here.
+
+=back
+
+B<OpenInteract2::Exception::Parameter>
+
+Used for parameter validation errors, including if a parameter is not
+found.
+
+Extra fields:
+
+=over 4
+
+=item *
+
+B<parameter_fail> ($) (Optional)
+
+Name of the parameter that failed.
+
+=back
+
+=head1 SHORTCUTS
+
+You can import shortcuts for these methods
 
 =head1 SEE ALSO
 
-L<SPOPS::Exception|SPOPS::Exception>
-
-L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
-
-L<OpenInteract2::Exception::Parameter|OpenInteract2::Exception::Parameter>
+L<Exception::Class|Exception::Class>
 
 L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>
 
