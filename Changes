@@ -1,5 +1,15 @@
 Revision history for Perl extension OpenInteract.
 
+1.60  Thu Aug 14 18:39:52 EDT 2003
+
+Overall:
+
+ * Issue quick fix to URL created when a user isn't logged in and the
+   new feature requiring logins is on. Thanks to Andrew Hurst for the
+   quick spot, although it was a scan 120 seconds after I'd posted
+   1.59 to PAUSE...
+
+
 1.59  Thu Aug 14 15:58:46 EDT 2003
 
 Overall:

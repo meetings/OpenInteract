@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.60  Thu Aug 14 18:39:52 EDT 2003
+
+ - Fix for redirect on required login not found
+
+
 1.59  Thu Aug 14 15:58:46 EDT 2003
 
  - You can now declare that only valid (logged-in) users can see your
@@ -281,4 +286,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.32 2003/08/14 19:54:10 lachoy Exp $
+$Id: RELEASE,v 1.33 2003/08/14 22:32:47 lachoy Exp $

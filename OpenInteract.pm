@@ -1,13 +1,13 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.50 2003/08/13 03:22:30 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.51 2003/08/14 22:32:47 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost :response );
 use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
-$OpenInteract::VERSION  = '1.59';
+$OpenInteract::VERSION  = '1.60';
 
 # Generic separator used in display
 
@@ -378,13 +378,11 @@ sub required_login_not_found {
                      "send them. Ignoring login requirement setting..." );
         return undef;
     }
-    my $apache = $R->apache;
     my $host = $R->{server_name};
-    my $port = $apache->get_server_port;
-    my $full_port = ( $port == 80 ) ? '' : ":$port";
-    my $full_url = join( '', 'http://', $host, $full_port, $required_url );
-    my $uri = Apache::URI->parse( $apache, $full_url );
-    $R->DEBUG && $R->scrib( 1, "Resetting request URL to '$full_url' since ",
+    my $full_url = join( '', 'http://', $host, $required_url );
+    my $uri = Apache::URI->parse( $R->apache, $full_url );
+    $R->DEBUG && $R->scrib( 1, "Resetting request URL to '$full_url' (composed ",
+                               "of host '$host' and path '$required_url') since ",
                                "login required and none found" );
 
     # This is available for the login page to set in a hidden variable
