@@ -31,6 +31,7 @@ conf/sample-Stash.pm
 doc/README
 doc/actions.html
 doc/admin.html
+doc/caching.html
 doc/components.html
 doc/configuration.html
 doc/data_import.html
@@ -62,7 +63,6 @@ OpenInteract/ApacheStartup.pm
 OpenInteract/Auth.pm
 OpenInteract/Cache.pm
 OpenInteract/Cache/File.pm
-OpenInteract/Cache/IPC.pm
 OpenInteract/CommonHandler.pm
 OpenInteract/Component.pm
 OpenInteract/Config.pm
@@ -98,7 +98,7 @@ OpenInteract/UI/Main.pm
 OpenInteract/Utility.pm
 OpenInteract/Intro.pod
 pkg/base-1.70.tar.gz
-pkg/base_box-1.00.tar.gz
+pkg/base_box-1.01.tar.gz
 pkg/base_error-1.43.tar.gz
 pkg/base_group-1.37.tar.gz
 pkg/base_page-1.00.tar.gz
@@ -112,7 +112,7 @@ pkg/results_manage-1.00.tar.gz
 pkg/system_doc-1.32.tar.gz
 pkg/classified-1.36.tar.gz
 pkg/full_text-1.32.tar.gz
-pkg/news-1.40.tar.gz
+pkg/news-1.48.tar.gz
 script/oi_manage
 script/template_translate.pl
 t/dummy.t

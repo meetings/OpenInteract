@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.23 2002/08/26 05:15:35 lachoy Exp $
+# $Id: Plugin.pm,v 1.24 2002/09/03 16:17:07 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -11,7 +11,7 @@ use SPOPS::Secure   qw( :level :scope );
 use SPOPS::Utility;
 use Text::Sentence;
 
-$OpenInteract::Template::Plugin::VERSION  = substr(q$Revision: 1.23 $, 10);
+$OpenInteract::Template::Plugin::VERSION  = substr(q$Revision: 1.24 $, 10);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -101,7 +101,13 @@ sub box_add {
     $params ||= {};
     my $R = OpenInteract::Request->instance;
     $R->DEBUG && $R->scrib( 1, "Trying to add $box with ", Dumper( $params ) );
-    push @{ $R->{boxes} }, { name => $box, params => $params };
+    my %box_info = ( name => $box );
+    if ( $params->{remove} ) {
+        $box_info{remove} = 'yes';
+        delete $params->{remove};
+    }
+    $box_info{params} = $params;
+    push @{ $R->{boxes} }, \%box_info;
     return undef;
 }
 

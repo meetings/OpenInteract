@@ -1,12 +1,11 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.11 2002/05/02 04:25:37 lachoy Exp $
+# $Id: Session.pm,v 1.12 2002/09/08 20:52:15 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
-@OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
@@ -125,8 +124,6 @@ sub _create_session { return undef }
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -251,5 +248,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

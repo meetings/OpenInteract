@@ -218,30 +218,7 @@ for the superuser. If this happens, you can just drop the database,
 recreate it and re-run the 'install_sql' command.
 
 
-(6) Import templates (optional)
-
-OpenInteract will work fine if you do not run this step.
-
-You can now bring the templates used in the various packages into your
-database. Once this is done you can edit them via the web browser.
-
-OpenInteract will work with the templates in the filesystem, but you
-won't be able to edit them via the browser. Additionally, some
-databases may provide a speed improvement with templates in the
-database. It's up to you.
-
-To import them, run the command:
-
- $ oi_manage --website_dir=%%WEBSITE_DIR%% \ 
-             --package=INITIAL \
-             install_template
-
-This installs the templates from the packages listed into you SQL
-database. Note that you can make changes to the templates at any time
-and re-import them into the database using this same command.
-
-
-(7) Change Directory Permissions
+(6) Change Directory Permissions
 
 (NOTE: Win32 servers can skip this step, since the webserver usually
 has sufficient permission for OpenInteract.)
@@ -260,7 +237,7 @@ To do this, just run:
  $ chown -R nobody uploads/
 
 
-(8) Edit Apache virtual host configuration
+(7) Edit Apache virtual host configuration
 
 Using the static/modperl configuration assumes that you have already
 setup a front-end proxy configuration as discussed at the following
@@ -300,7 +277,7 @@ the <VirtualHost></VirtualHost> tags into your main config file and
 skip the next step.
 
 
-(9) Edit Apache configuration
+(8) Edit Apache configuration
 
 If you're using the proxy server setup:
 
@@ -316,13 +293,13 @@ If you're using the solo mod_perl setup:
 
     Include %%WEBSITE_DIR%%/conf/httpd_modperl_solo.conf
 
-(10) Run Apache!
+(9) Run Apache!
 
 Startup Apache as you normally would, and hopefully everything will
 be up and running!
 
 
-(11) Connect to your website
+(10) Connect to your website
 
 Open up a web browser to your hostname or IP address. You should see a
 welcome page. Login with the username 'superuser' and the password you
@@ -336,4 +313,4 @@ the 'site admin' group to pull up a form).
 Now: have some fun!
 
 ========================================
-$Id: INSTALL.website,v 1.12 2002/05/07 05:35:17 lachoy Exp $
+$Id: INSTALL.website,v 1.13 2002/09/09 03:17:01 lachoy Exp $

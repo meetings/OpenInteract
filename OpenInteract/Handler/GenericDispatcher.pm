@@ -1,16 +1,17 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.4 2002/01/02 02:43:53 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.7 2002/09/09 02:57:46 lachoy Exp $
 
 use strict;
+use base qw( Exporter );
 use SPOPS::Secure qw( SEC_LEVEL_WRITE );
-require Exporter;
-
-@OpenInteract::Handler::GenericDispatcher::ISA     = qw( Exporter );
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
-@OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
+
+my $CLASS_TRACKING_KEY = 'class_cache_track';
+
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 
 # Note that we do "no strict 'refs'" a few times in various methods
@@ -26,28 +27,28 @@ sub handler {
     # given, discerning a default; if there is no task returned, we're
     # outta here.
 
-    my $task = $p->{task} || $class->_get_task;
+    $p->{TASK} ||= $class->_get_task;
 
-    $R->DEBUG && $R->scrib( 1, "Trying to run $class with $task" );
+    $R->DEBUG && $R->scrib( 1, "Trying to run [$class] with [$p->{TASK}]" );
 
     # Default is to email the author there is no default task defined.
 
-    return $class->_no_task_found  unless( $task );
+    return $class->_no_task_found  unless( $p->{TASK} );
 
-    # If we are not allowed to run the task, the error handler should 
+    # If we are not allowed to run the task, the error handler should
     # die() with the content for the page
 
-    unless ( $class->_task_allowed( $task ) ) {
-        $R->DEBUG && $R->scrib( 1, "$task is forbidden by $class; bailing." );
-        $R->throw({ code  => 303, 
-                    type  => 'module', 
-                    extra => { task => $task } });
+    unless ( $class->_task_allowed( $p->{TASK} ) ) {
+        $R->DEBUG && $R->scrib( 1, "[$p->{TASK}] is forbidden by [$class]; bailing." );
+        $R->throw({ code  => 303,
+                    type  => 'module',
+                    extra => { task => $p->{TASK} } });
     }
 
     # Check to see that user can do this task with security; if not
     # routine should die() with an error message.
 
-    $p->{level} = $class->_check_task_security( $task );
+    $p->{level} = $class->_check_task_security( $p->{TASK} );
 
     # For subclasses to override -- this would be useful if you want to
     # create a new dispatcher by subclassing this class and, for
@@ -55,10 +56,13 @@ sub handler {
     # should be selected in a menubar on your web page.
 
     $class->_local_action( $p );
-
+    my $task = $p->{TASK};
     return $class->$task( $p );
 }
 
+
+########################################
+# ACTIONS/TASKS
 
 sub _local_action { return; }
 
@@ -69,7 +73,7 @@ sub _get_task {
     my ( $class ) = @_;
     no strict 'refs';
     my $R = OpenInteract::Request->instance;
-    my $task = lc shift @{ $R->{path}->{current} } ||
+    my $task = lc shift @{ $R->{path}{current} } ||
                ${ $class . '::default_method' };
     return $task;
 }
@@ -85,7 +89,7 @@ sub _no_task_found {
     my $author_msg = <<MSG;
 Your module ($class) does not have a default task defined.
 Please create the package variable '\$$class\:\:default_method'
-as soon as you can. 
+as soon as possible.
 
 Thanks!
 
@@ -93,15 +97,13 @@ The Management
 MSG
     no strict 'refs';
     my $R = OpenInteract::Request->instance;
-    return $R->throw( { code       => 304, 
+    return $R->throw( { code       => 304,
                         type       => 'module',
                         system_msg => "Author has not defined default task for $class",
-                        extra => { email   => ${ $class . '::author' }, 
+                        extra => { email   => ${ $class . '::author' },
                                    subject => "No default task defined for $class",
                                    msg     => $author_msg } } );
 }
-
-
 
 sub _task_allowed {
     my ( $class, $task ) = @_;
@@ -109,7 +111,7 @@ sub _task_allowed {
     # Tasks beginning with '_' are not allowed by default
 
     return undef if ( $task =~ /^_/ );
-    no strict 'refs'; 
+    no strict 'refs';
 
     # Check to see if this task is forbidden from being publicly called; if so, bail.
 
@@ -135,12 +137,13 @@ sub _check_task_security {
     # package, this check assumes WRITE security as a default
 
     if ( $class->isa( 'SPOPS::Secure' ) ) {
-        $level           = eval { $R->user->check_security( { class => $class, oid => '0' } ) };
+        $level           = eval { $R->user->check_security({class     => $class,
+                                                            object_id => '0' }) };
         my %all_levels   = %{ $class . '::security' };
         my $target_level = $all_levels{ $task } ||
                            $all_levels{ DEFAULT_SECURITY_KEY() } ||
                            SEC_LEVEL_WRITE;
-        $R->DEBUG && $R->scrib( 2, "Security after check for ($task):\n", 
+        $R->DEBUG && $R->scrib( 2, "Security after check for ($task):\n",
                                    "user has: $level; user needs: $target_level" );
 
         # Security check failed, so bail (error handler die()s with an error message
@@ -157,13 +160,96 @@ sub _check_task_security {
 }
 
 
-# Return an object if we are able to construct it from parameters or 
+
+########################################
+# CACHING
+
+sub check_cache {
+    my ( $class, $p, $key_params ) = @_;
+    my $R = OpenInteract::Request->instance;
+    my $key = $class->_make_cache_key( $p, $key_params );
+    return undef unless ( $key );
+    my $data = $R->cache->get({ key => $key });
+    $R->DEBUG && $R->scrib( 1, "CACHE HIT! [Task: $p->{TASK}]" ) if ( $data );
+    return $data;
+}
+
+
+sub _make_cache_key {
+    my ( $class, $p, $key_params ) = @_;
+    return undef unless ( ref $p->{ACTION}{cache_key} eq 'HASH' );
+    return undef unless ( $p->{ACTION}{cache_key}{ $p->{TASK} } );
+    return join( '||', $p->{ACTION}{cache_key}{ $p->{TASK} },
+                       map { join( '=', $_, $key_params->{ $_ } ) }
+                             sort keys %{ $key_params } );
+}
+
+
+sub generate_content {
+    my ( $class, @params ) = @_;
+    my ( $p, $key_params, $template_params, $variables, $template_source );
+    my $num_params = scalar @params;
+    if ( $num_params == 4 ) {
+        ( $p, $key_params, $variables, $template_source ) = @params;
+        $template_params = {};
+    }
+    elsif ( $num_params == 5 ) {
+        ( $p, $key_params, $template_params, $variables, $template_source ) = @params;
+    }
+    else {
+        die "Incorrect parameters passed to generate_content. ",
+            "(Need 4 or 5; given $num_params)\n";
+    }
+    my $R = OpenInteract::Request->instance;
+    my $content = $R->template->handler( $template_params, $variables, $template_source );
+    my $key = $class->_make_cache_key( $p, $key_params );
+    if ( $key ) {
+        my $cache_expire = $p->{ACTION}{cache_expire} || {};
+        $R->cache->set({ key    => $key,
+                         data   => $content,
+                         expire => $cache_expire->{ $p->{TASK} } });
+        my $tracking = $R->cache->get({ key => $CLASS_TRACKING_KEY }) || {};
+        push @{ $tracking->{ $class } }, $key;
+        $R->DEBUG && $R->scrib( 1, "Adding key [$key] to class [$class]" );
+        $R->cache->set({ key  => $CLASS_TRACKING_KEY,
+                         data => $tracking });
+    }
+    return $content;
+}
+
+
+sub clear_cache {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    $R->scrib( 0, "Trying to clear cache for items in class [$class]" );
+    my $cache = $R->cache;
+    my $tracking = $cache->get({ key => $CLASS_TRACKING_KEY });
+    unless ( ref $tracking eq 'HASH' and scalar keys %{ $tracking } ) {
+        $R->scrib( 0, "Nothing has yet been tracked, nothing to clear" );
+        return;
+    }
+    my $keys = $tracking->{ $class } || [];
+    foreach my $cache_key ( @{ $keys } ) {
+        $R->scrib( 0, "Clearing key [$cache_key]" );
+        $cache->clear({ key => $cache_key });
+    }
+    $tracking->{ $class } = [];
+    $cache->set({ key => $CLASS_TRACKING_KEY, data => $tracking });
+    $R->scrib( 0, "Tracking data saved back" );
+}
+
+
+########################################
+# UTILITIES
+
+# Return an object if we are able to construct it from parameters or
 # wherever; if we have errors, raise them 
 
 sub _create_object {
     my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
-    my $id_field_list = ( ref $p->{_id_field} ) ? $p->{_id_field} : [ $p->{_id_field} ];
+    my $id_field_list = ( ref $p->{_id_field} )
+                          ? $p->{_id_field} : [ $p->{_id_field} ];
     my $object_class = $p->{_class};
     unless ( scalar @{ $id_field_list } and $object_class ) {
         die "Cannot retrieve object without id_field and class definitions\n";
@@ -180,22 +266,24 @@ sub _create_object {
         my $ei = OpenInteract::Error->set( SPOPS::Error->get );
         my $error_msg = undef;
         if ( $ei->{type} eq 'security' ) {
-            $error_msg = "Permission denied: you do not have access to view the requested object. ";
+            $error_msg = "Permission denied: you do not have access to " .
+                         "view the requested object.";
         }
         else {
             $R->throw( { code => 404 } );
-            $error_msg = "Error encountered trying to retrieve object. The error has been logged. "
+            $error_msg = "Error encountered trying to retrieve object. " .
+                         "The error has been logged."
         }
         die "$error_msg\n";
     }
     return $object;
-} 
+}
 
 sub date_process {
     my ( $class, $date ) = @_;
     return {} if ( ! $date );
     my ( $y, $m, $d ) = split /\D/, $date;
-    $m =~ s/^0//;   # do this so comparisons 
+    $m =~ s/^0//;   # do this so comparisons
     $d =~ s/^0//;   # within Template work
     return { year => $y, month => $m, day => $d };
 }
@@ -215,8 +303,6 @@ sub date_read {
 
 __END__
 
-=pod
-
 =head1 NAME
 
 OpenInteract::Handler::GenericDispatcher - Define task-dispatching, security-checking and other routines for Handlers to use
@@ -226,7 +312,7 @@ OpenInteract::Handler::GenericDispatcher - Define task-dispatching, security-che
  use OpenInteract::Handler::GenericDispatcher qw( DEFAULT_SECURITY_KEY );
  use SPOPS::Secure qw( :level );
 
- @OpenInteract::Handler::MyHandler::ISA = qw( 
+ @OpenInteract::Handler::MyHandler::ISA = qw(
                              OpenInteract::Handler::GenericDispatcher SPOPS::Secure );
  %OpenInteract::Handler::MyHandler::default_security = (
      DEFAULT_SECURITY_KEY() => SEC_LEVEL_READ,
@@ -263,7 +349,7 @@ B<_get_task>
 Return a task name by whatever means necessary. Default behavior is
 to return the next element (lowercased) from:
 
- $R->{path}->{current}
+ $R->{path}{current}
 
 If that element is undefined (or blank), the default behavior returns
 the the package variable B<default_method>.
@@ -315,6 +401,116 @@ actions. For instance, if you had a tag in every handler that was to
 be set in $R-E<gt>{page} and parsed by the main template to select a
 particular 'tab' on your web page, you could do so in this method.
 
+=head2 Caching
+
+Note that the C<\%params> parameter for both of these methods should
+be the same as the one passed to your implementation method. For
+instance, in this snippet it would be the hashref C<$p>:
+
+ sub listing {
+     my ( $class, $p ) = @_;
+ }
+
+Yes, this is awkward. But the current version of OpenInteract content
+handlers is stateless -- they use class methods rather than
+objects. The next version will take care of this, but in the meantime
+we need to pass around more parameters than normal.
+
+B<generate_content( \%params, \%key_params, \%template_params,
+                    \%template_variables, \%template_source )>
+
+or
+
+B<generate_content( \%params, \%key_params,
+                    \%template_variables, \%template_source )>
+
+This optionally replaces the typical last call within a handler:
+
+ return $R->template->handler( \%template_params, \%template_variables,
+                               \%template_source );
+
+The purpose is to catch the content before it is passed on and save it
+to the cache. You can then retrieve it from the cache using
+C<check_cache()>.
+
+For example, if you currently do something like:
+
+ sub listing {
+     my ( $class, $p ) = @_;
+     my $R = OpenInteract::Request->instance;
+     my $thingy_id = $R->apache->param( 'thingy_id' );
+     my $thingy = $R->thingy->fetch( $thingy_id );
+     ...
+     return $R->template->handler( {},
+                                   { thingy => $thingy,
+                                     error_msg => $error_msg },
+                                   { name => 'mypkg::mytmpl' } );
+ }
+
+ sub listing {
+     my ( $class, $p ) = @_;
+     my $R = OpenInteract::Request->instance;
+     my $thingy_id = $R->apache->param( 'thingy_id' );
+     my $thingy = $R->thingy->fetch( $thingy_id );
+     ...
+     return $class->generate_content( $p,
+                                      { thingy_id => $thingy_id },
+                                      { thingy => $thingy,
+                                        error_msg => $error_msg, ... },
+                                      { name => 'mypkg::mytmpl' } );
+ }
+
+There are three things happening here:
+
+=over 4
+
+=item *
+
+We have jettisoned the first argument to C<template-E<gt>handler>,
+since it was rarely used.
+
+=item *
+
+We have passed the hashref C<$p> as the first argument.
+
+=item *
+
+We have passed a hashref of parameters OI will use to cache the
+content.
+
+=back
+
+B<check_cache( \%params, \%cache_params )>
+
+If cached content exists that matches the cache key for your action
+and the parameters you pass in, then it is returned.
+
+ package My::Handler;
+
+ use base qw( OpenInteract::Handler::GenericDispatcher );
+
+ sub listing {
+     my ( $class, $p ) = @_;
+     my $R = OpenInteract::Request->instance;
+     my $thingy_id = $R->apache->param( 'thingy_id' );
+     my $cached = $class->check_cache( $p, { thingy_id => $thingy_id } );
+     return $cached if ( $cached );
+     ...
+ }
+
+B<clear_cache()>
+
+Whenever you modify, add or remove an object, it is normally best to
+clear the cache of all items your handler class has produced. All you
+need to do is call:
+
+  $class->clear_cache();
+
+And everything that handler has created will be cleared out. When the
+next call is made to one of the methods, it will first check the cache
+for its content and, not finding it, generate it and set it in the
+cache again.
+
 =head2 Utility
 
 B<_create_object( \%params )>
@@ -364,7 +560,7 @@ how your handler was called.
 For instance, in your C<action.perl> you might have:
 
  {
-    'news' => { 
+    'news' => {
         language => 'en',
         class    => 'OpenInteract::Handler::News',
         security => 'no',
@@ -383,7 +579,7 @@ For instance, in your C<action.perl> you might have:
 
 A call to the URL '/nouvelles/' would make the information:
 
- { 
+ {
    language => 'fr',
    title    => 'Les Nouvelles',
    security => 'no',
@@ -448,5 +644,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

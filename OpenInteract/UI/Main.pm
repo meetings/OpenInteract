@@ -1,11 +1,11 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.7 2002/01/02 02:43:54 lachoy Exp $
+# $Id: Main.pm,v 1.8 2002/09/08 20:56:09 lachoy Exp $
 
 use strict;
 
 @OpenInteract::UI::Main::ISA     = qw( OpenInteract::Config );
-$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
     my ( $class ) = @_;
@@ -27,15 +27,18 @@ sub handler {
 
     # Parse the URL and the information for our first action
 
-    my ( $action_class, $action_method ) = $R->lookup_action;
-    $R->DEBUG && $R->scrib( 1, "Action info: $action_class / $action_method" );
+    my $action_info = $R->lookup_action( undef, { return => 'info' } );
+    my ( $action_class, $action_method ) = ( $action_info->{class},
+                                             $action_info->{method} );
+    $R->DEBUG && $R->scrib( 1, "Action info [$action_class] [$action_method]" );
 
     # Capture any die() commands thrown; note that any error handler that
     # throws a die() needs to also return content to display; otherwise
     # it will be a pretty boring (empty) page :)
 
     $R->{page}{content} = eval { $action_class->$action_method({
-                                        path => $R->{path}{current} }) };
+                                        path   => $R->{path}{current},
+                                        ACTION => $action_info }) };
     if ( $@ ) {
         $R->{page}{content} = $@;
         $R->scrib( 0, "Action died. Here is what it left: $@" );

@@ -388,41 +388,56 @@ $data = {
      # just be overwritten.
 
      'dir' => {
-       'base'     => undef, # replaced in OpenInteract::Startup
-       'interact' => undef, # replaced in OpenInteract::Startup
-       'error'    => '$BASE/error',
-       'html'     => '$BASE/html',
-       'log'      => '$BASE/logs',
-       'cache'    => '$BASE/cache',
-       'cache_tt' => '$BASE/cache/tt',
-       'config'   => '$BASE/conf',
-       'data'     => '$BASE/data',
-       'mail'     => '$BASE/mail',
-       'help'     => '$HTML/help',
-       'overflow' => '$BASE/overflow',
-       'download' => '$HTML/downloads',
-       'upload'   => '$BASE/uploads',
-       'template' => '$BASE/template',
+       'base'          => undef, # replaced in OpenInteract::Startup
+       'interact'      => undef, # replaced in OpenInteract::Startup
+       'error'         => '$BASE/error',
+       'html'          => '$BASE/html',
+       'log'           => '$BASE/logs',
+       'cache_content' => '$BASE/cache/content',
+       'cache_tt'      => '$BASE/cache/tt',
+       'config'        => '$BASE/conf',
+       'data'          => '$BASE/data',
+       'mail'          => '$BASE/mail',
+       'help'          => '$HTML/help',
+       'overflow'      => '$BASE/overflow',
+       'download'      => '$HTML/downloads',
+       'upload'        => '$BASE/uploads',
+       'template'      => '$BASE/template',
      },
 
      ########################################
      # Caching
      #
-     # Caching is currently not implemented, but when it is all
-     # cache information will go here.
+
+     #
+     # Define information used by the SPOPS/content cache
+     #
+     # use: If true, caching is on; otherwise caching is disabled 
+     #
+     # use_spops: If true, caching for SPOPS objects is on; otherwise it is
+     # disabled
+     #
+     # default_expire: Each caching call can set its own expiration, but
+     # if not this is used. (In seconds)
+     #
+     # class: Cache implementation to use. File-based caching is the only
+     # implementation so far.
+     #
+     # max_size: Max size of the cache. (In bytes)
+     #
+     # directory_depth: Cache::FileCache will divide cached items into
+     # subdirectories so too many don't clog a single directory. This
+     # describes the depth. (Default is usually fine.)
 
      'cache_info' => {
        'data' => { 
-         'expire'   => 600,
-         'use'      => '0',
-         'class'    => 'OpenInteract::Cache::File',
-         'max_size' => 2000000,
-         'SPOPS'    => 0,
-         'use_ipc'  => 0,
-       },
-       'ipc' => {
-         'class'    => 'OpenInteract::Cache::IPC',
-         'key'      => 'CMWC',
+         'use'             => 0,
+         'use_spops'       => 0,
+         'default_expire'  => 600,
+         'class'           => 'OpenInteract::Cache::File',
+         'max_size'        => 2000000,
+         'cleanup'         => 1,
+         'directory_depth' => 3,
        },
        'template' => {
          'expire'   => 900,
@@ -505,5 +520,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.36 $',
+     'ConfigurationRevision' => '$Revision: 1.38 $',
 };

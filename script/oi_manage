@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.62 2002/08/26 05:16:28 lachoy Exp $
+# $Id: oi_manage,v 1.64 2002/09/09 02:50:50 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.62 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.64 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -54,13 +54,15 @@ my %ALIASES           = (
     refresh_widgets => 'refresh_widget',
 );
 
+my %TMPL_DEPRECATED = map { $_ => 1 } qw( install_template dump_template remove_template );
+
 # Subdirectories used when creating a base installation repository
 
 my @BASE_SUBDIR = qw( conf doc pkg template );
 
 # Subdirectories used when creating a website
 
-my @WEBSITE_SUBDIR    = qw( cache cache/tt conf data doc error
+my @WEBSITE_SUBDIR    = qw( cache cache/tt cache/content conf data doc error
                             html html/images logs mail overflow
                             pkg template test uploads  );
 
@@ -142,6 +144,15 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
         print "[oi_manage]: Command ($command) is an alias for $ALIASES{ $command }.\n",
               "Using alias and continuing...\n";
         $command = $ALIASES{ $command };
+    }
+
+    if ( $TMPL_DEPRECATED{ $command } ) {
+        print "[oi_manage]: Command ($command) has been deprecated since\n",
+              "templates are no longer supported in the database. Please read\n",
+              "doc/templates.html from the source directory or \n",
+              "WEBSITE_DIR/html/oidocs/templates.html from your website for more\n",
+              "information on how templates are used now.\n";
+        exit(0);
     }
 
     # Now, see if the user wants help. If no command was given, then
@@ -4083,6 +4094,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.62 $
+Revision: $Revision: 1.64 $
 
 =cut

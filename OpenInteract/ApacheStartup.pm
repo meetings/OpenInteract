@@ -1,16 +1,17 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.23 2002/01/02 02:43:53 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.25 2002/09/09 03:05:09 lachoy Exp $
 
 use strict;
 use Apache;
 use Apache::DBI;
+use File::Path;
 use OpenInteract::DBI;
 use OpenInteract::Startup;
 
 use constant DEBUG => 0;
 
-$OpenInteract::ApacheStartup::VERSION   = substr(q$Revision: 1.23 $, 10);
+$OpenInteract::ApacheStartup::VERSION   = substr(q$Revision: 1.25 $, 10);
 
 # Create a handler to put the X-Forwarded-For header into the IP
 # address -- thanks Stas! (perl.apache.org/guide/)
@@ -81,7 +82,11 @@ sub initialize {
     # If we're told, cleanup the Template Toolkit compile directory
 
     if ( $C->{template_info}{compile_cleanup} ) {
-        $class->cleanup_tt_cache( $C->get_dir( 'cache_tt' ) );
+        $class->cleanup_cache( $C->get_dir( 'cache_tt' ) );
+    }
+
+    if ( $C->{cache_info}{data}{cleanup} ) {
+        $class->cleanup_cache( $C->get_dir( 'cache_content' ) );
     }
 
     # Now copy all of each package's modules into a separate
@@ -156,15 +161,6 @@ sub child_init {
 
         push @{ $init_class }, 'OpenInteract::PackageRepository';
 
-        # Setup caching info for use in the child init handler below
-
-        my $cache_info      = $C->{cache_info}{data};
-        my $cache_class     = $cache_info->{class};
-        my $ipc_cache_class = $C->{cache}{ipc}{class};
-
-        $cache_class->class_initialize({ config => $C })      if ( $cache_info->{use} );
-        $ipc_cache_class->class_initialize({ config => $C })  if ( $cache_info->{use_ipc} );
-
         # Tell OpenInteract::Request to setup aliases if it hasn't
         # already
 
@@ -188,17 +184,11 @@ sub child_init {
 }
 
 
-sub cleanup_tt_cache {
+sub cleanup_cache {
     my ( $class, $dir ) = @_;
-    eval { opendir( TTC, $dir ) || die $! };
-    if ( $@ ) {
-        _w( 0, "Cannot open TT cache dir ($dir) for cleanup: $!" );
-        return;
-    }
-    my @cache_files = grep { -f "$dir/$_" } readdir( TTC );
-    closedir( TTC );
-    for ( @cache_files ) { unlink( "$dir/$_" ) || _w( 0, "Cannot remove ($dir/$_): $!" ) }
-    return;
+    return unless ( $dir );
+    File::Path::rmtree( $dir ) if ( -d $dir );
+    File::Path::mkpath( $dir, 0, 0777 ); # this may be bad, but...
 }
 
 
@@ -212,8 +202,6 @@ sub _w {
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -274,5 +262,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

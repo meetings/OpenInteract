@@ -1,5 +1,89 @@
 Revision history for Perl extension OpenInteract.
 
+1.51  Sun Sep  8 23:07:24 EDT 2002
+
+Individual:
+
+ * conf/sample-server.ini, conf/sample-server.perl:
+
+   - See UPGRADE for details on these:
+
+     o Add configuration keys 'cache_info.data.directory_depth' and
+     'cache_info.data.cleanup'
+     o Rename keys 'cache_info.data.SPOPS' and 'cache_info.data.expire'
+     o Delete keys 'cache_info.ipc.*' and 'cache_info.data.use_ipc'
+
+ * doc/caching.html:
+
+   - Create introduction to caching in OI.
+
+ * OpenInteract.pm:
+
+   - Modify how we setup the cache -- what parameters are used,
+   etc. (Part of caching implementation.)
+
+ * OpenInteract/Cache.pm:
+
+   - Rewrite big chunks of class. Caching now uses an OI object rather
+   than just class methods that can grab an cache implementation
+   object from the ether.
+
+ * OpenInteract/Cache/File.pm:
+
+   - Rewrite to reflect new caching changes, plus use Cache::FileCache
+   rather than the ancient File::Cache. Get rid of old AUTOLOAD stuff.
+
+ * OpenInteract/Cache/IPC.pm:
+
+   - Dump.
+
+ * OpenInteract/Handler/GenericDispatcher.pm:
+
+   - Create caching and cache checking methods for subclasses. You can
+   use these if your module subclasses this class OR if it subclasses
+   OpenInteract::CommonHandler. See intro to caching
+   (doc/caching.html) and POD for this class.
+
+ * OpenInteract/Session/(DBI|File|SQLite).pm:
+
+   - Only return a non-empty session. (Probably unnecessary, but just
+   to be sure...)
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - Fix 'box_add' so that it passes the 'remove' parameter properly
+
+ * OpenInteract/Template/Provider.pm:
+
+   - Return a better error message if we can't find a template in
+   _load().
+
+ * script/oi_manage:
+
+   - Add deprecation message for commands dealing with templates.
+
+Packages updated:
+
+   OpenInteract     1.50 -> 1.50
+   ----------------------------
+   base:            1.70 -> 1.70
+   base_box:        1.00 -> 1.01
+   base_error:      1.43 -> 1.43
+   base_group:      1.37 -> 1.37
+   base_page:       1.00 -> 1.00
+   base_security:   1.58 -> 1.58
+   base_template:   2.21 -> 2.21
+   base_theme:      1.35 -> 1.35
+   base_user:       1.58 -> 1.58
+   lookup:          1.00 -> 1.00
+   object_activity: 1.00 -> 1.00
+   results_manage:  1.00 -> 1.00
+   system_doc:      1.32 -> 1.32
+   classified:      1.36 -> 1.36
+   full_text:       1.32 -> 1.32
+   news:            1.40 -> 1.48
+
+
 1.50  Mon Aug 26 01:37:23 EDT 2002
 
 Overall:
@@ -18,7 +102,7 @@ Overall:
 
 Individual:
 
- * conf/server.ini, conf/server.perl:
+ * conf/sample-server.ini, conf/sample-server.perl:
 
    - Add new mandatory keys 'system_alias.site_template' and
    'system_alias.sitetemplate' (See UPGRADE for more info)

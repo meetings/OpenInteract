@@ -1,11 +1,11 @@
 package OpenInteract::Session::DBI;
 
-# $Id: DBI.pm,v 1.9 2002/05/02 04:42:09 lachoy Exp $
+# $Id: DBI.pm,v 1.10 2002/09/08 20:52:44 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract::Session );
 
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_id ) = @_;
@@ -36,15 +36,15 @@ sub _create_session {
         $R->scrib( 0, "Error thrown. Now clear the cookie" );
         return undef;
     }
-    return \%session;
+
+    # Only return the session if it's not empty
+    return \%session if ( scalar keys %session );
+    return undef;
 }
 
 1;
 
-
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -159,5 +159,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

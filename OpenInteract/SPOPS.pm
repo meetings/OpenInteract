@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.26 2002/04/24 12:34:52 lachoy Exp $
+# $Id: SPOPS.pm,v 1.28 2002/09/08 21:20:02 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -8,7 +8,7 @@ use Digest::MD5     qw( md5_hex );
 use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
@@ -251,12 +251,20 @@ sub get_supergroup_id { return $_[0]->global_config->{default_objects}{supergrou
 # inheritance hierarchy, particularly within SPOPS) are able to have
 # access to the various objects and resources
 
-sub global_cache                 { return OpenInteract::Request->instance->cache           }
-sub global_config                { return OpenInteract::Request->instance->config          }
-sub global_secure_class          { return OpenInteract::Request->instance->secure          }
-sub global_security_object_class { return OpenInteract::Request->instance->security        }
-sub global_user_class            { return OpenInteract::Request->user                      }
-sub global_group_class           { return OpenInteract::Request->group                     }
+sub global_cache {
+    my ( $self, @params ) = @_;
+    my $R = OpenInteract::Request->instance;
+    if ( $R->CONFIG->{cache_info}{data}{use_spops} ) {
+        return $R->cache;
+    }
+    return undef;
+}
+
+sub global_config                { return OpenInteract::Request->instance->config }
+sub global_secure_class          { return OpenInteract::Request->instance->secure }
+sub global_security_object_class { return OpenInteract::Request->instance->security }
+sub global_user_class            { return OpenInteract::Request->user }
+sub global_group_class           { return OpenInteract::Request->group }
 sub global_user_current          { return OpenInteract::Request->instance->{auth}{user}  }
 sub global_group_current         { return OpenInteract::Request->instance->{auth}{group} }
 
@@ -320,8 +328,6 @@ OBJECT
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -542,5 +548,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

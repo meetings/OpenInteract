@@ -1,12 +1,12 @@
 package OpenInteract::Session::SQLite;
 
-# $Id: SQLite.pm,v 1.2 2002/05/02 04:42:09 lachoy Exp $
+# $Id: SQLite.pm,v 1.3 2002/09/08 20:52:43 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract::Session );
 use Apache::Session::SQLite;
 
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_id ) = @_;
@@ -33,15 +33,14 @@ sub _create_session {
         $R->scrib( 0, "Error thrown. Now clear the cookie" );
         return undef;
     }
-    return \%session;
+    return \%session if ( scalar keys %session );
+    return undef;
 }
 
 1;
 
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -129,5 +128,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

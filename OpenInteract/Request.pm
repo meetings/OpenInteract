@@ -1,13 +1,12 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.14 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Request.pm,v 1.15 2002/09/08 20:51:07 lachoy Exp $
 
 use strict;
-use Class::Singleton  ();
-use Data::Dumper      qw( Dumper );
+use base qw( Class::Singleton );
+use Data::Dumper qw( Dumper );
 
-@OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -301,8 +300,6 @@ sub finish_request {
 
 __END__
 
-=pod
-
 =head1 NAME
 
 OpenInteract::Request -- container for request info and output
@@ -554,5 +551,3 @@ Chris Winters <chris@cwinters.com>
 
 Christian Lemburg <lemburg@aixonix.de> bugged me about getting a
 logging method (scrib) in here.
-
-=cut

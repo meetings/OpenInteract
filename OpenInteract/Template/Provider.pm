@@ -1,6 +1,6 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.23 2002/08/25 16:54:58 lachoy Exp $
+# $Id: Provider.pm,v 1.24 2002/09/08 20:55:35 lachoy Exp $
 
 use strict;
 use base qw( Template::Provider );
@@ -8,7 +8,7 @@ use Data::Dumper       qw( Dumper );
 use Digest::MD5        qw();
 use File::Spec         qw();
 
-$OpenInteract::Template::Provider::VERSION  = substr(q$Revision: 1.23 $, 10);
+$OpenInteract::Template::Provider::VERSION  = substr(q$Revision: 1.24 $, 10);
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
 use constant DEFAULT_TEMPLATE_EXTENSION   => 'template';
@@ -183,6 +183,9 @@ sub _load {
     my ( $content_template, $data );
     eval {
         $content_template = $R->site_template->fetch( $name );
+        unless ( $content_template ) {
+            die "Template with name [$name] not found.\n";
+        }
         $data = { 'name' => $content_template->full_filename,
                   'text' => $content_template->contents,
                   'time' => $content_template->modified_on,

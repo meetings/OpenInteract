@@ -1,22 +1,16 @@
 package OpenInteract::Cache;
 
-# $Id: Cache.pm,v 1.2 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Cache.pm,v 1.5 2002/09/09 03:05:32 lachoy Exp $
 
 use strict;
-use Digest::MD5 qw( md5 );
-
-my $IPC_CLASS = undef;
 
 # Returns: caching object (implementation-neutral)
 
 sub new {
-    my ( $pkg, $p ) = @_;
+    my ( $pkg, @params ) = @_;
     my $class = ref $pkg || $pkg;
-    if ( $p->{config} ) {
-        $IPC_CLASS = $p->{config}->{cache_info}->{ipc}->{class}  if ( $p->{config}->{cache_info}->{data}->{use_ipc} );
-    }
     my $self = bless( {}, $class );
-    $self->initialize( @_ );
+    $self->{_cache_object} = $self->initialize( @params );
     return $self;
 }
 
@@ -24,61 +18,60 @@ sub new {
 # Returns: data from the cache
 
 sub get {
-    my ( $class, $p ) = @_;
-    my $key = $p->{key};
+    my ( $self, $p ) = @_;
+
+    # if the cache hasn't been initialized, bail
+    return undef unless ( $self->{_cache_object} );
+
+    my $key       = $p->{key};
     my $is_object = 0;
     my $obj_class = undef;
     my $R = OpenInteract::Request->instance;
-    if ( ! $key and $p->{class} and $p->{id} ) {
-        $key = $class->_make_idx( $p->{class}, $p->{id} );
-        $R->DEBUG && $R->scrib( 1, "Created key from class/id: (($key))" );
+    if ( ! $key and $p->{class} and $p->{object_id} ) {
+        $key = _make_spops_idx( $p->{class}, $p->{object_id} );
+        $R->DEBUG && $R->scrib( 3, "Created class+id key [$key]" );
         $obj_class = $p->{class};
         $is_object++;
-        return undef  unless ( $obj_class->pre_cache_get( $p->{id} ) );
+        return undef  unless ( $obj_class->pre_cache_get( $p->{object_id} ) );
     }
-    return undef   if ( ! $key );
-    my $data = $class->_get_data( $key );
-
-    # If we're using IPC timestamps to ensure data consistency, 
-    # check to see that the IPC timestamp matches the data timestamp;
-    # if not, return nothing; if so, set $data to the data held in the 
-    # cache (which is the result if we're not using IPC stuff)
-
-    if ( $IPC_CLASS ) {
-        return undef unless ( $IPC_CLASS->check_meta( $key, $data->{timestamp} ) );
-        $data = $data->{data};
+    unless ( $key ) {
+        $R->DEBUG && $R->scrib( 2, "Cache MISS (no key)" );
+        return undef;
     }
-    return undef   if ( ! $data );
-    $R->DEBUG && $R->scrib( 1, "Cache hit! for <<$key>>" );
+
+    my $data = $self->get_data( $self->{_cache_object}, $key );
+    unless ( $data ) {
+        $R->DEBUG && $R->scrib( 2, "Cache MISS [$key]" );
+        return undef;
+    }
+
+    $R->DEBUG && $R->scrib( 2, "Cache HIT [$key]" );
     if ( $is_object ) {
-        return undef  unless ( $obj_class->post_cache_get( $data ) );
+        return undef unless ( $obj_class->post_cache_get( $data ) );
     }
     return $data;
 }
 
 sub set {
-    my ( $class, $p ) = @_;
+    my ( $self, $p ) = @_;
+
+    # if the cache hasn't been initialized, bail
+    return undef unless ( $self->{_cache_object} );
+
     my $is_object = 0;
     my $key  = $p->{key};
     my $data = $p->{data};
-    my $timestamp = time;
     my ( $obj );
     my $R = OpenInteract::Request->instance;
-    if ( $class->is_object( $data ) ) {
+    if ( _is_object( $data ) ) {
         $obj = $data;
-        $key = $class->_make_idx( ref $obj, $obj->id );
-        $R->DEBUG && $R->scrib( 1, "Created key from class/id: (($key))" );
+        $key = _make_spops_idx( ref $obj, $obj->id );
+        $R->DEBUG && $R->scrib( 2, "Created class/id key [$key]" );
         $is_object++;
         return undef  unless ( $obj->pre_cache_save );
-        if ( $obj->isa( 'SPOPS' ) ) {
-            $data = $obj->data;
-        }
+        $data = $obj->as_data_only;
     }
-    my $save_data = ( $IPC_CLASS ) 
-                      ? { data => $data, timestamp => $timestamp } 
-                      : $data;
-    $class->_set_data( $key, $save_data );
-    $IPC_CLASS->_set_meta( $key, $timestamp )  if ( $IPC_CLASS );
+    $self->set_data( $self->{_cache_object}, $key, $data, $p->{expire} );
     if ( $obj and $obj->can( 'post_cache_save' ) ) {
         return undef  if ( $obj->post_cache_save );
     }
@@ -86,190 +79,210 @@ sub set {
 }
 
 sub clear {
-    my ( $class, $p ) = @_;
-    if ( $class->is_object( $p->{data} ) ) {
-        $p->{key} = $class->_make_idx( ref $p->{data}, $p->{data}->id );
+    my ( $self, $p ) = @_;
+
+    # if the cache hasn't been initialized, bail
+    return undef unless ( $self->{_cache_object} );
+
+    my $key = $p->{key};
+    if ( ! $key and _is_object( $p->{data} ) ) {
+        $key = _make_spops_idx( ref $p->{data}, $p->{data}->id );
     }
-    return $class->_clear_data( $p->{key} );
+    elsif ( ! $key and $p->{class} and $p->{object_id} ) {
+        $key = _make_spops_idx( $p->{class}, $p->{object_id} );
+    }
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && $R->scrib( 2, "Trying to clear cache of [$key]" );
+    return $self->clear_data( $self->{_cache_object}, $key );
 }
 
-sub is_object {
-    my ( $class, $item ) = @_;
+
+sub purge {
+    my ( $self ) = @_;
+
+    # if the cache hasn't been initialized, bail
+    return undef unless ( $self->{_cache_object} );
+
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && $R->scrib( 2, "Trying to purge cache of all objects" );
+    return $self->purge_all( $self->{_cache_object} );
+}
+
+
+sub _is_object {
+    my ( $item ) = @_;
     my $typeof = ref $item;
     return undef if ( ! $typeof );
     return undef if ( $typeof =~ /^(HASH|ARRAY|SCALAR)$/ );
     return 1;
 }
 
-sub _make_idx { return join '--', $_[1], $_[2]; }
-
-
-# Set a new timestamp in the IPC metadata store
-
-sub ipc_set {
-    return undef if ( ! $IPC_CLASS );
-    my ( $class, $key ) = @_;
-    return $IPC_CLASS->_set_meta( $key, time );
+sub _make_spops_idx {
+    return join '--', $_[0], $_[1];
 }
 
-sub class_initialize { return undef; }
-sub initialize       { return undef; }
-sub _get_data        { return undef; }
-sub _set_data        { return undef; }
-sub clear_object     { return undef; }
-sub size_objects     { return undef; }
-sub size_bytes       { return undef; }
+########################################
+# SUBCLASS TO OVERRIDE
 
-
-sub DESTROY {
-    my ( $self ) = shift;
-    my $R = OpenInteract::Request->instance;
-    $R->DEBUG && $R->scrib( 1, "Removing object ", ref $self, " from play." );
-}
+sub initialize  { die "Subclass must define initialize()\n" }
+sub get_data    { die "Subclass must define get_data()\n" }
+sub set_data    { die "Subclass must define set_data()\n" }
+sub clear_data  { die "Subclass must define clear_data()\n" }
+sub purge_all   { die "Subclass must define purge_all()\n" }
 
 1;
 
 __END__
 
-=pod
-
 =head1 NAME
 
-OpenInteract::Cache -- caches objects so we do not need to do a database fetch each time
+OpenInteract::Cache -- Caches objects to avoid database hits and content to avoid template processing
 
 =head1 SYNOPSIS
 
- use OpenInteract::Cache;
- use OpenInteract::Object;
+ # In $WEBSITE_DIR/conf/server.ini
 
- my $obj = OpenInteract::Object->new();
- $obj->id( 35 );
- $obj->name( 'Superior Tecnologies, Inc.' );
- $obj->save();
+ [cache_info data]
+ default_expire = 600
+ use            = 0
+ use_spops      = 0
+ class          = OpenInteract::Cache::File
+ max_size       = 2000000
 
- my $cache = OpenInteract::Cache::CacheType->new();
- $cache->set( $obj );
+ # Use implicitly with built-in content caching
 
- ...(later)...
- my $class = 'OpenInteract::Object';
- my $obj = $cache->get( $class, 35 ) || $class->fetch( 35 );
+ sub listing {
+     my ( $class, $p ) = @_;
+     my %params = ( cache_key  => 'mypkg::myhandler::listing',
+                    cache_time => 1800 );
+     ...
+     return $R->template->handler(
+               {}, \%params, { name => 'mypkg::listing' } );
+ }
+
+ # Explicitly expire a cached item
+
+ sub edit {
+     my ( $class, $p ) = @_;
+     ...
+     eval { $object->save };
+     if ( $@ ) {
+         # set error message
+     }
+     else {
+         $R->cache->clear({ key => 'mypkg::myhandler::listing' });
+     }
+ }
 
 =head1 DESCRIPTION
 
-The original purpose of this class is to be a generic holder for
-various types of objects within the SPOPS (formerly Collection)
-framework. However, we will be extending it to cache any kind of data,
-given a key and a chunk of data. That data can be some HTML or a
-hashref of theme values.
+This class is the base class for different caching implementations,
+which are themselves just wrappers around various CPAN modules which
+do the actual work. As a result, the module is pretty simple.
 
-This class is meant to have a simple interface and is really only a
-wrapper around a functional caching module. These implementations are
-found in the subclasses.
+The only tricky aspect is that we use this for caching content and for
+caching SPOPS objects. So there is some additional data checking not
+normally in such a module.
 
 =head1 METHODS
 
-These are the methods for the cache:
+These are the methods for the cache. The following parameters are
+passed to every method that operates on an individual cached
+item. Either 'key' or 'class' and 'object_id' are required for these
+methods.
+
+=over 4
+
+=item *
+
+B<key>: Name under which we store data
+
+=item *
+
+B<class>: Class of SPOPS object
+
+=item *
+
+B<object_id>: ID of SPOPS object
+
+=back
 
 B<get( \%params )>
 
 Returns the data in the cache associated with a key; undef if data
 corresponding to the key is not found.
 
-Parameters:
-
-If you want to retrieve an object with a particular ID, use:
-
-=over 4
-
-=item *
-
-B<class>: Class of object
-
-=item *
-
-B<id>: ID of object
-
-=back
-
-This module will create a consistent key from these two items.
-
-Otherwise, use:
-
-=over 4
-
-=item *
-
-B<key>: Key for data to retrieve 
-
-=back
-
 B<set( \%params )>
 
-Saves the data found in the {data} parameter into the cache,
-referenced by the key {key} or by a key built from metadata if the
-item in {data} is an object. Returns a true value if successful.
+Saves the data found in the C<data> parameter into the cache,
+referenced by the key C<key>. If C<data> is an SPOPS object we create
+a key from its class and ID.
 
-Note that your object may define the methods I<pre_cache_save> and
-I<post_cache_save> which can act as callbacks during the caching
-process. Failure to return a true value from either of these callbacks
-will result in the data not being cached.
+Parameters:
 
-B<clear( [ $obj ] )>
+=over 4
 
-If given the request object and a collection object, clears the cache
-of that object. If not, clears the cache of all objects.
+=item *
 
-Note that your object may define the methods I<pre_cache_remove> and
-I<post_cache_remove> which can act as callbacks when the object is
-removed from the cache.
+B<data>: The data to save in the cache. This can be an SPOPS object or
+HTML content.
+
+=item *
+
+B<expire> (optional): Time the item should sit in the cache before being
+refreshed. This can be in seconds (the default) or in the "[number]
+[unit]" format outlined by L<Cache::Cache|Cache::Cache>. For example,
+'10 minutes'.
+
+=back
+
+Returns a true value if successful.
+
+B<clear( \%params )>
+
+Invalidates the cache for the specified item.
+
+B<purge()>
+
+Clears the cache of all items.
 
 =head1 SUBCLASS METHODS
 
 These are the methods that must be overridden by a subclass to
 implement caching.
 
-B<_get_data( $key )>
+B<initialize( \%OpenInteract::Config )>
+
+This method is called object is first created. Use it to define and
+return the object that actually does the caching. It will be passed to
+all successive methods (C<get_data()>, C<set_data()>, etc.).
+
+Relevant keys in the L<OpenInteract::Config|OpenInteract::Config>
+object passed in:
+
+ cache_info->default_expire - Default expiration time for items
+ cache_info->max_size       - Maximum size (in bytes) of cache
+ dir->cache_content         - Root directory for content cache
+
+B<get_data( $cache_object, $key )>
 
 Returns an object if it is cached and 'fresh', however that
 implementation defines fresh.
 
-B<_set_data( $data, $key, [ $expires ] )>
+B<set_data( $cache_object, $data, $key, [ $expires ] )>
 
-Returns 1 if successful, undef on failure.
+Returns 1 if successful, undef on failure. If C<$expires> is undefined
+or is not set to a valid L<Cache::Cache|Cache::Cache> value, then the
+configuration key 'cache_info.default_expire'.
 
-B<_clear_data( $key )>
+B<clear_data( $cache_object, $key )>
 
 Removes the specified data from the cache. Returns 1 if successful,
 undef on failure (or inability to do so).
 
-You may also provide the following:
+B<purge_all( $cache_object )>
 
-B<class_initialize( \%params )>
-
-This method is called B<once> when the class is first initialized
-(currently via a mod_perl ChildInitHandler). Generally used to define
-something (package variables, for instance) that can live throughout
-the life of the class.
-
-The hashref passed in for parameters typically contains just the
-config object (using the key 'config'); but you can also pass
-implementation-specific information to the functional module this way.
-
-B<initialize( \%params )>
-
-The cache object is held in the 'Stash Class' between requests, so it
-does not need to be recreated every time. The I<initialize()>
-procedure is only called after the cache object is first created.
-
-B<size_objects()>
-
-Returns the number of objects currently in the cache; undef if not
-implemented.
-
-B<size_bytes()>
-
-Returns the size in bytes of the objects currently in the cache; undef
-if not implemented.
+Clears the cache of all items.
 
 =head1 TODO
 
@@ -277,10 +290,7 @@ Test and get working!
 
 =head1 BUGS
 
-B<Caching and development mode>
-
-Do not use caching while you are in development mode. Old, incorrect
-versions of objects will inevitably get cached and mess you up.
+None known.
 
 =head1 COPYRIGHT
 
@@ -292,5 +302,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

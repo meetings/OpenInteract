@@ -1,14 +1,13 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.39 2002/08/25 17:22:35 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.40 2002/09/08 21:21:05 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
 use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
-@OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = '1.50';
+$OpenInteract::VERSION  = '1.51';
 
 
 # Generic separator used in display
@@ -129,7 +128,7 @@ sub setup_server_interface {
 
     $R->{remote_host} = $apr->connection->remote_ip();
     $R->DEBUG && $R->scrib( 1, "Request coming from $R->{remote_host}" );
-    return undef;
+    return;
 }
 
 
@@ -137,14 +136,21 @@ sub setup_server_interface {
 
 sub setup_cache {
     my ( $class, $R ) = @_;
-    my $C = $R->CONFIG;
-    if ( ! $R->cache and $C->{cache_info}{data}{use} ) {
-        my $cache_class = $C->{cache_info}{data}{class};
-        $R->DEBUG && $R->scrib( 1, "Using cache and setting up with ($cache_class)" );
-        my $cache = $cache_class->new({ config => $C });
+    my $CONFIG = $R->CONFIG;
+    my $cache_info = $CONFIG->{cache_info}{data};
+    if ( ! $R->cache and $cache_info->{use} ) {
+        my $cache_class = $cache_info->{class};
+        eval "require $cache_class";
+        if ( $@ ) {
+            $R->scrib( 0, "Cannot include cache class [$cache_class]: $@\n",
+                          "Continuing with operation..." );
+            return;
+        }
+        $R->DEBUG && $R->scrib( 1, "Using cache and setting up with [$cache_class]" );
+        my $cache = $cache_class->new( $CONFIG );
         $R->stash( 'cache', $cache );
     }
-    return undef;
+    return;
 }
 
 
@@ -202,7 +208,7 @@ sub parse_uri {
     $R->{path}{original} = $path;
     $R->{path}{original} .=  '?' . $u->query  if ( $u->query );
     $R->DEBUG && $R->scrib( 1, "Original path/query string set to: $R->{path}{original}" );
-    return undef;
+    return;
 }
 
 
@@ -225,7 +231,7 @@ sub find_action_handler {
         }
     }
     $R->DEBUG && $R->scrib( 1, "Found $R->{ui}{class} // $R->{ui}{method} for conductor" );
-    return undef;
+    return;
 }
 
 # Ensure our main database is up, otherwise bail.
@@ -259,7 +265,7 @@ sub setup_cookies_and_session {
         $class->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
-    return undef;
+    return;
 }
 
 
@@ -276,7 +282,7 @@ sub finish_cookies_and_session {
         $class->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
-    return undef;
+    return;
 }
 
 
@@ -352,7 +358,7 @@ THEMERR
         $R->DEBUG && $R->scrib( 1, "Set theme to session cache, expires ",
                                    "in [$theme_refresh] minutes" );
     }
-    return undef;
+    return;
 }
 
 
@@ -430,14 +436,12 @@ sub cleanup {
                                "path: ($R->{path}{original}) PID: ($$)\n",
                                "from: ($R->{remote_host})\n$SEP\n" );
     $R->finish_request;
-    return undef;
+    return;
 }
 
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -606,5 +610,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut
