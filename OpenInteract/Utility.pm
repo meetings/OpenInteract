@@ -1,13 +1,13 @@
 package OpenInteract::Utility;
 
-# $Id: Utility.pm,v 1.5 2001/10/30 02:24:19 lachoy Exp $
+# $Id: Utility.pm,v 1.8 2002/01/16 12:57:37 lachoy Exp $
 
 use strict;
 use Mail::Sendmail ();
 use MIME::Lite     ();
 
 @OpenInteract::Utility::ISA     = ();
-$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_SUBJECT        => 'Mail sent from OpenInteract';
 use constant DEFAULT_ATTACH_MESSAGE => 'Emailing attachments';
@@ -31,8 +31,8 @@ sub send_email {
         smtp    => $smtp_host,
         message => $p->{message},
     );
-    $R->DEBUG && $R->scrib( 1, "Trying to send  to <<$p->{email}>>" );
-    $R->DEBUG && $R->scrib( 2, "Message being sent:\n$p->{message}" );
+    $R->DEBUG && $R->scrib( 1, "Trying to send mail to [$mail{To}] via [$mail{smtp}]" );
+    $R->DEBUG && $R->scrib( 2, "Message being sent:\n$mail{message}" );
     eval { Mail::Sendmail::sendmail( %mail ) || die $Mail::Sendmail::error };
     if ( $@ ) {
         my $msg = "Cannot send email. Error: $@";
@@ -108,26 +108,32 @@ sub _clean_attachment_filename {
     my ( $class, $filename ) = @_;
     my $R = OpenInteract::Request->instance;
 
-    $R->DEBUG && $R->scrib( 1, "Attachment filename begin: ($filename)" );
+    $R->DEBUG && $R->scrib( 1, "Processing attachment filename [$filename]" );
+
+    my $website_dir = $R->CONFIG->get_dir( 'base' );
+
+    # Strip off the website root directory so we can ensure that the
+    # next check deals with relative files properly
+
+    $filename =~ s|^$website_dir||;
 
     # First, see if they use an absolute. If so, strip off the leading
     # '/' and assume they meant the absolute website directory
 
-    if ( $filename =~ s|\.\.||g ) {
-        $R->DEBUG && $R->scrib( 1, "Attachment had '..' sequence. New: ($filename)" );
-    }
-
     if ( $filename =~ s|^/+|| ) {
-        $R->DEBUG && $R->scrib( 1, "Attachment started with '/'. New: ($filename)" );
+        $R->DEBUG && $R->scrib( 1, "Attachment started with '/'. New: [($filename]" );
     }
 
-    my $website_dir = $R->CONFIG->get_dir( 'base' );
+    if ( $filename =~ s|\.\.||g ) {
+        $R->DEBUG && $R->scrib( 1, "Attachment had '..' sequence. New: [$filename]" );
+    }
+
     my $cleaned_filename = join( '/', $website_dir, $filename );
     if ( -f $cleaned_filename ) {
-        $R->DEBUG && $R->scrib( 1, "Final filename exists: ($cleaned_filename)" );
+        $R->DEBUG && $R->scrib( 1, "Final filename exists: [$cleaned_filename]" );
         return $cleaned_filename;
     }
-    $R->DEBUG && $R->scrib( 1, "Final filename does NOT EXIST: ($cleaned_filename)" );
+    $R->DEBUG && $R->scrib( 1, "Final filename does NOT EXIST: [$cleaned_filename]" );
     return undef;
 }
 
@@ -312,7 +318,7 @@ L<MIME::Lite|MIME::Lite>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.23 2001/12/01 17:38:12 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.28 2002/01/16 13:01:40 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
@@ -8,7 +8,7 @@ use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = 1.36;
+$OpenInteract::VERSION  = 1.37;
 
 
 # Generic separator used in display
@@ -48,6 +48,7 @@ sub handler ($$) {
         $class->setup_cache( $R );
         $class->parse_uri( $R );
         $class->find_action_handler( $R );
+        $class->check_database( $R );
         $class->setup_cookies_and_session( $R );
         $class->setup_authentication( $R );
         $class->setup_theme( $R );
@@ -68,7 +69,7 @@ sub handler ($$) {
 
 sub bail {
     my ( $class, $msg ) = @_;
-    $msg = $msg + 0;
+    $msg = $msg + 0;   # force scalar to numeric
     return $msg;
 }
 
@@ -227,6 +228,23 @@ sub find_action_handler {
     return undef;
 }
 
+# Ensure our main database is up, otherwise bail.
+
+sub check_database {
+    my ( $class, $R ) = @_;
+    my $db = $R->db( 'main' );
+    eval {
+        die unless ( $db );
+        warn "Found item: ", ref( $db ), "\n";
+        $db->ping;
+    };
+    if ( $@ ) {
+        my $error_msg = $R->throw({ code => 11 });
+        $class->send_html( $R->apache, $error_msg, $R );
+        die OK . "\n";
+    }
+    return;
+}
 
 sub setup_cookies_and_session {
     my ( $class, $R ) = @_;
@@ -359,11 +377,15 @@ sub send_html {
     my ( $class, $apache, $content, $R ) = @_;
     if ( ref $R ) {
         unless ( $R->CONFIG->{no_promotion} ) {
-            $apache->headers_out->{'X-Powered-By'} = "OpenInteract $OpenInteract::VERSION";
+            $apache->headers_out->{'X-Powered-By'} =
+                                   "OpenInteract $OpenInteract::VERSION";
         }
     }
-    my $content_type = $R->{page}{content_type} || $apache->content_type || 'text/html';
-    $content_type = ( $content_type eq 'httpd/unix-directory' ) ? 'text/html' : $content_type;
+    my $content_type = $R->{page}{content_type} ||
+                       $apache->content_type ||
+                       'text/html';
+    $content_type = ( $content_type eq 'httpd/unix-directory' )
+                      ? 'text/html' : $content_type;
     $apache->send_http_header( $content_type );
     $apache->print( $content );
 }
@@ -373,7 +395,12 @@ sub send_html {
 
 sub cleanup {
     my ( $class, $R ) = @_;
-    $R->DEBUG && $R->scrib( 2, "\n\nErrors: ", Dumper( $R->error_object->report ), "\n\n" );
+
+    # Wrap this in an eval so it won't bomb if 0.56 isn't installed
+
+    eval { SPOPS::Exception->clear_stack };
+
+    $R->DEBUG && $R->scrib( 2, "\n\nErrors: ", Dumper( $R->error_object->report ), "\n" );
     $R->error->clear;
     $R->error_object->clear_listing;
     $R->DEBUG && $R->scrib( 1, "\nRequest done:", scalar localtime, "\n",
@@ -547,7 +574,7 @@ None known
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

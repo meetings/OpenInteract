@@ -1,13 +1,13 @@
 package OpenInteract::Cookies::Apache;
 
-# $Id: Apache.pm,v 1.4 2001/11/06 14:31:44 lachoy Exp $
+# $Id: Apache.pm,v 1.5 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Apache::Cookie;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Cookies::Apache::ISA     = ();
-$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 
 # Retrieve the cookies using Apache::Request
@@ -193,7 +193,7 @@ L<Apache::Cookie|Apache::Cookie>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

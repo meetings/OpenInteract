@@ -213,7 +213,7 @@ mailing lists, hosted at SourceForge at the above URL.
 
 =head1 COPYRIGHT
 
-OpenInteract is Copyright (c) 2001 intes.net, inc.. All rights reserved.
+OpenInteract is Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 The OpenInteract library(**) is free software; you can redistribute it
 and/or modify it under the terms of the Perl Artistic License or the

@@ -1,14 +1,15 @@
 package OpenInteract::Error::System;
 
-# $Id: System.pm,v 1.5 2001/10/28 02:41:34 lachoy Exp $
+# $Id: System.pm,v 1.8 2002/01/16 13:11:49 lachoy Exp $
 
 use strict;
 use Carp                   qw( cluck );
 use Data::Dumper           qw( Dumper );
 use OpenInteract::Error::Main;
+use OpenInteract::Utility;
 
 @OpenInteract::Error::System::ISA     = ();
-$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my $ERROR_HOLD = $OpenInteract::Error::Main::ERROR_HOLD;
 
@@ -125,8 +126,9 @@ mob of users on your hands.
 
 Your friendly OpenInteract System
 MSG
-    eval { OpenInteract::Utility->send_email({ to      => $R->CONFIG->{mail}{admin_email} ||
-                                                          $R->CONFIG->{admin_email},
+    my $send_to = $R->CONFIG->{mail}{admin_email} ||
+                  $R->CONFIG->{admin_email};
+    eval { OpenInteract::Utility->send_email({ to      => $send_to,
                                                message => $msg,
                                                subject => 'Cannot connect to database!' }) };
     if ( $@ ) {
@@ -232,7 +234,7 @@ sub file_not_found {
     $R->DEBUG && cluck ">> Error: cannot find or open requested location *$err->{system_msg})";
     $err->{user_msg} = 'Requested file not found or cannot be opened';
     OpenInteract::Error::Main->save_error( $err );
-    $R->{page}{title} = 'Sorry: Action not found';
+    $R->{page}{title} = 'Sorry: Not found';
     my $html = $R->template->handler( {}, { err => $err },
                                       { name => 'error_not_found' } );
     die "$html\n";
@@ -615,7 +617,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

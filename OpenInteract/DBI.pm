@@ -1,6 +1,6 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.9 2001/10/07 14:21:41 lachoy Exp $
+# $Id: DBI.pm,v 1.10 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Carp         qw( croak );
@@ -8,7 +8,7 @@ use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -362,7 +362,7 @@ PerlEx - http://www.activestate.com/Products/PerlEx/
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

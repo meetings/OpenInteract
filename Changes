@@ -1,5 +1,179 @@
 Revision history for Perl extension OpenInteract.
 
+1.37  Fri Jan 18 17:34:59 EST 2002
+
+Overall:
+
+ - The base_page package now includes support for directory handlers,
+ which allows you to step in at a directory request and generate
+ specific content for that request. (Previously, index support was
+ only for setting a filename to be used, much like DirectoryIndex in
+ Apache.)
+
+ - Time-expired sessions are now supported -- just add the key
+ 'session_info'->'expires_in' to your server configuration and set it
+ to the number of minutes an inactive session should last. (Setting it
+ to 0/undef == forever)
+
+ - General bugfixes
+
+Structure changes:
+
+ - You'll need to drop the table 'content_type' and add it again if
+ you upgrade a website to the newest 'base_page' package. You can add
+ the table again using:
+
+  $ oi_manage install_sql --package=base_page
+
+ Will do it (along with issuing a number of errors, but that's ok).
+
+Individual:
+
+ * INSTALL.website:
+
+   - Added notes about directory permissions
+
+ * Makefile.PL:
+
+   - Add Class::Accessor and dependencies
+
+ * conf/sample-httpd*.conf:
+
+   - Added definition for 'combined' log, thanks to suggestion from
+   Bill Moseley <moseley@hank.org>
+
+ * conf/sample-server.ini:
+
+   - Added configuration key 'session_info'->'expires_in' so you can
+   control session inactivity expiration
+
+   - Added the key 'template_info'->'cache_size' to control how many
+   templates TT will keep cached in memory
+
+ * conf/sample-server.perl:
+
+   - Updated default actions to refer to 'page' instead of 'basicpage'
+   (Thanks to Andreas nolte <andreas.nolte@bertelsmann.de> for
+   poitning this out.
+
+   - Added configuration key 'session_info'->'expires_in' so you can
+   control session inactivity expiration
+
+   - Added the key 'template_info'->'cache_size' to control how many
+   templates TT will keep cached in memory
+
+ * conf/sample-spops.perl:
+
+   - Comment out the 'increment_field' key (if you append a config to
+   the bottom you'll get errors) Thanks to Sloan Seaman for the spot.
+
+ * OpenInteract.pm:
+
+   - Clear out the stack of exceptions in SPOPS::Exception if 0.56 is
+   being used.
+
+   - Add 'check_database()' step that is called before any interaction
+   with the database. This way we should be able to ensure the
+   connection is up and provide a decent error message rather than the
+   'Themes not functioning' one.
+
+ * OpenInteract/ApacheStartup.pm:
+
+   - Win32 wasn't starting up properly due to when we were putting the
+   config info in the OpenInteract package. Fixed -- thanks to John
+   Sequeira <jseq@mediaone.net> for reporting the bug
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Added MY_EDIT_FAIL_TASK, MY_REMOVE_FAIL_TASK and
+   MY_REMOVE_DISPLAY_TASK so that the modules can have better control
+   over what happens on success or failure.
+
+   - create() now passes a true value for 'is_new_object' in addition
+   to a true value for 'edit' so that show() can do the right thing.
+
+   - Added MY_SEARCH_RESULTS_CAP and MY_SEARCH_RESULTS_CAP_FAIL_TASK
+   so a module can define the max number of results that can be
+   returned from a search, and if too many are returned can run a
+   custom task. (See docs for more info.)
+
+   - Added MY_SEARCH_FAIL_TASK so that modules can have better control
+   over what happens when a search fails.
+
+ * OpenInteract/Package.pm:
+
+   - In check() added new check to conf/spops.perl file to ensure that
+   every key in the configuration points to a hashref. (Thanks to
+   Sloan Seaman for the spot.)
+
+   - Added checks to export() to check for existing
+   file/directory. (Thanks to Sloan Seaman for suggesting.)
+
+ * OpenInteract/Session.pm:
+
+   - Add method 'is_session_valid()' that is called every time we
+   create a new session. Currently it checks the
+   'session_info'->'expires_in' key of the server configuration to see
+   if the session has expired after n minutes of inactivity.
+
+ * OpenInteract/Startup.pm:
+
+   - Enable an option to be passed to create_temp_lib -- we check to
+   see if it's set to 'lazy' and if so, we don't try to recreate the
+   temporary lib dir if it already exists.
+
+ * OpenInteract/Utility.pm:
+
+   - Update _clean_attachment_filename() to first remove the website
+   base directory from the filename, then go through the
+   relative/absolute checks. Otherwise you wind up with something
+   like: $WEBSITE_DIR/$WEBSITE_DIR/...
+
+ * script/oi_manage:
+
+   - Fix 'list_actions' and 'list_objects' so that we create an entire
+   static environment as opposed to just the configuration (sets up
+   the temporary lib directory properly); also, use the newly-created
+   'lazy' option so that we don't try to recreate the lib dir if it
+   already exists (this might change)
+
+   - Updated 'test_db_connection()' to ensure a database handle is
+   returned and to wrap $db->disconnect() in eval {} to trap any
+   errors (and report them in the status)
+
+ * template/label_form_upload_row:
+
+   - Widget for displaying a file upload in a row
+
+ * template/table_bordered_begin:
+
+   - Added support for setting the border in the inner table (Thanks
+   to Bill Heckel <bill@billheckel.com> for the patch.)
+
+Packages changed. The 'Changes' file in each package has details.
+
+   OpenInteract     1.36 -> 1.37
+   ----------------------------
+   base:            1.63 -> 1.63
+   base_box:        0.41 -> 0.42
+   base_component:  1.30 -> 1.30
+   base_error:      1.37 -> 1.39
+   base_group:      1.30 -> 1.32
+   base_page:       0.40 -> 0.77
+   base_security:   1.53 -> 1.54
+   base_template:   1.27 -> 1.27
+   base_theme:      1.29 -> 1.29
+   base_user:       1.45 -> 1.47
+   lookup:          0.18 -> 0.20
+   object_activity: 0.10 -> 0.10
+   results_manage:  0.06 -> 0.07
+   system_doc:      1.28 -> 1.29
+   classified:      1.32 -> 1.32
+   full_text:       1.30 -> 1.30
+   news:            1.33 -> 1.33
+   static_page:     1.52 -> 1.53
+
+
 1.36  Sat Dec  1 12:55:16 EST 2001
 
 Overall:

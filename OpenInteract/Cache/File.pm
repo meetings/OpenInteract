@@ -1,6 +1,6 @@
 package OpenInteract::Cache::File;
 
-# $Id: File.pm,v 1.2 2001/10/17 04:47:07 lachoy Exp $
+# $Id: File.pm,v 1.3 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use vars qw( $AUTOLOAD );
@@ -8,7 +8,7 @@ use File::Cache;
 use OpenInteract::Cache;
 
 @OpenInteract::Cache::File::ISA     = qw( OpenInteract::Cache );
-$OpenInteract::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 $AUTOLOAD = undef;
 
@@ -135,7 +135,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,11 +1,11 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.6 2001/11/29 05:35:11 lachoy Exp $
+# $Id: Main.pm,v 1.7 2002/01/02 02:43:54 lachoy Exp $
 
 use strict;
 
 @OpenInteract::UI::Main::ISA     = qw( OpenInteract::Config );
-$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
     my ( $class ) = @_;
@@ -184,7 +184,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

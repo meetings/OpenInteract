@@ -1,6 +1,6 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.5 2001/10/11 15:39:26 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use vars qw( $PKG_DB_FILE );
@@ -12,7 +12,7 @@ use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
 
 @OpenInteract::PackageRepository::ISA       = qw( Exporter  SPOPS::Utility  SPOPS::HashFile );
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -491,7 +491,7 @@ L<OpenInteract::Package>, OpenInteract documentation: I<Packages in OpenInteract
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

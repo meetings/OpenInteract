@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.26 2001/11/30 15:22:22 lachoy Exp $
+# $Id: Startup.pm,v 1.30 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -14,7 +14,7 @@ use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -140,7 +140,7 @@ sub main_initialize {
 
 
 sub setup_static_environment_options {
-    my ( $class, $usage, $options ) = @_;
+    my ( $class, $usage, $options, $params ) = @_;
     $options ||= {};
     my ( $OPT_website_dir );
     $options->{'website_dir=s'} = \$OPT_website_dir;
@@ -157,7 +157,7 @@ sub setup_static_environment_options {
     unless ( -d $OPT_website_dir ) {
         die "$usage\n Parameter 'website_dir' must refer to an OpenInteract website directory!\n";
     }
-    return $class->setup_static_environment( $OPT_website_dir );
+    return $class->setup_static_environment( $OPT_website_dir, undef, $params );
 }
 
 
@@ -165,15 +165,16 @@ sub setup_static_environment_options {
 # of the web application server -- just pass in the website directory!
 
 sub setup_static_environment {
-    my ( $class, $website_dir, $su_passwd ) = @_;
+    my ( $class, $website_dir, $su_passwd, $params ) = @_;
     die "Directory ($website_dir) is not a valid directory!\n" unless ( -d $website_dir );
+    $params ||= {};
 
     my $bc = $class->read_base_config({ dir => $website_dir });
     unless ( $bc and ref $bc eq 'HASH' ) {
         die "No base configuration file found in website directory ($website_dir)" ;
     }
 
-    $class->create_temp_lib( $bc );
+    $class->create_temp_lib( $bc, $params->{temp_lib} );
 
     unshift @INC, $website_dir;
 
@@ -240,11 +241,18 @@ sub create_config {
 # separate directory -- if it currently exists we clear it out first.
 
 sub create_temp_lib {
-    my ( $class, $base_config ) = @_;
+    my ( $class, $base_config, $opt ) = @_;
+    $opt ||= '';
     my $site_dir = $base_config->{website_dir};
 
     my $lib_dir  = "$site_dir/$TEMP_LIB_DIR";
     unshift @INC, $lib_dir;
+
+    if ( -d $lib_dir and $opt eq 'lazy' ) {
+        DEBUG && _w( 1, "Temp lib dir ($lib_dir) already exists and we're lazy;",
+                        "not copying modules to temp lib dir" );
+        return [];
+    }
 
     File::Path::rmtree( $lib_dir ) if ( -d $lib_dir );
     mkdir( $lib_dir, 0777 );
@@ -1128,7 +1136,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

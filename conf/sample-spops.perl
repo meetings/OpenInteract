@@ -84,7 +84,7 @@ $spops = {
 # increment_field - Whether to use (or be aware of) auto-incrementing
 # features of your database driver.
 
-               increment_field => 1,
+#              increment_field => 1,
 
 # no_insert - Fields for which we should not try to insert
 # information, ever. If you're using a SPOPS implementation (e.g.,

@@ -1,12 +1,12 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.14 2001/11/20 04:09:53 lachoy Exp $
+# $Id: Auth.pm,v 1.15 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -536,7 +536,7 @@ L<OpenInteract::Group|OpenInteract::Group>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

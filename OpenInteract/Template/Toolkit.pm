@@ -1,12 +1,12 @@
 package OpenInteract::Template::Toolkit;
 
-# $Id: Toolkit.pm,v 1.3 2001/08/26 04:09:56 lachoy Exp $
+# $Id: Toolkit.pm,v 1.4 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use OpenInteract::Template::Process;
 
 @OpenInteract::Template::Toolkit::ISA     = qw( OpenInteract::Template );
-$OpenInteract::Template::Toolkit::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Toolkit::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
     my ( $class, @params ) = @_;
@@ -56,7 +56,7 @@ This class is deprecated. Use L<OpenInteract::Template::Process>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

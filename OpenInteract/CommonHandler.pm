@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.29 2001/12/01 15:25:38 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.35 2002/01/15 13:29:18 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.35 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -55,11 +55,11 @@ sub search {
         $R->scrib( 0, "User requested search for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>Objects of this type cannot be searched.</p>';
     }
+
     $p ||= {};
+    my %params = %{ $p };
 
     my $apr = $R->apache;
-
-    my %params = %{ $p };
 
     if ( $class->MY_SEARCH_RESULTS_PAGED ) {
         require OpenInteract::ResultsManage;
@@ -79,12 +79,25 @@ sub search {
 
         else {
             $R->DEBUG && $R->scrib( 1, "Running search for the first time" );
-            my $iterator = eval { $class->_search_build_and_run({ is_paged => 1 }) };
-            if ( $iterator and ! $@ ) {
-                $results->save( $iterator );
-                $R->DEBUG && $R->scrib( 1, "Search ID ($results->{search_id})" );
-                $class->_search_save_id( $results->{search_id} );
+            my ( $iterator, $msg ) =
+                    eval { $class->_search_build_and_run({ %params, is_paged => 1 }) };
+
+            # TODO: We will probably catch a specific exception here
+            # when we use exceptions in OI
+
+            if ( ! $iterator and $msg ) {
+                my $cap_task = $class->MY_SEARCH_RESULTS_CAP_FAIL_TASK;
+                return $class->$cap_task({ error_msg => $msg });
             }
+
+            if ( $@ ) {
+                my $fail_task = $class->MY_SEARCH_FAIL_TASK;
+                return $class->$fail_task({ error_msg => "Search failed: $@" });
+            }
+
+            $results->save( $iterator );
+            $R->DEBUG && $R->scrib( 1, "Search ID ($results->{search_id})" );
+            $class->_search_save_id( $results->{search_id} );
         }
 
         if ( $results->{search_id} ) {
@@ -108,9 +121,22 @@ sub search {
     # search and get back an iterator
 
     else {
-        $params{iterator} = eval { $class->_search_build_and_run };
+        my ( $msg );
+        ( $params{iterator}, $msg ) =
+                    eval { $class->_search_build_and_run( \%params ) };
+
+        # TODO: We will probably catch a specific exception here
+        # when we use exceptions in OI
+
+        if ( ! $params{iterator} and $msg ) {
+            my $cap_task = $class->MY_SEARCH_RESULTS_CAP_FAIL_TASK;
+            return $class->$cap_task({ error_msg => $msg });
+        }
+
         if ( $@ ) {
+            my $fail_task = $class->MY_SEARCH_FAIL_TASK;
             $R->scrib( 0, "Got error from running search: $@" );
+            return $class->$fail_task({ error_msg => "Search failed: $@" });
         }
     }
 
@@ -146,10 +172,10 @@ sub _search_build_and_run {
 
     # Grab the criteria and customize if necessary
 
-    my $criteria = $class->_search_build_criteria;
+    my $criteria = $class->_search_build_criteria( $p );
 
     my ( $tables, $where, $values ) =
-                    $class->_search_build_where_clause( $criteria );
+                    $class->_search_build_where_clause( $criteria, $p );
 
     my ( $limit );
     if ( $p->{min} or $p->{max} ) {
@@ -158,8 +184,21 @@ sub _search_build_and_run {
     }
 
     my $object_class = $class->MY_OBJECT_CLASS;
-    $R->DEBUG && $R->scrib( 1, "RUN SEARCH (before): ", scalar localtime );
 
+    if ( my $num_limit_results = $class->MY_SEARCH_RESULTS_CAP ) {
+        my $row = eval { $object_class->db_select({ select => [ 'count(*)' ],
+                                                    from   => $tables,
+                                                    where  => $where,
+                                                    value  => $values,
+                                                    return => 'single' }) };
+        if ( $row->[0] > $num_limit_results ) {
+            my $msg = "Your search has returned too many results. " .
+                      "(Limit: $num_limit_results) Please try again.";
+            return ( undef,  $msg );
+        }
+    }
+
+    $R->DEBUG && $R->scrib( 1, "RUN SEARCH (before): ", scalar localtime );
     my $order = $class->MY_SEARCH_RESULTS_ORDER;
     my $iter = eval { $object_class->fetch_iterator({
                                          from       => $tables,  where => $where,
@@ -167,14 +206,14 @@ sub _search_build_and_run {
                                          order      => $order }) };
     $R->DEBUG && $R->scrib( 1, "RUN SEARCH (after): ", scalar localtime );
 
-    return $iter unless ( $@ );
+    return ( $iter, undef ) unless ( $@ );
 
-    $R->scrib( 0, "Search failed: $@ ($SPOPS::Error::system_msg)\nClass: $class\n",
+    $R->scrib( 0, "Search failed: $@\nClass: $class\n",
                   "FROM", join( ',', @{ $tables } ), "\n",
                   "WHERE $where\n",
                   "ORDER BY $order\n",
                   "VALUES", join( ',', @{ $values } ) );
-    die "Search failed ($SPOPS::Error::system_msg)\n";
+    die "Search failed ($@)\n";
 }
 
 
@@ -182,7 +221,7 @@ sub _search_build_and_run {
 # submitted. Fields with multiple values are saved as arrayrefs.
 
 sub _search_build_criteria {
-    my ( $class ) = @_;
+    my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
     my $apr = $R->apache;
     my $object_class = $class->MY_OBJECT_CLASS;
@@ -201,9 +240,9 @@ sub _search_build_criteria {
         $search_params{ $full_field } = ( scalar @value > 1 )
                                           ? \@value : $value[0];
     }
+    $class->_search_criteria_customize( \%search_params, $p );
     $R->DEBUG && $R->scrib( 1, "($class) Found search parameters:\n",
                                Dumper( \%search_params ) );
-    $class->_search_criteria_customize( \%search_params );
     return \%search_params
 }
 
@@ -215,7 +254,7 @@ sub _search_build_criteria {
 #  AND ( table.first_name LIKE '%john%' )
 
 sub _search_build_where_clause {
-    my ( $class, $search_criteria ) = @_;
+    my ( $class, $search_criteria, $p ) = @_;
     my $R = OpenInteract::Request->instance;
 
     # Find all our configured information
@@ -281,7 +320,7 @@ sub _search_build_where_clause {
                 $search_value = "%$search_criteria->{ $field_name }%";
             }
             push @value, $search_value;
-            $R->DEBUG && $R->scrib( 1, "Set ($field_name) $oper ($search_value)" );
+            $R->DEBUG && $R->scrib( 2, "Set ($field_name) $oper ($search_value)" );
         }
         push @where, '( ' . join( ' OR ', @where_param ) . ' )';
     }
@@ -340,7 +379,7 @@ sub _search_build_where_clause {
     }
 
     my @tables = keys %from_tables;
-    $class->_search_build_where_customize( \@tables, \@where, \@value );
+    $class->_search_build_where_customize( \@tables, \@where, \@value, $p );
 
     my $clause = join( " AND ", @where );
     $R->DEBUG && $R->scrib( 1, "($class) Built WHERE clause\n",
@@ -378,7 +417,8 @@ sub create {
         $R->scrib( 0, "Request for create ($class) denied - inadequate security" );
         return '<h1>Error</h1><p>You do not have permission to create new objects.</p>';
     }
-    $p->{edit} = 1;
+    $p->{edit}          = 1;
+    $p->{is_new_object} = 1;
     return $class->show( $p );
 }
 
@@ -403,12 +443,30 @@ sub show {
 
     # Setup our default info
 
+    my $fail_method  = $class->MY_SHOW_FAIL_TASK;
     my $object_type  = $class->MY_OBJECT_TYPE;
     my $object_class = $class->MY_OBJECT_CLASS;
     my $id_field     = $object_class->id_field;
-    my $object = $p->{ $object_type } ||
-                 eval { $class->fetch_object( $p->{ $id_field }, $id_field ) };
-    return $class->search_form({ error_msg => $@ }) if ( $@ );
+    my $object = $object_class->new;
+    unless ( $p->{is_new_object} ) {
+        $object = $p->{ $object_type } ||
+                  eval { $class->fetch_object( $p->{ $id_field }, $id_field ) };
+        return $class->$fail_method({ error_msg => $@ }) if ( $@ );
+    }
+
+    # If this is a saved object, see if we're supposed to ensure it's
+    # active. If the user is an admin, it doesn't matter.
+
+    my $active_field = $class->MY_ACTIVE_CHECK;
+    if ( ! $R->{auth}{is_admin} and $object->is_saved and $active_field ) {
+        my $status = $object->{ $active_field };
+        unless ( $status =~ /^\s*(y|yes|1)\s*$/i ) {
+            $R->scrib( 0, "Object failed 'active' status check (Status: $status)" );
+            my $error_msg = "This object is currently inactive. Please check later.";
+            return $class->$fail_method({ error_msg => $error_msg });
+        }
+        $R->DEBUG && $R->scrib( 1, "Object passed 'active' status check (Status: $status)" );
+    }
 
     # Ensure the object can be edited -- remember, 'fetch_object'
     # ALWAYS returns an object or dies, so don't add another clause
@@ -445,14 +503,14 @@ sub edit {
     my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_EDIT ) {
         $R->scrib( 0, "User requested edit for ($class) and it's not allowed." );
-        return $class->search_form({
-                 error_msg => 'Objects of this type cannot be modified.' });
+        return '<h1>Error</h1><p>Objects of this type cannot be edited.</p>';
     }
 
     $R->{page}{return_url} = $class->MY_EDIT_RETURN_URL;
 
     # Setup default info
 
+    my $fail_method  = $class->MY_EDIT_FAIL_TASK;
     my $object_type  = $class->MY_OBJECT_TYPE;
     my $object_class = $class->MY_OBJECT_CLASS;
     my $id_field     = $object_class->id_field;
@@ -462,7 +520,9 @@ sub edit {
     # error and we should go back to the search form rather than the
     # display form.
 
-    return $class->search_form({ error_msg => $@ }) if ( $@ );
+    if ( $@ ) {
+        return $class->$fail_method({ error_msg => $@ });
+    }
 
     # Assumption: SEC_LEVEL_WRITE is necessary. (Probably ok.)
 
@@ -471,7 +531,7 @@ sub edit {
     if ( $object_level < SEC_LEVEL_WRITE ) {
         my $error_msg = 'Sorry, you do not have access to modify this ' .
                         'object. No modifications made.';
-        return $class->search_form({ error_msg => $error_msg });
+        return $class->$fail_method({ error_msg => $error_msg });
     }
 
     # We pass this to the customization routine so you can do
@@ -495,20 +555,19 @@ sub edit {
         return $class->_execute_options( $opts );
     }
 
-    my %show_params = ();
+    my %show_params = ( $object_type => $object, object => $object );
     eval { $object->save( $opts ) };
     if ( $@ ) {
         my $ei = OpenInteract::Error->set( SPOPS::Error->get );
         $R->scrib( 0, "Object ($object_type) save failed: $@ ($ei->{system_msg})" );
         $R->throw({ code => 407 });
         $show_params{error_msg} = "Object modification failed. Error found: $ei->{system_msg}";
+        return $class->$fail_method( \%show_params );
     }
-    else {
-        $show_params{status_msg} = ( $is_new )
-                                     ? 'Object created properly.'
-                                     : 'Object saved properly with changes.';
-    }
-    $show_params{ $object_type } = $object;
+
+    $show_params{status_msg} = ( $is_new )
+                                 ? 'Object created properly.'
+                                 : 'Object saved properly with changes.';
     my $method = $class->MY_EDIT_DISPLAY_TASK;
     return $class->$method( \%show_params );
 }
@@ -545,6 +604,15 @@ sub _edit_assign_fields {
         $R->DEBUG && $R->scrib( 1, "Object edit date: ($object_type) ($field) ($value)" );
         $object->{ $field } = $value;
     }
+
+    # Go through datetime fields
+
+    foreach my $field ( $class->MY_EDIT_FIELDS_DATETIME ) {
+        my $value = $class->_read_field_datetime( $apr, $field );
+        $R->DEBUG && $R->scrib( 1, "Object edit datetime: ($object_type) ($field) ($value)" );
+        $object->{ $field } = $value;
+    }
+
     return ( OK, undef );
 }
 
@@ -578,7 +646,21 @@ sub _read_field_date {
                           $apr->param( $field . '_day' ) );
     return undef unless ( $y and $m and $d );
     return join( '-', $y, $m, $d );
- }
+}
+
+
+sub _read_field_datetime {
+    my ( $class, $apr, $field ) = @_;
+    my $date = $class->_read_field_date( $apr, $field );
+    return undef unless ( $date );
+    my ( $h, $m, $am_pm ) = ( $apr->param( $field . '_hour' ),
+                              $apr->param( $field . '_minute' ),
+                              $apr->param( $field . '_am_pm' ) );
+    unless ( $h and $m and $am_pm ) {
+        $h = '12'; $m = '00'; $am_pm = 'AM';
+    }
+    return join( ' ', $date, "$h:$m $am_pm" );
+}
 
 
 sub _read_field_date_object {
@@ -603,16 +685,19 @@ sub remove {
 
     my $apr = $R->apache;
 
+    my $fail_method  = $class->MY_REMOVE_FAIL_TASK;
     my $object_type  = $class->MY_OBJECT_TYPE;
     my $object_class = $class->MY_OBJECT_CLASS;
     my $id_field     = $object_class->id_field;
     my $object       = eval { $class->fetch_object( $p->{ $id_field },
                                                     $id_field ) };
 
-    return $class->search_form({ error_msg => $@ }) if ( $@ );
+    if ( $@ ) {
+        return $class->$fail_method({ error_msg => $@ });
+    }
     unless ( $object->is_saved ) {
         my $error_msg = 'Cannot fetch object for removal. No modifications made.';
-        return $class->search_form({ error_msg => $error_msg });
+        return $class->$fail_method({ error_msg => $error_msg });
     }
 
 
@@ -621,7 +706,7 @@ sub remove {
     if ( $object->{tmp_security_level} < SEC_LEVEL_WRITE ) {
         my $error_msg = 'Sorry, you do not have access to remove this ' .
                         'object. No modifications made.';
-        return $class->search_form({ error_msg => $error_msg });
+        return $class->$fail_method({ error_msg => $error_msg });
     }
 
     my %show_params = ();
@@ -633,11 +718,12 @@ sub remove {
         $R->scrib( 0, "Cannot remove object ($object_type) ($@) ($ei->{system_msg})" );
         $R->throw({ code => 405 });
         $show_params{error_msg} = "Cannot remove object! See error log.";
+        return $class->$fail_method( \%show_params );
     }
-    else {
-        $show_params{status_msg} = 'Object successfully removed.';
-    }
-    return $class->search_form( \%show_params );
+
+    $show_params{status_msg} = 'Object successfully removed.';
+    my $method = $class->MY_REMOVE_DISPLAY_TASK;
+    return $class->$method( \%show_params );
 }
 
 
@@ -882,6 +968,9 @@ sub MY_SEARCH_FIELDS_EXACT       { return () }
 sub MY_SEARCH_FIELDS_LEFT_EXACT  { return () }
 sub MY_SEARCH_FIELDS_RIGHT_EXACT { return () }
 sub MY_SEARCH_TABLE_LINKS        { return () }
+sub MY_SEARCH_FAIL_TASK          { return 'search_form' }
+sub MY_SEARCH_RESULTS_CAP        { return 0 }
+sub MY_SEARCH_RESULTS_CAP_FAIL_TASK { return 'search_form' }
 sub MY_SEARCH_RESULTS_ORDER      { return undef }
 sub MY_SEARCH_RESULTS_PAGED      { return undef }
 sub MY_SEARCH_RESULTS_KEY        { return $_[0]->MY_OBJECT_TYPE . '_search_id' }
@@ -891,6 +980,8 @@ sub MY_SEARCH_RESULTS_TITLE      { return 'Search Results' }
 sub MY_SEARCH_RESULTS_TEMPLATE   { return 'search_results' }
 
 sub MY_ALLOW_SHOW                { return 1 }
+sub MY_SHOW_FAIL_TASK            { return 'search_form' }
+sub MY_ACTIVE_CHECK              { return undef }
 sub MY_OBJECT_FORM_TITLE         { return 'Object Detail' }
 sub MY_OBJECT_FORM_TEMPLATE      { return 'object_form' }
 
@@ -902,9 +993,13 @@ sub MY_EDIT_RETURN_URL           { return $_[0]->MY_HANDLER_PATH . '/' }
 sub MY_EDIT_FIELDS               { return () }
 sub MY_EDIT_FIELDS_TOGGLED       { return () }
 sub MY_EDIT_FIELDS_DATE          { return () }
+sub MY_EDIT_FIELDS_DATETIME      { return () }
+sub MY_EDIT_FAIL_TASK            { return 'search_form' }
 sub MY_EDIT_DISPLAY_TASK         { return 'show' }
 
 sub MY_ALLOW_REMOVE              { return undef }
+sub MY_REMOVE_FAIL_TASK          { return 'search_form' }
+sub MY_REMOVE_DISPLAY_TASK       { return 'search_form' }
 
 sub MY_ALLOW_NOTIFY              { return undef }
 sub MY_NOTIFY_FROM               { return undef }
@@ -1188,6 +1283,38 @@ B<MY_ALLOW_SEARCH()> (bool) (optional)
 Should searches be allowed?
 
 Default: true
+
+B<MY_SEARCH_FAIL_TASK()> ($) (optional)
+
+Task to run if your search fails. The parameter 'error_msg' will be
+set to an appropriate message which you can display.
+
+Default: search_form
+
+B<MY_SEARCH_RESULTS_CAP()> ($) (optional)
+
+Constrains the max number of records returned. If this is set we run a
+'count(*)' query using the search criteria before running the
+search. If the result is greater than the number set here, we call
+B<MY_SEARCH_RESULTS_CAP_FAIL_TASK> with an error message set in the
+'error_msg' parameter about the number of records that would have been
+returned.
+
+Note that this is a somewhat crude measure of the records returned
+because it does not take into account security checks. That is, a
+search that returns 500 records from the database could conceivably
+return only 100 records after security checks. Keep this in mind when
+setting the value.
+
+Default: 0 (no cap)
+
+B<MY_SEARCH_RESULTS_CAP_FAIL_TASK()> ($) (optional)
+
+Task to run in this class when a search exceeds the figure set in
+B<MY_SEARCH_RESULTS_CAP>. The task is run with a relevant message in
+the 'error_msg' parameter.
+
+Default: search_form
 
 B<MY_SEARCH_RESULTS_PAGED()> (bool) (optional)
 
@@ -1477,8 +1604,9 @@ that date:
 
 =head1 TASK: CREATE
 
-This task is just an alias for C<show()>, passing along the 'edit'
-parameter.
+This task is just an alias for C<show()>, passing along a true value
+for both the 'edit' and 'is_new_object' parameters, which C<show()>
+can inspect to do the right thing.
 
 =head2 Configuration
 
@@ -1508,6 +1636,26 @@ B<MY_ALLOW_SHOW()> (bool) (optional)
 Should object display be allowed?
 
 Default: true
+
+B<MY_SHOW_FAIL_TASK()> ($) (optional)
+
+If the display of the object fails -- cannot fetch it, object is not
+active, etc. -- then what method should we run? Whatever method is run
+should be able to display the error message (in 'error_msg') so the
+user knows what happened.
+
+Default: 'search_form'
+
+B<MY_ACTIVE_CHECK()> ($) (optional)
+
+Should we check to see if the object is active before displaying it?
+If true, the return value from this method should be the field to
+check for a value of 'yes' or '1'.
+
+If you do not want to check the 'active' status of an object, leave
+this blank (the default).
+
+Default: undef
 
 B<MY_OBJECT_FORM_TITLE()> ($) (optional)
 
@@ -1588,6 +1736,14 @@ from three separate fields, but you can override C<_read_field_date()>
 for your own needs.
 
 No default
+
+B<MY_EDIT_FAIL_TASK()> ($) (optional)
+
+Specify the task to run when the edit fails for any reason -- except
+if you specify a different task to run when returning from
+C<_edit_customize()> with an error.
+
+Default: 'search_form'
 
 B<MY_EDIT_DISPLAY_TASK()> ($) (optional)
 
@@ -1671,6 +1827,18 @@ B<MY_ALLOW_REMOVE()> (bool) (optional)
 Should removals be allowed?
 
 Default: false
+
+B<MY_REMOVE_FAIL_TASK()> ($) (optional)
+
+Task to run if the remove fails for any reason.
+
+Default: 'search_form'
+
+B<MY_REMOVE_DISPLAY_TASK()> ($) (optional)
+
+Task to run after the remove completes
+
+Default: 'search_form'
 
 =head2 Customization
 
@@ -1913,7 +2081,7 @@ L<OpenInteract::Handler::GenericDispatcher|OpenInteract::Handler::GenericDispatc
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

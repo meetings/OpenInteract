@@ -1,11 +1,11 @@
 package OpenInteract::SampleStash;
 
-# $Id: sample-Stash.pm,v 1.2 2001/11/02 17:58:30 lachoy Exp $
+# $Id: sample-Stash.pm,v 1.3 2002/01/02 02:43:54 lachoy Exp $
 
 use strict;
 
 @OpenInteract::SampleStash::ISA     = ();
-$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 # This is where we do the stashing
 
@@ -97,7 +97,7 @@ the key into the lexical %KEEP hash with a true value.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

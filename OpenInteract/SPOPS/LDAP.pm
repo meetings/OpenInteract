@@ -1,12 +1,12 @@
 package OpenInteract::SPOPS::LDAP;
 
-# $Id: LDAP.pm,v 1.10 2001/10/17 04:47:07 lachoy Exp $
+# $Id: LDAP.pm,v 1.11 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use OpenInteract::SPOPS;
 
 @OpenInteract::SPOPS::LDAP::ISA     = qw( OpenInteract::SPOPS );
-$OpenInteract::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 
 # TODO: Ensure stub is in SPOPS::LDAP for this
@@ -126,7 +126,7 @@ L<SPOPS::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 MSN Marketing Service Nordwest, GmbH. All rights
+Copyright (c) 2001-2002 MSN Marketing Service Nordwest, GmbH. All rights
 reserved.
 
 This library is free software; you can redistribute it and/or modify

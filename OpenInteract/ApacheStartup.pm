@@ -1,6 +1,6 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.21 2001/11/28 05:51:32 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.23 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Apache;
@@ -10,7 +10,7 @@ use OpenInteract::Startup;
 
 use constant DEBUG => 0;
 
-$OpenInteract::ApacheStartup::VERSION   = substr(q$Revision: 1.21 $, 10);
+$OpenInteract::ApacheStartup::VERSION   = substr(q$Revision: 1.23 $, 10);
 
 # Create a handler to put the X-Forwarded-For header into the IP
 # address -- thanks Stas! (perl.apache.org/guide/)
@@ -95,6 +95,9 @@ sub initialize {
         $OS = $Config::Config{ 'osname' };
     }
 
+    push @OpenInteract::to_initialize, [ $BASE_CONFIG->{website_dir},
+                                         $BASE_CONFIG->{stash_class} ];
+
     if ( $OS =~ /Win32/i ) {
         DEBUG && _w( 1, "SERVER INIT: Running initialization for Windows." );
         child_init();
@@ -103,13 +106,9 @@ sub initialize {
         unless ( $OpenInteract::is_initialized ) {
             DEBUG && _w( 1, "SERVER INIT: Adding ChildInitHandler for initialization" );
             Apache->push_handlers( PerlChildInitHandler => \&child_init );
+            $OpenInteract::is_initialized++;
         }
     }
-
-    $OpenInteract::is_initialized++;
-    push @OpenInteract::to_initialize, [ $BASE_CONFIG->{website_dir},
-                                         $BASE_CONFIG->{stash_class} ];
-
 }
 
 
@@ -267,7 +266,7 @@ I<Configuration Guide to OpenInteract>, L<mod_perl>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

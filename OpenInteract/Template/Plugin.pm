@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.17 2001/11/19 04:14:32 lachoy Exp $
+# $Id: Plugin.pm,v 1.20 2002/01/17 00:03:31 lachoy Exp $
 
 use strict;
 use Class::Date     qw( -DateParse );
@@ -13,7 +13,7 @@ use Text::Sentence;
 
 @OpenInteract::Template::Plugin::ISA     = qw( Template::Plugin );
 $OpenInteract::Template::Plugin::VERSION  = '1.2';
-$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 
 my %SECURITY_CONSTANTS  = (
@@ -241,6 +241,21 @@ sub money_format {
 }
 
 
+sub byte_format {
+    my ( $self, $num ) = @_;
+    my @formats = ( '%s bytes', '%5.1f KB', '%5.1f MB', '%5.1f GB' );
+    my $idx = 0;
+    my $max = scalar @formats - 1;
+    while ( $num > 1024 and $idx < $max ) {
+        $num /= 1024;
+        $idx++;
+    }
+    my $fmt = sprintf( $formats[ $idx ], $num );
+    $fmt =~ s/^\s+//;
+    return $fmt;
+}
+
+
 # Return the arg sent to ucfirst
 
 sub uc_first { return ucfirst $_[1] }
@@ -316,6 +331,16 @@ sub use_main_template {
     return undef;
 }
 
+
+# This should return the main content template used. This isn't
+# documented yet because while it probably works 90% of the time, I'm
+# not sure about the other 10%.
+
+sub content_template {
+    my ( $self ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return $R->{templates_used}->[0];
+}
 
 
 ########################################
@@ -768,6 +793,32 @@ displays:
 
   Your yearly salary: $36000
 
+B<byte_format( $number )>
+
+Displays C<$number> as a number of bytes. If the number is less than
+1024 it displays directly, between 1024 and 1024**2 as KB, between
+1024**2 and 1024**3 as MB and greater than that as GB.
+
+Example:
+
+ The file sizes are:
+   [% OI.byte_format( 989 ) %]
+   [% OI.byte_format( 2589 ) %]
+   [% OI.byte_format( 9019 ) %]
+   [% OI.byte_format( 2920451 ) %]
+   [% OI.byte_format( 920294857 ) %]
+   [% OI.byte_format( 3211920294857 ) %]
+
+displays:
+
+ The file sizes are:
+   989 bytes
+   2.5 KB
+   8.8 KB
+   2.8 MB
+   877.7 MB
+   2991.3 GB
+
 B<uc_first( $text )>
 
 Simply upper-case the first letter of the text passed in. Note that we
@@ -1083,7 +1134,7 @@ Slashcode (http://www.slashcode.com) for inspiration
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

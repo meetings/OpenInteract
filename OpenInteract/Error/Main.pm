@@ -1,6 +1,6 @@
 package OpenInteract::Error::Main;
 
-# $Id: Main.pm,v 1.6 2001/10/17 04:47:07 lachoy Exp $
+# $Id: Main.pm,v 1.7 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 require Exporter;
@@ -11,7 +11,7 @@ use Data::Dumper qw( Dumper );
 $ERROR_HOLD = 'error_hold';
 
 @OpenInteract::Error::Main::ISA       = qw( Exporter );
-$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Error::Main::EXPORT_OK = qw( $ERROR_HOLD );
 
 
@@ -164,7 +164,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

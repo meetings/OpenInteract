@@ -1,6 +1,6 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.18 2001/10/18 12:02:30 lachoy Exp $
+# $Id: Provider.pm,v 1.19 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Data::Dumper       qw( Dumper );
@@ -10,7 +10,7 @@ use Template::Provider;
 
 @OpenInteract::Template::Provider::ISA      = qw( Template::Provider );
 $OpenInteract::Template::Provider::VERSION  = '1.2';
-$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
 
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
@@ -663,7 +663,7 @@ Slashcode (http://www.slashcode.com/)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -2,5 +2,6 @@
 ~$
 \.old$
 \.bak$
+\.backup$
 ^tmp
 ^_

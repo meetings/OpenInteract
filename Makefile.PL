@@ -27,6 +27,9 @@ my %opts = (
       'Pod::POM'         => undef,
       'MIME::Lite'       => 2.00,
       'File::MMagic'     => undef,
+      'Carp::Assert'      => undef,
+      'Class::Fields'     => undef,
+      'Class::Accessor'   => undef,
     },
 );
 

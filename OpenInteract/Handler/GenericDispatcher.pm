@@ -1,13 +1,13 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.3 2001/09/21 02:59:43 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.4 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use SPOPS::Secure qw( SEC_LEVEL_WRITE );
 require Exporter;
 
 @OpenInteract::Handler::GenericDispatcher::ISA     = qw( Exporter );
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
@@ -440,7 +440,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

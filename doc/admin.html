@@ -721,7 +721,7 @@ stash_class      MySite::Stash
  3.  &gt;&gt; cd apache-1.3.12
 
  4.  &gt;&gt; ./configure --prefix=/usr/local/apache \ 
-                --enable-module=rewrite --enable_module=proxy \
+                --enable-module=rewrite --enable-module=proxy \
                 --activate-module=src/modules/extra/mod_proxy_add_forward.c \
                 --enable-module=proxy_add_forward
 
@@ -742,10 +742,18 @@ stash_class      MySite::Stash
 
  11. &gt;&gt; make
 
- 12. &gt;&gt; make install
+ 12. &gt;&gt; make test
+
+ (note: if this fails due to an error with URI::URL, set the
+ environment variable 'PERL_HTTP_URI_CLASS' to 'URI::URL', with
+ something like:
+
+    # export PERL_HTTP_URI_CLASS=URI::URL
+
+ 13. &gt;&gt; make install
  (mod_perl Perl modules are now installed)
 
- 13. &gt;&gt; cp ../apache-1.3.12/src/httpd /usr/local/apache/bin/httpd_mp
+ 14. &gt;&gt; cp ../apache-1.3.12/src/httpd /usr/local/apache/bin/httpd_modperl
  (mod_perl-enabled Apache is now installed)
 </font></pre>
 

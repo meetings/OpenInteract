@@ -1,13 +1,13 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.13 2001/11/06 04:25:44 lachoy Exp $
+# $Id: Request.pm,v 1.14 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Class::Singleton  ();
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -543,7 +543,7 @@ none known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

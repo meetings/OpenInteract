@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.55 2001/11/28 15:21:28 lachoy Exp $
+# $Id: oi_manage,v 1.57 2002/01/11 14:35:22 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.55 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.57 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -1193,31 +1193,23 @@ sub refresh_widget {
 
 sub list_actions {
     my ( $p ) = @_;
-    my $bc = eval { OpenInteract::Startup->read_base_config({
-                                             dir => $p->{website_dir} }) };
-    if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
-                                         error       => $@,
-                                         sub         => 'list_actions' }) }
-
-    push @INC, $bc->{website_dir};
-    my ( $init, $C ) = OpenInteract::Startup->main_initialize({
-                                                base_config => $bc,
-                                                alias_init => 1,
-                                                spops_init => 1 });
+    my $R = OpenInteract::Startup->setup_static_environment( $p->{website_dir}, '',
+                                                             { temp_lib => 'lazy' } );
+    my $CONFIG = $R->CONFIG;
     my @actions = ();
 ACTION:
-    foreach my $action ( sort keys %{ $C->{action} } ) {
+    foreach my $action ( sort keys %{ $CONFIG->{action} } ) {
         if ( ! $action or $action =~ /^_/ ) {
-            my $redir_action = $C->{action}{ $action }{redir};
+            my $redir_action = $CONFIG->{action}{ $action }{redir};
             push @actions, { action => "SYSTEM ($action) redirected to ($redir_action)" };
             next ACTION;
         }
         push @actions, { action          => $action,
-                         package_name    => $C->{action}{ $action }{package_name},
-                         package_version => $C->{action}{ $action }{package_version},
-                         class           => $C->{action}{ $action }{class},
-                         method          => $C->{action}{ $action }{method},
-                         template        => $C->{action}{ $action }{tmpl_name} };
+                         package_name    => $CONFIG->{action}{ $action }{package_name},
+                         package_version => $CONFIG->{action}{ $action }{package_version},
+                         class           => $CONFIG->{action}{ $action }{class},
+                         method          => $CONFIG->{action}{ $action }{method},
+                         template        => $CONFIG->{action}{ $action }{tmpl_name} };
     }
     return \@actions;
 }
@@ -1229,27 +1221,19 @@ ACTION:
 
 sub list_objects {
     my ( $p ) = @_;
-    my $bc = eval { OpenInteract::Startup->read_base_config({
-                                             dir => $p->{website_dir} }) };
-    if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
-                                         error       => $@,
-                                         sub         => 'list_objects' }) }
-
-    push @INC, $bc->{website_dir};
-    my ( $init, $C ) = OpenInteract::Startup->main_initialize({
-                                                base_config => $bc,
-                                                alias_init => 1,
-                                                spops_init => 1 });
+    my $R = OpenInteract::Startup->setup_static_environment( $p->{website_dir}, '',
+                                                             { temp_lib => 'lazy' } );
+    my $CONFIG = $R->CONFIG;
     my @objects = ();
 OBJECT:
-    foreach my $alias ( sort keys %{ $C->{SPOPS} } ) {
+    foreach my $alias ( sort keys %{ $CONFIG->{SPOPS} } ) {
         next OBJECT if ( ! $alias or $alias =~ /^_/ );
         my @alias_list = ( $alias );
-        if ( ref $C->{SPOPS}{alias} eq 'ARRAY' ) {
-            push @alias_list, @{ $C->{SPOPS}{alias} };
+        if ( ref $CONFIG->{SPOPS}{alias} eq 'ARRAY' ) {
+            push @alias_list, @{ $CONFIG->{SPOPS}{alias} };
         }
         push @objects, { alias  => join ( ', ', @alias_list ),
-                         class  => $C->{SPOPS}{ $alias }{class} };
+                         class  => $CONFIG->{SPOPS}{ $alias }{class} };
     }
     return \@objects;
 }
@@ -1635,12 +1619,6 @@ sub create_website {
                        "creating subdir ($p->{website_dir}/$sub_dir): $!";
     }
 
-    # Do the conf and other files
-
-    cp( "$p->{base_dir}/conf/sample-apache.dat",
-        "$p->{website_dir}/conf/apache.dat" )
-        || die "[oi_manage]: Failure! Cannot copy apache module listing: $!";
-
     # Copy over all OI system documentation. (This can be refreshed to
     # the latest version from the base installation with the
     # 'refresh_doc' oi_manage command.)
@@ -1708,6 +1686,7 @@ TMPLMSG
     # use the template toolkit for this, eh?)
 
     my %file_match = (
+      "conf/sample-apache.dat"              => "conf/apache.dat",
       "conf/sample-Stash.pm"                => "$p->{website_name}/Stash.pm",
       "conf/sample-httpd_modperl.conf"      => "conf/httpd_modperl.conf",
       "conf/sample-httpd_modperl_solo.conf" => "conf/httpd_modperl_solo.conf",
@@ -2575,6 +2554,14 @@ DBKEY:
             next DBKEY;
         }
         my $db = eval { OpenInteract::DBI->connect( $C->{db_info}{ $db_key } ) };
+        unless ( $db ) {
+            push @msg, "-- Basic connect: failed (no error, but no database handle returned)",
+                       "-- Use database: not attempted",
+                       "-- Create table: not attempted";
+            $status->{ok} = 0;
+            next DBKEY;
+        }
+
         if ( $@ ) {
             my ( $error ) = $@ =~ /failed:\s*(.*)$/;
             $error ||= $@;
@@ -2610,7 +2597,10 @@ DBKEY:
                            "please remove table ($test_table) manually.)";
             }
         }
-        $db->disconnect;
+        eval { $db->disconnect };
+        if ( $@ ) {
+            push @msg, "(NOTE: Error trying to disconnect: $@)";
+        }
     }
     $status->{msg} = join "\n", @msg;
     return $status;
@@ -2829,7 +2819,7 @@ Website creator commands:
 
 Other commands:
 
-   initial_packages, list_packages, list_actions
+   initial_packages, list_packages, list_actions, list_objects
 
 For more information, run 'oi_manage --man'
 
@@ -4067,6 +4057,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.55 $
+Revision: $Revision: 1.57 $
 
 =cut

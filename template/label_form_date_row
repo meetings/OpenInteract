@@ -6,7 +6,7 @@
 [%- DEFAULT colspan = 2; -%]  
 [%- INCLUDE label_row_begin( colspan = 1 ) -%]
 [%- INCLUDE data_cell_begin -%]
-[%- PROCESS date_select( object = OI.date_into_object( value ),
-                         field_prefix = name ) -%]
+[%- object = ( date_object ) ? date_object : OI.date_into_object( value ) -%]
+[%- PROCESS date_select( field_prefix = name ) -%]
 [% field_label -%]
 </td></tr>

@@ -228,7 +228,25 @@ database. Note that you can make changes to the templates at any time
 and re-import them into the database using this same command.
 
 
-(7) Edit Apache virtual host configuration
+(7) Change Directory Permissions
+
+(NOTE: Win32 servers can skip this step, since the webserver usually
+has sufficient permission for OpenInteract.)
+
+To enable caching, browser editing/uploading of files you'll need to
+modify the permissions on a few directories. The user who owns the
+directories should be the same as the user your webserver runs as --
+most of the time this is 'nobody'.
+
+To do this, just run:
+
+ $ cd %%WEBSITE_DIR%%
+ $ chown -R nobody html/
+ $ chown -R nobody cache/
+ $ chown -R nobody uploads/
+
+
+(8) Edit Apache virtual host configuration
 
 Using the static/modperl configuration assumes that you have already
 setup a front-end proxy configuration as discussed at the following
@@ -268,7 +286,7 @@ the <VirtualHost></VirtualHost> tags into your main config file and
 skip the next step.
 
 
-(8) Edit Apache configuration
+(9) Edit Apache configuration
 
 If you're using the proxy server setup:
 
@@ -284,13 +302,13 @@ If you're using the solo mod_perl setup:
 
     Include %%WEBSITE_DIR%%/conf/httpd_modperl_solo.conf
 
-(9) Run Apache!
+(10) Run Apache!
 
 Startup Apache as you normally would, and hopefully everything will
 be up and running!
 
 
-(10) Connect to your website
+(11) Connect to your website
 
 Open up a web browser to your hostname or IP address. You should see a
 welcome page. Login with the username 'superuser' and the password you
@@ -304,4 +322,4 @@ the 'site admin' group to pull up a form).
 Now: have some fun!
 
 ========================================
-$Id: INSTALL.website,v 1.9 2001/11/29 05:16:44 lachoy Exp $
+$Id: INSTALL.website,v 1.10 2002/01/18 22:48:35 lachoy Exp $

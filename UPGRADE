@@ -59,11 +59,36 @@ check here to see what updates there have been between the versions.
 
 
 ==============================
+UPGRADING TO 1.37
+==============================
+
+Configuration changes:
+--------------------
+
+Added the configuration key:
+
+   - 'session_info'->'expires_in'
+     optional: leaving it out won't affect operation
+
+Structure changes:
+--------------------
+
+ - You'll need to drop the table 'content_type' and add it again if
+ you upgrade a website to the newest 'base_page' package. You can add
+ the table again using:
+
+  $ oi_manage install_sql --package=base_page
+
+ will do it (along with issuing a number of errors, but that's ok).
+
+
+==============================
 UPGRADING TO 1.35
 ==============================
 
-THIS IS A SUBSTANTIAL UPGRADE. PLEASE READ THIS AND MAKE APPROPROATE
+THIS IS A SUBSTANTIAL UPGRADE. PLEASE READ THIS AND MAKE APPROPRIATE
 CHANGES TO YOUR CONFIGURATION FILE.
+
 
 OpenInteract configuration changes
 --------------------
@@ -408,4 +433,4 @@ process to have the changes take effect.
 
 
 ========================================
-$Id: UPGRADE,v 1.8 2001/12/01 17:37:25 lachoy Exp $
+$Id: UPGRADE,v 1.11 2002/01/18 22:48:17 lachoy Exp $

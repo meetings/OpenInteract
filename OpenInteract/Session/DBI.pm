@@ -1,12 +1,12 @@
 package OpenInteract::Session::DBI;
 
-# $Id: DBI.pm,v 1.6 2001/11/06 04:26:07 lachoy Exp $
+# $Id: DBI.pm,v 1.7 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use OpenInteract::Session;
 
 @OpenInteract::Session::DBI::ISA     = qw( OpenInteract::Session );
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session {
     my ( $class, $session_id ) = @_;
@@ -105,7 +105,7 @@ L<Apache::Session>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

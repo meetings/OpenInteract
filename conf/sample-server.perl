@@ -46,11 +46,15 @@ $data = {
      # down the browser. Otherwise, pass something like the
      # following: '+3d' (3 days); '+3M' (3 months); '+480s' (480
      # seconds); '+15h' (15 hours); '+1y' (1 year)
+     #
+     # The setting for 'expires_in' is in minutes. If set to 0 or
+     # undef the sessions will never be time-expired.
 
      'session_info' => {
        'class'      => 'Apache::Session::MySQL',
        'expiration' => '+3M',
        'params'     => {},
+       'expires_in' => 0,
      },
 
 
@@ -273,6 +277,11 @@ $data = {
 
      'template_info' => {
 
+       # Extension for template files -- used to lookup files by
+       # the TT provider module (shouldn't need to change).
+
+       'template_ext' => 'tmpl',
+
        # Whether to look into the database or the filesystem first
        # when checking templates. The default is filesystem, but if
        # you make changes to templates via the browser you'll want to
@@ -280,6 +289,22 @@ $data = {
        # be seen. Options are: 'database', 'filesystem'
 
        'source' => 'filesystem',
+
+       # cache_size: How many templates the Template Toolkit should
+       # cache in memory
+
+       'cache_size => 75,
+
+       # If true, will remove all compiled files on server restart
+       # (production boxes can set this to false so that startup costs
+       # aren't so heavy)
+
+       'compile_cleanup' => 1,
+
+       # Extension for compiled TT files. Most people won't (or
+       # shouldn't) care about this.
+
+       'compile_ext' => '.ttc',
 
        # Custom handler that's called before the template object is
        # initialized. Here you can define a PRE_PROCESS template (for
@@ -302,22 +327,6 @@ $data = {
 
        'custom_variable_class'  => '',
        'custom_variable_method' => '',
-
-       # If true, will remove all compiled files on server restart
-       # (production boxes can set this to false so that startup costs
-       # aren't so heavy)
-
-       'compile_cleanup' => 1,
-
-       # Extension for compiled TT files. Most people won't (or
-       # shouldn't) care about this.
-
-       'compile_ext' => '.ttc',
-
-       # Extension for template files -- used to lookup files by
-       # the TT provider module (shouldn't need to change).
-
-       'template_ext' => 'tmpl',
 
      },
 
@@ -472,10 +481,10 @@ $data = {
            'method'    => 'handler',           
        },
        'none' => {
-           'redir'     => 'basicpage',
+           'redir'     => 'page',
        },
        'not_found' => {
-           'redir'     => 'basicpage',
+           'redir'     => 'page',
        },
      },
 
@@ -489,5 +498,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.28 $',
+     'ConfigurationRevision' => '$Revision: 1.31 $',
 };

@@ -1,12 +1,12 @@
 package OpenInteract::Cookies::CGI;
 
-# $Id: CGI.pm,v 1.3 2001/10/17 04:47:07 lachoy Exp $
+# $Id: CGI.pm,v 1.4 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use CGI::Cookie  qw();
 
 @OpenInteract::Cookies::CGI::ISA     = ();
-$OpenInteract::Cookies::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cookies::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 
 # Parse the cookies using CGI::Cookie
@@ -184,7 +184,7 @@ L<CGI|CGI>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

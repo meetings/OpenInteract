@@ -1,6 +1,6 @@
 package OpenInteract::Template::Process;
 
-# $Id: Process.pm,v 1.18 2001/10/30 02:24:39 lachoy Exp $
+# $Id: Process.pm,v 1.21 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
@@ -10,9 +10,10 @@ use OpenInteract::Template::Provider;
 use Template;
 
 $OpenInteract::Template::Process::VERSION  = '1.2';
-$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
+use constant DEFAULT_CACHE_SIZE  => 75;
 
 # Since each website gets its own template object, when we call
 # initialize() all the website's information has been read in and
@@ -24,14 +25,16 @@ sub initialize {
     my $R = OpenInteract::Request->instance;
     $R->DEBUG && $R->scrib( 1, "Starting template initialization process" );
     my $CONFIG = $R->CONFIG;
+    my $oi_tt_config = $CONFIG->{template_info};
 
     $Template::Config::CONTEXT = 'OpenInteract::Template::Context';
 
     # Default configuration -- this can be modified by each site
 
-    my $compile_ext = $CONFIG->{template_info}{compile_ext} || DEFAULT_COMPILE_EXT;
+    my $compile_ext = $oi_tt_config->{compile_ext} || DEFAULT_COMPILE_EXT;
+    my $cache_size  = $oi_tt_config->{cache_size}  || DEFAULT_CACHE_SIZE;
     my %tt_config = ( PLUGINS     => { OI => 'OpenInteract::Template::Plugin' },
-                      CACHE_SIZE  => 75,
+                      CACHE_SIZE  => $cache_size,
                       COMPILE_DIR => $CONFIG->get_dir( 'cache_tt' ),
                       COMPILE_EXT => $compile_ext );
 
@@ -303,8 +306,8 @@ L<Template::Manual::Config|Template::Manual::Config>.
 For instance, say you have a template of all the BLOCKs you use to
 define common graphical elements. (You can more easily do this with
 template widgets, but this is just an example.) You can save this
-template as C<$WEBSITE_DIR/template/myblocks.tmpl> directory. Then to
-make it available to all templates processed by your site, you can do:
+template as C<$WEBSITE_DIR/template/myblocks.tmpl>. Then to make it
+available to all templates processed by your site, you can do:
 
  # In conf/server.perl
 
@@ -326,7 +329,7 @@ make it available to all templates processed by your site, you can do:
 
 Easy! Since 'myblocks.tmpl' is a global template, it will get picked
 up by
-C<OpenInteract::Template::Provider|OpenInteract::Template::Provider>
+L<OpenInteract::Template::Provider|OpenInteract::Template::Provider>
 when TT tries to process it before every request. And since TT does
 template caching, you should not get the performance hit associated
 with parsing/compiling the global BLOCKs template with every template
@@ -395,7 +398,8 @@ Method 3: Specify the text yourself
  or
  text    => \$scalar_ref_with_text
 
-Method 4: Specify an object of type C<OpenInteract::SiteTemplate>
+Method 4: Specify an object of type
+L<OpenInteract::SiteTemplate|OpenInteract::SiteTemplate>
 
  object => $site_template_obj
 
@@ -403,7 +407,7 @@ Method 4: Specify an object of type C<OpenInteract::SiteTemplate>
 
 =head2 Custom Processing
 
-You have the opportunity to step in during the executing of C<handler>
+You have the opportunity to step in during the executing of C<handler()>
 with every request and set template variables. To do so, you need to
 define a handler and tell OI where it is.
 
@@ -483,7 +487,7 @@ L<OpenInteract::Template::Provider|OpenInteract::Template::Provider>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

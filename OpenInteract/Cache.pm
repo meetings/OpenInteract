@@ -1,6 +1,6 @@
 package OpenInteract::Cache;
 
-# $Id: Cache.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Cache.pm,v 1.2 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Digest::MD5 qw( md5 );
@@ -284,7 +284,7 @@ versions of objects will inevitably get cached and mess you up.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,13 +1,13 @@
 package OpenInteract::SPOPS::DBI;
 
-# $Id: DBI.pm,v 1.11 2001/11/01 05:37:22 lachoy Exp $
+# $Id: DBI.pm,v 1.12 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use OpenInteract::SPOPS;
 use SPOPS::ClassFactory qw( OK NOTIFY );
 
 @OpenInteract::SPOPS::DBI::ISA     = qw( OpenInteract::SPOPS );
-$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 sub global_datasource_handle {
     my ( $self, $connect_key ) = @_;
@@ -147,7 +147,7 @@ L<SPOPS::Manual::CodeGeneration|SPOPS::Manual::CodeGeneration>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

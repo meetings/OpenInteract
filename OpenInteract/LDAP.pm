@@ -1,13 +1,13 @@
 package OpenInteract::LDAP;
 
-# $Id: LDAP.pm,v 1.5 2001/08/28 21:27:42 lachoy Exp $
+# $Id: LDAP.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 use Net::LDAP    qw();
 
 @OpenInteract::LDAP::ISA      = ();
-$OpenInteract::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG        => 0;
 use constant LDAP_PORT    => 389;
@@ -220,7 +220,7 @@ L<Net::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 MSN Marketing Service Nordwest, GmbH. All rights
+Copyright (c) 2001-2002 MSN Marketing Service Nordwest, GmbH. All rights
 reserved.
 
 This library is free software; you can redistribute it and/or modify

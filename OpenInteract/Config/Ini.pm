@@ -1,12 +1,12 @@
 package OpenInteract::Config::Ini;
 
-# $Id: Ini.pm,v 1.5 2001/11/29 05:34:38 lachoy Exp $
+# $Id: Ini.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use OpenInteract::Config qw( _w DEBUG );
 
 @OpenInteract::Config::Ini::ISA     = ();
-$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 # Stuff in metadata (_m):
 #   sections (\@): all full sections, in the order they were read
@@ -335,7 +335,7 @@ L<Config::IniFiles|Config::IniFiles>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

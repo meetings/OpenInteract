@@ -1,6 +1,18 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.37  Fri Jan 18 17:34:59 EST 2002
+
+  - The 'base_page' package now supports directory handlers, which let
+  you create custom actions for directory index requests.
+
+  - You can now expire inactive sessions. An additional key in the
+  server configuration controls the number of minutes you allow a
+  session to have no activity.
+
+  - General bugfixes and updates.
+
+
 1.36  Sat Dec  1 12:55:16 EST 2001
 
   - Minor bugfixes, both in core OI modules. Easy upgrade.
@@ -153,4 +165,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.15 2001/12/01 17:37:59 lachoy Exp $
+$Id: RELEASE,v 1.16 2002/01/18 22:48:06 lachoy Exp $

@@ -1,13 +1,13 @@
 package OpenInteract::Config::PerlFile;
 
-# $Id: PerlFile.pm,v 1.4 2001/07/11 12:26:28 lachoy Exp $
+# $Id: PerlFile.pm,v 1.5 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Data::Dumper         qw( Dumper );
 use OpenInteract::Config qw( _w DEBUG );
 
 @OpenInteract::Config::PerlFile::ISA     = qw( OpenInteract::Config );
-$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub read_config {
     my ( $class, $filename ) = @_;
@@ -125,7 +125,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

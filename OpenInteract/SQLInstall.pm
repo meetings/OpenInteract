@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.17 2001/10/17 04:47:07 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.18 2002/01/02 02:43:53 lachoy Exp $
 
 use strict;
 use Class::Date;
@@ -9,7 +9,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -1165,7 +1165,7 @@ L<DBI|DBI>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

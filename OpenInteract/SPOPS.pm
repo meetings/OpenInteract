@@ -1,14 +1,15 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.19 2001/11/26 13:18:32 lachoy Exp $
+# $Id: SPOPS.pm,v 1.22 2002/01/10 13:34:18 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
 use Digest::MD5     qw( md5_hex );
 use HTML::Entities  ();
+use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
@@ -38,9 +39,9 @@ sub save_object_key {
         $obj_key = $self->generate_object_key;
         eval { $self->db_insert({ %{ $p }, table => OBJECT_KEY_TABLE,
                                   field => [ qw/ object_key class object_id / ],
-                                  value => [ $obj_key, ref $self, $self->id ] }) };
+                                  value => [ $obj_key, ref( $self ), $self->id ] }) };
         if ( $@ ) {
-            warn "Cannot save object key: $@", Dumper( SPOPS::Error->get ), "\n";
+            warn "Cannot save object key: $@\n";
             return undef;
         }
     }
@@ -139,7 +140,7 @@ sub log_action_enter {
                               field => [ qw/ class object_id action action_by action_on notes / ],
                               value => [ $class, $id, $action, $uid, $now, $log_msg ] } ); };
     if ( $@ ) {
-        $R->scrib( 0, "Log entry failed: $SPOPS::Error::system_msg" );
+        $R->scrib( 0, "Log entry failed: $@" );
         OpenInteract::Error->set( SPOPS::Error->get );
         $OpenInteract::Error::user_msg = "Cannot log object action: $action";
         $OpenInteract::Error::notes    = "Object: $class ($id) by $uid on $now";
@@ -538,7 +539,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

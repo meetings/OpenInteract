@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.28 2001/11/30 13:30:35 lachoy Exp $
+# $Id: Package.pm,v 1.35 2002/01/16 17:36:41 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.35 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -76,14 +76,14 @@ my $ARCHIVE_ERROR     = undef;
 
 my %SPOPS_CONF_KEEP   = map { $_ => 1 } qw( class has_a links_to );
 
-use constant DEBUG               => 0;
-
 # These are the default public and site admin group IDs; we use them
 # when copying over the SPOPS configuration files (see
 # _copy_spops_config_file())
 
 use constant PUBLIC_GROUP_ID     => 2;
 use constant SITE_ADMIN_GROUP_ID => 3;
+
+use constant DEBUG => 0;
 
 
 # Create subdirectories for a package.
@@ -456,6 +456,44 @@ sub install_to_website {
                                      $pkg_file_list );
     }
 
+    ########################################
+    # TODO: For each file copied over to the /html directory, create a
+    # 'page' object in the system for it. Note that we might have to
+    # hook this up with the system that ensures we don't overwrite
+    # certain files. So we might need to either remove it from the
+    # _copy_package_files() routine, or add an argument to that
+    # routine that lets us pass in a coderef to execute with every
+    # item copied over.
+
+    # ACK -- here's a problem. We don't know if we can even create an
+    # $R yet, because (1) the base_page package might not have even
+    # been installed yet (when creating a website) and (2) the user
+    # hasn't yet configured the database (etc.)
+
+    # We can get around this whenever we rewrite
+    # Package/PackageRepository/oi_manage, but until then we will tell
+    # people to include the relevant data inserts with packages that
+    # include HTML documents.
+
+    # Until then, here's what this might look like :-)
+
+#    # Now do the HTML files, but also create records for each of the
+#    # HTML files in the 'page' table
+
+#    my $copied = $class->_copy_package_files( "$info->{website_dir}/html",
+#                                              'html',
+#                                              $pkg_file_list );
+#    my @html_locations = map { s/^html//; $_ } @{ $copied };
+#    foreach my $location ( @html_locations ) {
+#        my $page = $R->page->fetch( $location, { skip_security => 1 } );
+#        next if ( $page );
+#        eval {
+#            $R->page->new({ location => $location,
+#                                       ... })
+#                    ->save({ skip_security => 1 });
+#        };
+#    }
+
     # Now copy the MANIFEST.SKIP file and package.conf, so we can run
     # 'check_package' on the package directory (once complete) as well as
     # generate a MANIFEST once we're done copying files
@@ -494,7 +532,7 @@ sub export {
     chdir( $p->{directory} ) if ( -d $p->{directory} );
 
     my $cwd = cwd;
-    DEBUG && _w( 1, "Current directory exporting from: ($cwd)" );
+    DEBUG && _w( 1, "Current directory exporting from: [$cwd]" );
 
     # If necessary, Read in the config and ensure that it has all the
     # right information
@@ -505,7 +543,7 @@ sub export {
     if ( $@ ) {
         die "Package configuration file cannot be opened -- \n" ,
             "are you chdir'd to the package directory? (Reported reason \n",
-            "for failure: $@\n";
+            "for failure: $@)\n";
     }
     DEBUG && _w( 2, "Package config read in: ", Dumper( $config ) );
 
@@ -520,7 +558,7 @@ sub export {
         }
     }
     if ( scalar @missing_fields ) {
-        die "Configuration file exists ($cwd/$DEFAULT_CONF_FILE) ",
+        die "Configuration file exists [$cwd/$DEFAULT_CONF_FILE] ",
             "but is missing the following fields: (",
             join( ', ', @missing_fields ), "). Please add these fields and try again.\n";
     }
@@ -560,8 +598,13 @@ sub export {
     # Now, create a directory of this name-version and copy the files
 
     my $package_id = join( '-', $config->{name}, $config->{version} );
+    if ( -d $package_id ) {
+        die "Cannot create directory [$cwd/$package_id] to ",
+            "archive the package because it already exists.\n";
+    }
     mkdir( $package_id, 0777 )
-         || die "Cannot create directory used to archive the package! Error: $!";
+         || die "Cannot create directory [$cwd/$package_id] to ",
+                "archive the package! Error: $!";
     {
         local $ExtUtils::Manifest::Quiet = 1;
         ExtUtils::Manifest::manicopy( $package_files, "$cwd/$package_id" );
@@ -575,10 +618,12 @@ sub export {
     # Create the tardist
 
     my $filename = "$cwd/$package_id.tar.gz";
-    my $rv = eval { $class->_create_archive( $filename, @archive_files ) };
-    if ( $@ and $@ =~ /file exists/ ) {
-        die "Cannot create archive ($filename) - file already exists.\n";
+    if ( -f $filename ) {
+        $class->_remove_directory_tree( "$cwd/$package_id" );
+        die "Cannot create archive [$filename] - file already exists.\n";
     }
+    my $rv = eval { $class->_create_archive( $filename, @archive_files ) };
+    die "Error creating archive: $@\n" if ( $@ );
 
     # And remove the directory we just created
 
@@ -594,7 +639,7 @@ sub export {
                  version => $config->{version},
                  file    => "$filename" };
     }
-    die "Cannot create distribution ($filename). Error: ", Archive::Tar->error(), "\n";
+    die "Cannot create distribution [$filename]. Error: ", Archive::Tar->error(), "\n";
 }
 
 
@@ -638,6 +683,8 @@ sub check {
     }
     return $status if ( $status->{msg} );
 
+    DEBUG && _w( 1, " - package.conf and website_name directory (if app.) ok" );
+
     # Set this after we do the initial sanity checks
 
     $status->{ok}++;
@@ -651,19 +698,33 @@ sub check {
         $status->{msg} .= "\n-- File (Changes) to show package Changelog: DOES NOT EXIST\n" ;
     }
 
+    DEBUG && _w( 1, " - Changes file exists" );
+
     my $pkg_files = ExtUtils::Manifest::maniread();
 
     # Now, first go through the config perl files
 
     my @perl_files = grep /^conf.*\.perl$/, keys %{ $pkg_files };
     foreach my $perl_file ( sort @perl_files ) {
+        DEBUG && _w( 1, " checking perl file ($perl_file)" );
         my $filestatus = 'ok';
-        my $obj = eval { SPOPS::HashFile->new({ filename => $perl_file }) };
         my $sig = '++';
+        my $obj = eval { SPOPS::HashFile->new({ filename => $perl_file }) };
         if ( $@ ) {
             $status->{ok} = 0;
-            $filestatus = "cannot be read in. $@\n";
-            $sig = '--';
+            $filestatus   = "cannot be read in. $@\n";
+            $sig          = '--';
+        }
+        elsif ( $perl_file =~ /spops/ ) {
+            foreach my $spops_key ( keys %{ $obj } ) {
+                my $typeof = ref $obj->{ $spops_key } || 'not a reference';
+                unless ( $typeof eq 'HASH' ) {
+                    $status->{ok} = 0;
+                    $filestatus   = "invalid SPOPS configuration: value of each key must be " .
+                                    "a hashref and the value [$spops_key] is [$typeof]\n";
+                    $sig          = '--';
+                }
+            }
         }
         $status->{msg} .= "\n$sig File ($perl_file) $filestatus";
     }
@@ -675,6 +736,7 @@ sub check {
         local $SIG{__WARN__} = sub { return undef };
         my @pm_files = grep /\.pm$/, keys %{ $pkg_files };
         foreach my $pm_file ( sort @pm_files ) {
+            DEBUG && _w( 1, " checking module file ($pm_file)" );
             my $filestatus = 'ok';
             my $sig = '++';
             eval { require "$pm_file" };
@@ -691,6 +753,7 @@ sub check {
 
     my @data_files = grep /^data\/.*\.dat$/, keys %{ $pkg_files };
     foreach my $data_file ( sort @data_files ) {
+        DEBUG && _w( 1, " checking data file ($data_file)" );
         my $filestatus = 'ok';
         my $sig = '++';
         eval { $class->read_data_file( $data_file ) };
@@ -714,6 +777,7 @@ sub check {
     my @template_errors_ok = ( 'plugin not found', 'no providers for template prefix', 'file error' );
     my $template_errors_re = '(' . join( '|', @template_errors_ok ) . ')';
     foreach my $template_file ( sort @template_files ) {
+        DEBUG && _w( 1, " checking template ($template_file)" );
         my $filestatus = 'ok';
         my $sig = '++';
         eval { $template->process( $template_file, undef, \$out )
@@ -731,6 +795,7 @@ sub check {
     # Now open up the package.conf and check to see that name, version
     # and author exist
 
+    DEBUG && _w( 1, " checking package.conf validity" );
     my $config = $class->read_config({ directory => '.' });
     $status->{name} = $config->{name};
     my $conf_msg = '';
@@ -769,6 +834,7 @@ sub check {
     # -- just get feedback from the manifest module, don't let it
     # print out results of its findings (Quiet)
 
+    DEBUG && _w( " checking MANIFEST against files" );
     $ExtUtils::Manifest::Quiet = 1;
     my @missing = ExtUtils::Manifest::manicheck();
     if ( scalar @missing ) {
@@ -1674,7 +1740,7 @@ L<OpenInteract::PackageRepository>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

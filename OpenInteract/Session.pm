@@ -1,12 +1,12 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.5 2001/11/06 14:29:52 lachoy Exp $
+# $Id: Session.pm,v 1.9 2002/01/16 16:26:08 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
@@ -30,13 +30,44 @@ sub parse {
         return undef;
     }
     $R->DEBUG && $R->scrib( 2, "Retrieved session properly: ", Dumper( $R->{session} ) );
+
+    # Check to see if we should expire the session
+
+    unless ( $class->is_session_valid ) {
+        $R->DEBUG && $R->scrib( 1, "Session is expired; clearing out." );
+        eval { tied( %{ $R->{session} } )->delete() };
+        if ( $@ ) {
+            $R->scrib( 0, "Caught error trying to remove expired session: $@\n",
+                          "Continuing without problem since this just means",
+                          "you'll have a stale session in your datastore" );
+        }
+        $R->{session} = {};
+        return undef;
+    }
+
     return 1;
+}
+
+
+sub is_session_valid {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return 1 unless ( $R->{session}{timestamp} );
+    my $expires_in = $R->CONFIG->{session_info}{expires_in};
+    return 1 unless ( $expires_in > 0 );
+    my $last_refresh = ( time - $R->{session}{timestamp} ) / 60;
+    return 1 unless ( $last_refresh > $expires_in );
+    $R->DEBUG && $R->scrib( 1, "Session has expired. Last refresh was ",
+                               "[", sprintf( '%5.2f', $last_refresh ) , "] minutes ago at ",
+                               "[", scalar localtime( $R->{session}{timestamp} ) , "]",
+                               "and threshold is [", $expires_in, "] minutes" );
+    return undef;
 }
 
 
 sub save {
     my ( $class ) = @_;
-    my $R     = OpenInteract::Request->instance;
+    my $R = OpenInteract::Request->instance;
     if ( tied %{ $R->{session} } ) {
         $R->{session}{timestamp} = $R->{time};
         $R->DEBUG && $R->scrib( 2, "Saving tied session\n", Dumper( $R->{session} ) );
@@ -101,8 +132,9 @@ OpenInteract::Session - Implement session handling in the framework
 
 =head1 SYNOPSIS
 
- # In pkg/base/OpenInteract.pm
- # Note that $R->session translates to OpenInteract::Session
+ # In OpenInteract.pm Note that $R->session translates to
+ # OpenInteract::Session::Blah thanks to the server configuration key
+ # 'system_alias::session'
 
  $R->session->parse;
 
@@ -111,7 +143,8 @@ OpenInteract::Session - Implement session handling in the framework
  $R->{session}{my_stateful_data} = "oogle boogle";
  $R->{session}{favorite_colors}{red} += 5;
 
- # And from any template
+ # And from any template you can use the OI template plugin (see
+ # OpenInteract::Template::Plugin)
 
  <p>The weight of your favorite colors are:
  [% FOREACH color = keys OI.session.favorite_colors %]
@@ -126,10 +159,10 @@ OpenInteract::Session - Implement session handling in the framework
 =head1 DESCRIPTION
 
 Sessions are a fundamental part of OpenInteract, and therefore session
-handling is fairly transparent. We rely on L<Apache::Session> to do the
-heavy-lifting for us.
+handling is fairly transparent. We rely on
+L<Apache::Session|Apache::Session> to do the heavy-lifting for us.
 
-This handler has two public methods: parse() and save(). Guess in which
+This handler has two public methods: C<parse()> and C<save()>. Guess in which
 order they are meant to be called?
 
 This class also requires you to implement a subclass that overrides
@@ -142,6 +175,10 @@ Subclasses should refer to the package variable
 C<$OpenInteract::Session::COOKIE_NAME> for the name of the cookie to
 create, and should throw a '310' error of type 'session' if unable to
 connect to the session data source to create a session.
+
+You can create sessions that will expire if not used by setting the
+C<session_info::expires_in> server configuration key. See the
+description below in L<CONFIGURATION> for more information.
 
 =head1 METHODS
 
@@ -167,8 +204,15 @@ The following configuration keys are used:
 
 B<session_info::expiration> (optional)
 
-Used to set the time a session lasts. See L<CGI> for an explanation of
+Used to set the time a session lasts. See L<CGI|CGI> for an explanation of
 the relative date strings accepted.
+
+=item *
+
+B<session_info::expires_in> (optional)
+
+Used to set the time (in number of minutes) greater than which a
+session will expire due to inactivity.
 
 =back
 
@@ -182,17 +226,17 @@ None known.
 
 =head1 SEE ALSO
 
-L<Apache::Session>
+L<Apache::Session|Apache::Session>
 
-L<OpenInteract::Template> -- assigns the session hash informatioon to
-the template
+L<OpenInteract::Template::Plugin|OpenInteract::Template::Plugin>:
+makes the session hash information available to the template
 
-L<OpenInteract::Cookies> -- routines for parsing, creating, setting
+C<OpenInteract::Cookies::*> -- routines for parsing, creating, setting
 cookie information so we can match up users with session information
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
