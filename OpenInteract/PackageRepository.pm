@@ -1,18 +1,17 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.7 2003/02/10 13:22:12 lachoy Exp $
 
 use strict;
+use base qw( Exporter SPOPS::HashFile );
 use vars qw( $PKG_DB_FILE );
-
-use Data::Dumper       qw( Dumper );
-require Exporter;
+use File::Copy    qw( copy move );
+use File::Spec;
+use Data::Dumper  qw( Dumper );
 use OpenInteract::Package;
-use SPOPS::HashFile    ();
-use SPOPS::Utility     ();
+use SPOPS::Utility;
 
-@OpenInteract::PackageRepository::ISA       = qw( Exporter  SPOPS::Utility  SPOPS::HashFile );
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -25,7 +24,7 @@ $OpenInteract::PackageRepository::C        = {
 $OpenInteract::PackageRepository::RULESET  = {};
 
 $PKG_DB_FILE = 'conf/package_repository.perl';
-sub package_filename { return join( '/', $_[1], $PKG_DB_FILE ) }
+sub package_filename { return File::Spec->catfile( '/', $_[1], $PKG_DB_FILE ) }
 
 sub CONFIG  { return $OpenInteract::PackageRepository::C };
 sub RULESET { return $OpenInteract::PackageRepository::RULESET };
@@ -37,7 +36,7 @@ use constant META_KEY => 'META_INF';
 #
 #  OpenInteract::PackageRepository->class_initialize;
 
-sub _class_initialize { 
+sub _class_initialize {
     my ( $class, $CONFIG ) = @_;
     my $count = 1;
     my $C = $class->CONFIG;
@@ -56,7 +55,7 @@ sub _class_initialize {
 sub new {
     my ( $class, $p ) = @_;
     if ( ! $p->{filename} and $p->{directory} ) {
-        $p->{filename} = join( '/', $p->{directory}, $PKG_DB_FILE );
+        $p->{filename} = File::Spec->catfile( $p->{directory}, $PKG_DB_FILE );
     }
     $p->{perm} ||= 'new';
     return $class->SUPER::new( $p );
@@ -73,10 +72,56 @@ sub initialize {
 
 sub backup {
     my ( $self, $p ) = @_;
-    my $extension = $p->{extension} || 'backup';
-    $extension = ".$extension" unless ( $extension =~ /^\./ );
+    return unless ( -f $p->{filename} );
+    my $backup_name = $self->_backup_filename( $p );
+    eval { copy( $p->{filename}, $backup_name ) || die $! };
+    if ( $@ ) {
+        _w( 0, "Cannot backup repository: $@" );
+    }
 }
 
+sub restore_backup {
+    my ( $self, $p ) = @_;
+    return unless ( -f $p->{filename} );
+    my $backup_name = $self->_backup_filename( $p );
+    my $corrupt_name = join( '', $p->{filename}, 'maybebad' );
+    if ( -f $corrupt_name ) {
+        unlink( $corrupt_name );
+    }
+    eval { move( $p->{filename}, $corrupt_name ) };
+    if ( $@ ) {
+        _w( 0, "Failed to move repository to restore backup: $@" );
+    }
+    eval { move( $backup_name, $p->{filename} ) };
+    if ( $@ ) {
+        _w( 0, "Failed to restore backup for repository: $@" );
+    }
+    _w( 1, "Backup file restored ok" );
+
+    my $class = ref( $self );
+    my $backup_object = $class->SUPER::fetch( $p->{filename}, $p );
+    while ( my ( $key, $value ) = each %{ $backup_object } ) {
+        $self->{ $key } = $value;
+    }
+ }
+
+sub remove_backup {
+    my ( $self, $p ) = @_;
+    return unless ( -f $p->{filename} );
+    my $backup_name = $self->_backup_filename( $p );
+    return unless ( -f $backup_name );
+    eval { unlink( $backup_name ) || die $! };
+    if ( $@ ) {
+        _w( 0, "Cannot remove backup file: $@" );
+    }
+}
+
+sub _backup_filename {
+    my ( $self, $p ) = @_;
+    my $extension = $p->{extension} || 'backup';
+    $extension = ".$extension" unless ( $extension =~ /^\./ );
+    return join( '', $p->{filename}, $extension );
+}
 
 # Ensure that the base_dir, name and version properties are defined
 # for every package in the repository. Also remove each package's
@@ -140,19 +185,20 @@ sub fetch {
     my ( $class, $filename, $p ) = @_;
     $filename ||= '';
     $p        ||= {};
-    DEBUG && _w( 1, "Trying to fetch file ($filename)  with info ", Dumper( $p ) );
+    DEBUG && _w( 1, "Trying to fetch file [$filename]  with info ", Dumper( $p ) );
     $p->{perm} ||= 'write';
     return $class->SUPER::fetch( $filename, $p ) if ( $filename );
-    if ( $p->{directory} ) {
-        if ( ! -d $p->{directory} ) {
-            die "Cannot open package repository in $p->{directory}: the directory does not exist.\n";
-        }
-        $filename = $class->package_filename( $p->{directory} );
-        my $object = $class->SUPER::fetch( $filename, $p );
-        $object->{ META_KEY() } ||= { base_dir => $p->{directory} };
-        return $object;
+    unless ( $p->{directory} ) {
+        die "Cannot open package repository without a filename or directory.\n";
     }
-    die "Cannot open package repository without a filename or directory.\n";
+    unless ( -d $p->{directory} ) {
+        die "Cannot open package repository in directory",
+           "[$p->{directory}]: the directory does not exist.\n";
+    }
+    $filename = $class->package_filename( $p->{directory} );
+    my $object = $class->SUPER::fetch( $filename, $p );
+    $object->{ META_KEY() } ||= { base_dir => $p->{directory} };
+    return $object;
 }
 
 
@@ -217,7 +263,7 @@ sub fetch_package_by_name {
     # If we wanted an exact match and didn't find it, return nothing,
     # otherwise return the latest version
 
-    return undef  if ( $p->{version} ); 
+    return undef  if ( $p->{version} );
     return $final;
 }
 
@@ -257,7 +303,7 @@ sub verify_package {
     my @pkg_exist = ();
     foreach my $pkg_name ( @package_names ) {
         my $info = $self->fetch_package_by_name({ name => $pkg_name });
-        DEBUG && _w( 1, sprintf( "Verify package status %-20s: %s", 
+        DEBUG && _w( 1, sprintf( "Verify package status %-20s: %s",
                         $pkg_name,  ( $info ) ? "exists (Version $info->{version})" : 'does not exist' ) );
         push @pkg_exist, $info  if ( scalar keys %{ $info } );
     }
@@ -275,6 +321,14 @@ sub _w {
 }
 
 
+# Delegate to SPOPS::Utility
+
+sub now {
+    shift;
+    return SPOPS::Utility->now( @_ );
+}
+
+
 1;
 
 __END__
@@ -289,13 +343,13 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
   # Get a reference to a repository
 
-  my $repository = OpenInteract::PackageRepository->fetch( 
-                                     undef, 
+  my $repository = OpenInteract::PackageRepository->fetch(
+                                     undef,
                                      { directory => '/opt/OpenInteract' } );
 
  # Create a new package, set some properties and save to the repository
 
-  my $pkg_info = { 
+  my $pkg_info = {
       name        => 'MyPackage',
       version     => 3.13,
       author      => 'Arthur Dent <arthurd@earth.org>',
@@ -306,7 +360,7 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
  # Retrieve the latest version of a package
 
- my $info = eval { $repository->fetch_package_by_name({ 
+ my $info = eval { $repository->fetch_package_by_name({
                                         name => 'MyPackage' }) };
  unless ( $info ) {
    die "No package found with that name!";
@@ -314,7 +368,7 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
  # Retrieve a specific version
 
- my $info = eval { $repository->fetch_package_by_name({ 
+ my $info = eval { $repository->fetch_package_by_name({
                                         name    => 'MyPackage',
                                         version => 3.12 }) };
  unless ( $info ) {
@@ -323,7 +377,7 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
  # Install a package
 
- my $info = eval { $repository->install_package({ 
+ my $info = eval { $repository->install_package({
                        package_file => $OPT_package_file }) };
  if ( $@ ) {
    print "Could not install package! Error: $@";
@@ -334,10 +388,10 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
  # Install to website (apply package)
 
- my $info = eval { $repository->fetch_package_by_name({ 
+ my $info = eval { $repository->fetch_package_by_name({
                                         name    => 'MyPackage',
                                         version => 3.12 }) };
- my $site_repository = OpenInteract::Package->fetch( 
+ my $site_repository = OpenInteract::Package->fetch(
                                       undef,
                                       { directory => "/home/MyWebsiteDir" } );
  $info->{website_name} = "MyApp";
@@ -358,7 +412,7 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
 
  # Find a file in a package
 
- $repository->find_file({ package => 'MyPackage', 
+ $repository->find_file({ package => 'MyPackage',
                           file    => 'template/mytemplate.tmpl' });
  open( TMPL, $filename ) || die "Cannot open $filename: $!";
  while ( <TMPL> ) { ... }
@@ -451,7 +505,7 @@ back; multiple names get returned in an arrayref.
 B<verify_package_list( @package_names )>
 
 The same as C<verify_package()> except we return a list reference of
-package instead of a single 
+package instead of a single
 
 B<find_file( [ $package_name | \%package_info ], @file_list )>
 
@@ -460,7 +514,7 @@ find within a package. If you pass multiple files, each will be
 checked in order. Note that the name must include any directory prefix
 as well. For instance:
 
-   $repos->find_file( 'mypackage', 
+   $repos->find_file( 'mypackage',
                       'template/mytemplate', 'template/mytemplate.tmpl' );
 
 Returns a full filename of an existing file, undef if no existing file

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.64 2002/09/09 02:50:50 lachoy Exp $
+# $Id: oi_manage,v 1.66 2003/02/16 21:12:29 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,11 +17,12 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.64 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.66 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
 use constant DEBUG => 0;
+use constant REPOSITORY_BACKUP => 'oimanagebackup';
 
 # Legitimate commands; anything not listed here will be kicked out and
 # the 'usage' stuff displayed
@@ -609,13 +610,20 @@ CREATEMSG
         notify_error( @error_msg )  if ( @error_msg );
         print "Running install_package...\n$SEP\n\n";
         my $repository = $REPOS_CLASS->fetch( undef, { directory => $OPT_base_dir } );
-        my $pkg = $PKG_CLASS->install_distribution({ repository => $repository,
-                                                     package_file => $OPT_package_file });
+        $repository->backup({ filename => REPOSITORY_BACKUP });
+        my $num_pkg = scalar @{ $repository->fetch_all_packages };
+        my $pkg = $PKG_CLASS->install_distribution({
+                                        repository => $repository,
+                                        package_file => $OPT_package_file });
         if ( $pkg ) {
             print "Installed package: $pkg->{name}-$pkg->{version}\n";
         }
         else {
             print "Error installating package.\n";
+            my $current_num_pkg = scalar @{ $repository->fetch_all_packages };
+            if ( $num_pkg != $current_num_pkg ) {
+                $repository->restore_backup( REPOSITORY_BACKUP );
+            }
         }
         print "\n$SEP\nFinished installing package!\n";
         exit(0);
@@ -1807,6 +1815,10 @@ PACKAGE:
             push @status, $this_status;
             next PACKAGE;
         }
+
+        $website_repos->backup({ filename => REPOSITORY_BACKUP });
+        my $num_pkg = scalar @{ $website_repos->fetch_all_packages() };
+
         my $website_info = \%{ $info };
         $this_status->{version}         = $website_info->{version};
         $website_info->{website_dir}    = $p->{website_dir};
@@ -1816,6 +1828,10 @@ PACKAGE:
                             $base_repos, $website_repos, $website_info, $CONFIG ) };
         if ( $@ ) {
             $this_status->{msg} = "Cannot install package to website. Error: $@\n";
+            my $current_num_pkg = scalar @{ $website_repos->fetch_all_packages() };
+            if ( $num_pkg != $current_num_pkg ) {
+                $website_repos->restore_backup;
+            }
         }
         else {
 
@@ -4094,6 +4110,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.64 $
+Revision: $Revision: 1.66 $
 
 =cut

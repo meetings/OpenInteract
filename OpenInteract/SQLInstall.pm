@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.21 2002/05/02 04:53:56 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.22 2003/01/07 13:46:54 lachoy Exp $
 
 use strict;
 use Class::Date;
@@ -9,7 +9,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -133,6 +133,7 @@ sub create_structure {
             $table_sql = $class->sql_modify_increment_type( $p->{config}, $driver_name, $table_sql );
             $table_sql = $class->sql_modify_usertype( $p->{config}, $driver_name, $table_sql );
             $table_sql = $class->sql_modify_grouptype( $p->{config}, $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_datetime( $p->{config}, $driver_name, $table_sql );
             eval { $p->{db}->do( $table_sql ) };
             if ( $@ ) {
                 $this_status->{ok} = 0;
@@ -520,6 +521,33 @@ sub sql_modify_increment_type {
     return wantarray ? @to_change : $to_change[0];
 }
 
+
+sub sql_modify_datetime {
+    my ( $class, $config, $driver_name, @to_change ) = @_;
+    foreach ( @to_change ) {
+        if ( $driver_name eq 'mysql' ) {
+            s/%%DATETIME%%/DATETIME/g;
+        }
+        elsif ( $driver_name eq 'Sybase' or
+                $driver_name eq 'ASAny' or
+                $driver_name eq 'FreeTDS' ) {
+            s/%%DATETIME%%/DATETIME/g;
+        }
+        elsif ( $driver_name eq 'Pg' ) {
+            s/%%DATETIME%%/TIMESTAMP/g;
+        }
+        elsif ( $driver_name eq 'Oracle' ) {
+            s/%%DATETIME%%/DATE/g;
+        }
+        elsif ( $driver_name eq 'SQLite' ) {
+            s/%%DATETIME%%/TIMESTAMP/g;
+        }
+        elsif ( $driver_name eq 'InterBase' ) {
+            s/%%DATETIME%%/TIMESTAMP/g;
+        }
+    }
+    return wantarray ? @to_change : $to_change[0];
+}
 
 # Translate %%USERID_TYPE%% to a datatype specified in the server
 # configuration. This is so we can have user IDs as characters or

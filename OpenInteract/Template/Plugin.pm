@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.27 2002/11/10 16:32:52 lachoy Exp $
+# $Id: Plugin.pm,v 1.29 2003/02/16 21:29:41 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -11,7 +11,7 @@ use SPOPS::Secure   qw( :level :scope );
 use SPOPS::Utility;
 use Text::Sentence;
 
-$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -105,6 +105,11 @@ sub box_add {
     if ( $params->{remove} ) {
         $box_info{remove} = 'yes';
         delete $params->{remove};
+    }
+    for ( qw( weight title template ) ) {
+        next unless ( $params->{ $_ } );
+        $box_info{ $_ } = $params->{ $_ };
+        delete $params->{ $_ };
     }
     $box_info{params} = $params;
     push @{ $R->{boxes} }, \%box_info;
@@ -329,13 +334,23 @@ sub get_users {
 # OI DISPLAY
 ########################################
 
+# Tell OI (from a page) about the page title
+
+sub page_title {
+    my ( $self, $title ) = @_;
+    my $R = OpenInteract::Request->instance;
+    $R->{page}{title} = $title;
+    $R->DEBUG && $R->scrib( 2, "Set page title to [$title]" );
+    return undef;
+}
+
 # Tell OI (from a page) you want to use a different 'main' template
 
 sub use_main_template {
     my ( $self, $template_name ) = @_;
     my $R = OpenInteract::Request->instance;
     $R->{page}{_template_name_} = $template_name;
-    $R->DEBUG && $R->scrib( 1, "Set main template to: ", $template_name );
+    $R->DEBUG && $R->scrib( 2, "Set main template to [$template_name]" );
     return undef;
 }
 
@@ -903,6 +918,14 @@ displays (when under the normal location of '/'):
 displays (when under a different location '/oi'):
 
  <a href="/oi/User/show/?user_id=5">blah</a>
+
+B<page_title( $title )>
+
+Tell OpenInteract to use C<$title> for the page title.
+
+Example:
+
+ [% OI.page_title( 'My Favorite Quotes from Douglas Adams' ) %]
 
 B<use_main_template( $template_name )>
 

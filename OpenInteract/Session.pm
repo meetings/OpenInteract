@@ -1,11 +1,11 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.12 2002/09/08 20:52:15 lachoy Exp $
+# $Id: Session.pm,v 1.13 2003/01/08 05:21:33 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
@@ -105,6 +105,8 @@ sub save {
             foreach my $key ( keys %{ $R->{session} } ) {
                 $session->{ $key } = $R->{session}{ $key };
             }
+
+            $session->{timestamp} = $R->{time};
             $R->cookies->create_cookie({ name    => $OpenInteract::Session::COOKIE_NAME,
                                          value   => $session->{_session_id},
                                          path    => '/',

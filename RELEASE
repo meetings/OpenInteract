@@ -1,6 +1,17 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.56  Mon Feb 17 16:55:40 EST 2003
+
+ - All packages now use %%DATETIME%% key to specify a datetime field.
+
+ - Backup the package repository and do a check whenever we perform
+ any actions to modify it. This should help with corruption of the
+ repository.
+
+ - Small bugfixes and enhancements.
+
+
 1.55  Fri Dec 20 08:00:48 EST 2002
 
  - You can customize the temporary library directory in conf/base.conf.
@@ -250,4 +261,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.27 2002/11/17 16:33:48 lachoy Exp $
+$Id: RELEASE,v 1.29 2003/02/17 22:21:08 lachoy Exp $

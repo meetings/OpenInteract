@@ -1,5 +1,89 @@
 Revision history for Perl extension OpenInteract.
 
+1.56  Mon Feb 17 16:55:40 EST 2003
+
+Overall:
+
+ * Updated all relevant packages to use the '%%DATETIME%%' key in
+   database schemas since different databases use different types
+   ('datetime', 'timestamp', 'date', 'whenever', etc.)
+
+ * A number of small bugfixes and enhancements. Included in this is an
+   update of package documentation for most packages shipped with the
+   distribution. (Fixes SF Bug #597982)
+
+Individual:
+
+ * conf/sample-override_spops.ini
+
+   - Add 'news_section' as object to be optionally modified for its
+   database type.
+
+ * OpenInteract/Config/Ini.pm:
+
+   - Fixed a few bugs in the INI read/write along with a small
+   documentation note. Thanks much to Isidro Vila Verde <jvv@fe.up.pt>
+   for pointing out the errors and sending along fixes.
+
+ * OpenInteract/Package.pm:
+
+   - Update copy_modules() to return an arrayref of the full
+   destination paths of the modules rather than the module files
+   themselves.
+
+ * OpenInteract/PackageRepository.pm:
+
+   - Add routines to backup and restore from backup.
+
+ * OpenInteract/Session.pm:
+
+   - Set session key 'timestamp' on create
+
+ * OpenInteract/SQLInstall.pm:
+
+   - Add support for '%%DATETIME%%' keyword in schemas to install.
+
+ * OpenInteract/Startup.pm:
+
+   - Do a chmod 0777 on all the files and directories in the templib
+   directory. Fixes SF Bug #657857.
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - Add 'page_title( $title )' method to change the page title from a
+   template.
+
+   - Be sure that boxes added via 'box_add' copy the box parameters
+   (title, weight, etc.) to the right place
+
+ * script/oi_manage:
+
+   - Call repository backup/restore backup when appropriate. This
+   should help with accidental corruption of the repository.
+
+
+Packages updated:
+
+   OpenInteract     1.55 -> 1.56
+   ----------------------------
+   base:            1.70 -> 1.72
+   base_box:        1.01 -> 1.04
+   base_error:      1.43 -> 1.45
+   base_group:      1.37 -> 1.38
+   base_page:       1.15 -> 1.17
+   base_security:   1.58 -> 1.60
+   base_template:   2.22 -> 2.23
+   base_theme:      1.35 -> 1.36
+   base_user:       1.59 -> 1.61
+   lookup:          1.00 -> 1.01
+   object_activity: 1.01 -> 1.03
+   results_manage:  1.00 -> 1.01
+   system_doc:      1.32 -> 1.33
+   classified:      1.36 -> 1.38
+   full_text:       1.33 -> 1.34
+   news:            1.48 -> 1.54
+
+
 1.55  Fri Dec 20 08:00:48 EST 2002
 
 Individual:

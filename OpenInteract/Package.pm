@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.39 2002/08/24 19:57:13 lachoy Exp $
+# $Id: Package.pm,v 1.40 2003/01/25 16:16:07 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.40 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -900,6 +900,7 @@ sub _copy_module_files {
     $to_dir =~ s|/$||;
     my $pkg_files = ExtUtils::Manifest::maniread;
     my @module_files = grep /\.pm$/, keys %{ $pkg_files };
+    my @module_files_full = ();
     my ( %dir_ok );
     foreach my $filename ( @module_files ) {
         my $full_dest_file = join( '/', $to_dir, $filename );
@@ -911,9 +912,10 @@ sub _copy_module_files {
             $dir_ok{ $full_dest_dir }++;
         }
         cp( $filename, $full_dest_file );
+        push @module_files_full, $full_dest_file;
     }
     chdir( $current_dir );
-    return \@module_files;
+    return \@module_files_full;
 }
 
 
@@ -1682,6 +1684,13 @@ to_text (\@)
 Replacement values for each of the keys in 'from_text'
 
 =back
+
+B<copy_modules( $pkg_info, $to_dir )>
+
+Copy all module files (everything ending in C<.pm>) from this package
+to a separate directory.
+
+Returns: arrayref with the full destination path of all files copied.
 
 =head1 HELPER METHODS
 

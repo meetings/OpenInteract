@@ -1,11 +1,11 @@
 package OpenInteract::Config::Ini;
 
-# $Id: Ini.pm,v 1.90 2002/09/16 20:20:03 lachoy Exp $
+# $Id: Ini.pm,v 1.91 2003/01/24 13:03:47 lachoy Exp $
 
 use strict;
 use OpenInteract::Config qw( _w DEBUG );
 
-$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.90 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.91 $ =~ /(\d+)\.(\d+)/);
 
 # Stuff in metadata (_m):
 #   sections (\@): all full sections, in the order they were read
@@ -77,6 +77,10 @@ sub read_file {
     while ( <CONF> ) {
         chomp;
         next if ( /^\s*$/ );
+        if ( /^# Written by OpenInteract::Config::Ini at/ ) {
+            my $dispose = <CONF>; # get rid of next blank line
+            next;                 # ... and the current line
+        }
         s/\s+$//;
         if ( /^\s*\#/ ) {
             push @comments, $_;
@@ -136,7 +140,7 @@ sub set_value {
         push @{ $set_in->{ $param } }, $value;
     }
     elsif ( $existing ) {
-        push @{ $set_in->{ $param } }, $existing, $value
+        $set_in->{ $param } = [ $existing, $value ];
     }
     else {
         $set_in->{ $param } = $value;
@@ -164,10 +168,12 @@ sub write_file {
 
     DEBUG && _w( 1, "--Writing INI to ($filename) (original: $original_filename)" );
     open( OUT, "> $filename" ) || die "Cannot write configuration to ($filename): $!";
-    print OUT "# Written by ", ref $self, " at ", scalar localtime, "\n";
+    print OUT "# Written by ", ref $self, " at ", scalar localtime, "\n\n";
     foreach my $full_section ( @{ $self->{_m}{order} } ) {
-        print OUT $self->{_m}{comments}{ $full_section }, "\n",
-                  "[$full_section]\n",
+        if ( $self->{_m}{comments}{ $full_section } ) {
+            print OUT $self->{_m}{comments}{ $full_section }, "\n";
+        }
+        print OUT "[$full_section]\n",
                   $self->output_section( $full_section ),
                   "\n\n";
     }
@@ -188,7 +194,7 @@ sub output_section {
                       : $self->{ $section };
     my @items = ();
     foreach my $key ( keys %{ $show_from } ) {
-        if ( ref $show_from->{ $key } eq 'ARRAY ' ) {
+        if ( ref $show_from->{ $key } eq 'ARRAY' ) {
             foreach my $value ( @{ $show_from->{ $key } } ) {
                 push @items, $self->show_item( $key, $value );
             }
@@ -218,7 +224,7 @@ OpenInteract::Config::Ini - Read/write INI-style (++) configuration files
  my $config = OpenInteract::Config::Ini->new({ filename => 'myconf.ini' });
  print "Main database driver is:", $config->{db_info}{main}{driver}, "\n";
  $config->{db_info}{main}{username} = 'mariolemieux';
- $config->write_config;
+ $config->write_file;
 
 =head1 DESCRIPTION
 

@@ -1,12 +1,13 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.34 2002/12/19 22:20:21 lachoy Exp $
+# $Id: Startup.pm,v 1.36 2003/01/25 16:20:15 lachoy Exp $
 
 use strict;
-use Cwd           qw( cwd );
-use Data::Dumper  qw( Dumper );
-use File::Path    qw();
-use Getopt::Long  qw( GetOptions );
+use Cwd            qw( cwd );
+use Data::Dumper   qw( Dumper );
+use File::Basename qw( dirname );
+use File::Path     qw();
+use Getopt::Long   qw( GetOptions );
 use OpenInteract::Config;
 use OpenInteract::Config::GlobalOverride;
 use OpenInteract::Error;
@@ -14,7 +15,7 @@ use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -240,7 +241,7 @@ sub create_temp_lib {
     unshift @INC, $lib_dir;
 
     if ( -d $lib_dir and $opt eq 'lazy' ) {
-        DEBUG && _w( 1, "Temp lib dir ($lib_dir) already exists and we're lazy;",
+        DEBUG && _w( 1, "Temp lib dir [$lib_dir] already exists and we're lazy;",
                         "not copying modules to temp lib dir" );
         return [];
     }
@@ -257,7 +258,16 @@ sub create_temp_lib {
         my $files_copied = $PKG_CLASS->copy_modules( $package, $lib_dir );
         push @all_files, @{ $files_copied };
     }
-    DEBUG && _w( 3, "Copied ", scalar @all_files, " module files to ($lib_dir)" );
+    DEBUG && _w( 3, "Copied ", scalar @all_files, " module files to [$lib_dir]" );
+
+    # Now change permissions so all the files and directories are
+    # world-everything, letting the process's umask kick in
+
+    chmod( 0666, @all_files );
+
+    my %tmp_dirs = map { $_ => 1 } map { dirname( $_ ) } @all_files;
+    chmod( 0777, keys %tmp_dirs );
+
     return \@all_files;
 }
 
