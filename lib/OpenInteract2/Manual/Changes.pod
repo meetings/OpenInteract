@@ -1,0 +1,836 @@
+=head1 NAME
+
+OpenInteract2::Manual::Changes - Significant changes to OpenInteract2
+
+=head1 NOTE
+
+Each package maintains its own changelog. These changes are not
+mentioned here except to note the package version changes with
+successive OI2 releases.
+
+=head1 1.99_03, 8 September 2003
+
+=head2 Major Changes
+
+=over 4
+
+=item *
+
+A very thorough package development tutorial is in full effect, see
+L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>.
+
+=item *
+
+API for management tasks has changed, and C<oi2_manage> is now a much
+simpler shell around the main facade. Adding a new task is as simple
+as creating a class under the right namespace and registering yourself
+with the facade.
+
+=item *
+
+Actions can store messages for the view to pickup and the built-in
+template input widgets are hooked into them, making for fairly
+seamless validation roundtripping.
+
+=item *
+
+SPOPS and Action configurations can now be modified at server startup
+by your code. This allows you to create configuration shortcuts (like
+'is_googlable') and make other developers on your team happy. (See
+L<OpenInteract2::Config::Initializer|OpenInteract2::Config::Initializer>)
+
+=item *
+
+Actions in all system packages should work as advertised, with the
+exception of some functionality in the C<base_page> package.
+
+=item *
+
+B<Tons> of smaller changes throughout, including cleaner APIs, more
+tests, lots more documentation and examples, and cleaning up as a
+result of testing more of the system.
+
+=back
+
+=head2 Minor Changes
+
+C<Makefile.PL/Build.PL>
+
+=item *
+
+Bump up required version for L<File::DirSync|File::DirSync> since it
+has new feature.
+
+=item *
+
+Add L<Test::MockObject|Test::MockObject> as requirement.
+
+L<HTTP::Daemon::OpenInteract2|HTTP::Daemon::OpenInteract2>
+
+=item *
+
+Use the C<version()> from the context rather than hardcoding it
+ourselves. (old...)
+
+=item *
+
+Move most of the functionality from C<script/oi2_daemon> here so we
+can access it from other places too (like tests).
+
+L<OpenInteract2::Action|OpenInteract2::Action>
+
+=item *
+
+Rename a number of methods to give them a 'protected' veneer:
+C<check_task_validity()>, C<find_task()>, C<find_task_method()> become
+C<_check_task_validity()>, C<_find_task()>, C<_find_task_method()>,
+respectively.
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+=item *
+
+Add overridable init_at_startup() and documentation with example.
+
+L<OpenInteract2::Action::CommonRemove|OpenInteract2::Action::CommonRemove>
+
+=item *
+
+Blew up because wrong method called, how embarrassing. Works now.
+
+L<OpenInteract2::Action::CommonSearch|OpenInteract2::Action::CommonSearch>
+
+=item *
+
+Always pass C<search_criteria> to template to be nice, add warning
+about the format of the fieldnames.
+
+L<OpenInteract2::Action::TemplateOnly|OpenInteract2::Action::TemplateOnly>
+
+=item *
+
+Reflect parent change of C<find_task()> to C<_find_task()>.
+
+L<OpenInteract2::Auth|OpenInteract2::Auth>
+
+=item *
+
+Make an object rather than using class methods. The various
+information that we passed around is now in the auth object, and this
+object is passed to any custom handlers you may have defined as well.
+
+=item *
+
+Port change from 1.x allowing users to configure the website not to
+accept users who aren't logged in.
+
+L<OpenInteract2::Auth::AdminCheck|OpenInteract2::Auth::AdminCheck>
+
+=item *
+
+Modify to use information from auth object rather than having it
+passed in.
+
+L<OpenInteract2::Auth::Group|OpenInteract2::Auth::Group>
+
+=item *
+
+Modify to use information from auth object rather than having it
+passed in.
+
+L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>
+
+=item *
+
+Modify to use information from auth object rather than having it
+passed in.
+
+L<OpenInteract2::Config|OpenInteract2::Config>
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+=item *
+
+In translate_dirs() ensure that 'dir.website' doesn't have a trailing
+slash.
+
+L<OpenInteract2::Config::Base|OpenInteract2::Config::Base>
+
+=item *
+
+After object initialized remove trailing '/' from all set directories.
+
+L<OpenInteract2::Config::Initializer|OpenInteract2::Config::Initializer>
+
+=item *
+
+Add class to handle SPOPS and Action configuration initialization
+duties. The class is observable so you can add custom behavior. (See
+docs for details and how this hooks into packages.)
+
+=item *
+
+Note that the use of 'TASK_EDIT' in the 'display' key of SPOPS objects
+will only result in the 'url_edit' key being populated from a call to
+'object_configuration()' on an SPOPS object if you're using SPOPS >=
+0.79. It doesn't do any harm otherwise, you just won't get the right
+URLs...
+
+L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>
+
+=item *
+
+Add 'config_watcher' property
+
+L<OpenInteract2::ContentGenerator::TT2Plugin|OpenInteract2::ContentGenerator::TT2Plugin>
+
+=item *
+
+Add C<can_write> shortcut so we don't have to use 'tmp_security_level'
+anymore...
+
+L<OpenInteract2::Controller|OpenInteract2::Controller>
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+L<OpenInteract2::Context|OpenInteract2::Context>
+
+=item *
+
+Create C<lookup_session_config()> rather than having outsiders root
+around server config. In the same vein add
+'lookup_default_action_info', 'default_action_id',
+'lookup_default_datasource_name', lookup_system_datasource_name',
+'lookup_default_ldap_datasource_name', 'lookup_directory',
+'lookup_temp_lib_directory'.
+
+=item *
+
+Rename 'datasource_config' -E<gt> 'lookup_datasource_config'
+
+=item *
+
+Add docs for filter shortcut methods
+
+=item *
+
+Remove C<alias()> and replace with C<lookup_class()>. This means that:
+
+  CTX->template_class
+
+and similar calls (based on the names in the 'system_alias' server
+configuration key, now replaced by 'system_class') will no longer work
+and you must use:
+
+ CTX->lookup_class( 'template' )
+
+instead. This wasn't used terribly often and all uses in OI2 and
+packages have been replaced.
+
+This change also entailed modifying the setup so that the alias
+building features weren't called, and removing the corresponding
+OI2::Setup call (see below).
+
+=item *
+
+Remove C<global_attribute()> -- feature without a purpose.
+
+L<OpenInteract2::Manage|OpenInteract2::Manage>
+
+=item *
+
+Modify the API quite a bit. Some is just renaming (e.g.,
+'brief_description()' is now 'get_brief_description()') but other bits
+are much more substantial. Just read
+L<OpenInteract2::Manual::Management|OpenInteract2::Manual::Management>
+for how things work now.
+
+=item *
+
+No tasks are hardcoded in this class (or the
+L<OpenInteract2::Manage::Package|OpenInteract2::Manage::Package> or
+L<OpenInteract2::Manage::Website|OpenInteract2::Manage::Website>
+abstract subclasses). Instead we find all classes from C<@INC> under
+the C<OpenInteract2::Manage> namespace (including subnamespaces) and
+C<require> them. This means all you need to do to create a new task is
+put it under the right package and register yourself with the main
+management class and you're good to go.
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+L<OpenInteract2::Manage::CreateSourceDirectory|OpenInteract2::Manage::CreateSourceDirectory>
+
+=item *
+
+Update to use new feature in L<File::DirSync|File::DirSync> so we can
+return on request information about what got synchronized.
+
+L<OpenInteract2::Manage::Website::CleanExpiredSessions|OpenInteract2::Manage::Website::CleanExpiredSessions>
+
+=item *
+
+Add new task to delete old and empty sessions. Replaces script from
+'base' package.
+
+L<OpenInteract2::Manage::Website::CreateSecurity|OpenInteract2::Manage::Website::CreateSecurity>
+
+=item *
+
+Add new task to batch create security for SPOPS objects. Replaces
+script from 'base_security' package.
+
+L<OpenInteract2::Manage::Website::InstallPackage|OpenInteract2::Manage::Website::InstallPackage>
+
+=item *
+
+After package is installed add notification to refresh the temp lib
+dir if necessary.
+
+=item *
+
+Do explicit check to see if this package name/version already
+installed, and if so don't fail but generate a message indicating that
+the install wasn't performed.
+
+L<OpenInteract2::Manage::Website::ReindexObjects|OpenInteract2::Manage::Website::ReindexObjects>
+
+=item *
+
+Add new task to reindex (or initially index) SPOPS objects. Replaces
+script from 'full_text' package.
+
+L<OpenInteract2::Manual::AdminDatabase|OpenInteract2::Manual::AdminDatabase>
+
+=item *
+
+Add instructions for initializing iAnywhere ASA, thanks to Greg Fenton
+for writing them up.
+
+L<OpenInteract2::Manual::Architecture|OpenInteract2::Manual::Architecture>
+
+=item *
+
+Fix errors in request process pointed out by Greg Fenton.
+
+=item *
+
+Add discussion of how OI implements MVC (or really, how it implements
+separation of concerns and the pieces of OI that map to the letters in
+MVC...)
+
+L<OpenInteract2::Manual::Management|OpenInteract2::Manual::Management>
+
+=item *
+
+Add content, reflects fully the recent API changes.
+
+L<OpenInteract2::Manual::QuickStart|OpenInteract2::Manual::QuickStart>
+
+=item *
+
+Fix errors and inconsistencies and make clarifications throughout
+document, thanks to Greg Fenton for detailed report.
+
+L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
+
+=item *
+
+Add discussion of multiple content generators with the same code,
+declaring 'template_source' in an action to enable this, and similar
+matters.
+
+L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
+
+=item *
+
+Write the thing. It's really big, read it now!
+
+L<OpenInteract2::Manual::TutorialAdvanced|OpenInteract2::Manual::TutorialAdvanced>
+
+=item *
+
+Add placeholder for tutorial on advanced OI functionality.
+
+L<OpenInteract2::Package|OpenInteract2::Package>
+
+=item *
+
+Add little 'parse_full_name()' class method to complement 'full_name'
+object method.
+
+=item *
+
+Modify check() for templates -- it was succeeding even though the
+template file didn't exist.
+
+=item *
+
+On install() be sure to translate the package filename into an
+absolute one, otherwise we eventually lose track.
+
+=item *
+
+Fix for reading package from file -- directory wasn't being set
+correctly.
+
+L<OpenInteract2::Repository|OpenInteract2::Repository>
+
+=item *
+
+Add internal methods to maintain a cache of packages rather than
+refetch them on every 'fetch_package()'. This may come back to bite us
+in the future because there's no synchronization going on...
+
+L<OpenInteract2::Request|OpenInteract2::Request>
+
+=item *
+
+Add 'action_errors' and 'add_action_errors()', plus docs.
+
+=item *
+
+Add 'get_implementation_type'
+
+L<OpenInteract2::Response|OpenInteract2::Response>
+
+=item *
+
+Add 'get_implementation_type'
+
+=item *
+
+Rename C<_set_url()> to C<assign_request_url()> so other modules can
+call; rename call in subclasses as well.
+
+L<OpenInteract2::Response|OpenInteract2::Response>
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+=item *
+
+Add factory_log() and factory_error() to capture messages from
+Class::Factory and redirect to our logger
+
+L<OpenInteract2::ResultsManage|OpenInteract2::ResultsManage>
+
+=item *
+
+Use methods instead of object hash references. Another notch for
+Class::Accessor...
+
+L<OpenInteract2::SessionManager|OpenInteract2::SessionManager>
+
+=item *
+
+Renamed this and all subclasses from OI2::Session* to reflect that
+we're not session objects, we're managing session objects.
+
+L<OpenInteract2::Setup|OpenInteract2::Setup>
+
+=item *
+
+Move all initialization methods for action config and calls to the
+datasource-specific initializer to OpenInteract2::Config::Initializer
+so that users can add custom behaviors.
+
+=item *
+
+Document C<create_temp_lib> call better, explaining our intentions.
+
+=item *
+
+Remove C<build_aliases> and documentation for it. (No longer needed,
+see OI2::Context change docs.)
+
+L<OpenInteract2::SPOPS|OpenInteract2::SPOPS>
+
+=item *
+
+Fix bug resulting from evaluating C<$spops_obj-E<gt>id> in list
+context that was fixed in 1.x but didn't get replicated. Thanks to
+damien leri (again!) for pointing it out.
+
+=item *
+
+Move all configuration initialization modification routines into
+L<OpenInteract2::Config::Initializer|OpenInteract2::Config::Initializer>.
+
+=item *
+
+All object key methods now use the 'system' datasource name rather
+than relying on the object that was being keyed.
+
+L<OpenInteract2::SPOPS::DBI|OpenInteract2::SPOPS::DBI>
+
+=item *
+
+Move all configuration initialization modification routines into
+L<OpenInteract2::Config::Initializer|OpenInteract2::Config::Initializer>.
+
+L<OpenInteract2::SPOPS::LDAP|OpenInteract2::SPOPS::LDAP>
+
+=item *
+
+Move all configuration initialization modification routines into
+L<OpenInteract2::Config::Initializer|OpenInteract2::Config::Initializer>.
+
+L<OpenInteract2::SQLInstall|OpenInteract2::SQLInstall>
+
+=item *
+
+Modify some server config retrievals into method calls on the
+context. (Data hiding, what's that?)
+
+L<sample/website/conf/server.ini>
+
+=item *
+
+Add 'config_watcher' section. Allows us to declare SPOPS/action
+configuration initialization observers.
+
+=item *
+
+Add 'datasource_config.ldap' for the default LDAP datasource
+
+=item *
+
+Add 'required', 'required_url' and 'required_skip' to 'login'
+
+=item *
+
+Add 'use_meta_redirect' and 'use_header_redirect' to 'display_info'
+
+=item *
+
+Rename 'system_alias' section to 'system_class', remove a number of
+items from it and rename some others.
+
+L<script/oi2_daemon>
+
+=item *
+
+Store the PID file in the directory from where the configuration file
+is read. (Thanks to Greg Fenton for suggestion.)
+
+=item *
+
+Move most functionality to
+L<HTTP::OpenInteract2::Daemon|HTTP::OpenInteract2::Daemon> so we can
+run it outside the script.
+
+L<t/*>
+
+=item *
+
+Add lots of stub tests to be filled in shortly -- honest! Also created
+a TODO listing of tests to create.
+
+=head1 1.99_02
+
+NOTE: Skipped this release to sync up the beta number with the extra
+dev number.
+
+=head1 1.99_01, 3 July 2003
+
+=head2 Major Changes
+
+=over 4
+
+=item *
+
+Log4perl is now used for all logging. This is a major change in how
+OI2 presents its state to you, allowing you far more flexibility than
+you previously had.
+
+=item *
+
+B<Lots> of documentation additions and updates.
+
+=item *
+
+Different content generators than the Template Toolkit exist and can
+be used. They're not as featureful (e.g., nothing similar to the TT
+plugin) but may be useful when porting applications. They are
+C<Text::Template> (using
+L<OpenInteract2::ContentGenerator::TextTemplate|OpenInteract2::ContentGenerator::TextTemplate>)
+and C<HTML::Template> (using
+L<OpenInteract2::ContentGenerator::HtmlTemplate|OpenInteract2::ContentGenerator::HtmlTemplate>).
+
+You can find examples of using them in the 'news' package -- look at
+the bottom of the conf/action.ini file to enable the different actions.
+
+=item *
+
+The controller has been decoupled from the content generator. Each
+controller is B<associated> with a content generator, but a content
+generator doesn't map to a single controller. (This probably doesn't
+make sense to anybody who didn't read the code or try to use a
+different content generator, but trust me that it's better.)
+
+=item *
+
+OpenInteract2 now has content filters. And they're easy! A filter is
+just an observer (see L<Class::Observable|Class::Observable>) that
+catches 'filter' observations and has an opportunity to modify the
+content generated before it's optionally cached.
+
+=item *
+
+...which leads to caching of action content, now implemented. It's
+mostly transparent to your action as long as the cached content
+doesn't depend on any non-request parameters. (See
+L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching> for
+lots of info.)
+
+=item *
+
+OpenInteract2::Exception now uses Exception::Class rather than
+SPOPS::Exception, and E::C is a depdendency.
+
+=item *
+
+The standalone daemon (C<oi2_daemon>) respects the C<OPENINTERACT2>
+environment variable and will use it to find the server configuration
+and the daemon configuration if unspecified.
+
+=back
+
+=head2 Minor changes
+
+Too many small fixes and improvements to note, sorry. As we stabilize
+to 2.0 this will get explicit.
+
+=head2 Broken stuff
+
+Full text searching doesn't seem to work. A number of other actions
+have not been fully tested by hand, much less in an automated fashion.
+
+Also, tests for other areas of the system are lagging.
+
+=head1 1.99_00, 10 June 2003
+
+This is the first BETA release. DO NOT run production systems on it.
+
+=head2 Compatibility
+
+Since OpenInteract 2.x uses a separate namespace than OpenInteract 1.x
+(OpenInteract2 vs. OpenInteract), you should have B<no problems>
+installing this on a machine with OpenInteract 1.x. 
+
+There is currently no automated way to upgrade the server
+configuration or everything about a custom package. (You can translate
+the C<conf/action.perl> and C<conf/spops.perl> into the new INI format
+-- see scripts in C<script/>.) In addition, a number of core packages
+have upgraded schemas so you can't simply dump your table and reload
+it.
+
+Before 2.0 final is released there should be tools to:
+
+=over 4
+
+=item *
+
+Do a simple translation of content handlers and other classes. This
+would just translate most of the $R calls to CTX calls (or
+CTX-E<gt>request, CTX-E<gt>response calls).
+
+=item *
+
+Do a translation of Template Toolkit directives that have changed
+(there aren't many).
+
+=back
+
+=head2 Major Changes
+
+These are the highlights. Many others are lurking under the covers.
+
+=over 4
+
+=item *
+
+There is no longer a package repository and a website, only a
+website. This greatly simplifies development.
+
+=item *
+
+You can deploy OI2 under a specific URL-space so that, for instance,
+all requests under '/OI2/' will get translated to the proper action.
+
+=item *
+
+And along with deployment you can easily rewrite URLs to fit in the
+deployment scheme.
+
+=item *
+
+Tight integration with SPOPS object persistence still exists and has
+been enhanced to make development easier -- you do not have to specify
+'SPOPS::Secure' in the ISA, just set the 'is_secure' key to 'yes'. You
+also do not have to specify the database type in your persistent
+object -- it's wired to a datasource which knows this information, so
+we generate it at startup time.
+
+=item *
+
+An entirely new management scheme replaced the massive C<oi_manage>
+with programmable tasks to create a website, create and install
+packages, install database schemas along with associated data and
+security settings, and more.
+
+=item *
+
+Request parameters that OI2 deals with are separate from the how those
+parameters are retrieved. This means it's easy to deploy an OI2 server
+in different environments -- it ships with interfaces for Apache
+1.x/mod_perl 1.x, CGI, and a standalone server based on LWP. It's easy
+to create interfaces for other systems as well. (See L<OI2
+INTERFACES>.)
+
+=item *
+
+Content handlers are now objects instead of classes, all deriving from
+L<OpenInteract2::Action|OpenInteract2::Action>. This simplifies
+development, making each action stateful rather than passing around a
+dumb hashref.
+
+=item *
+
+You can now generate any kind of content from OI2. OI2 is still
+heavily biased toward the Template Toolkit (can you blame it?), but
+you can plugin any type of content generator you like. A sample one is
+in the distribution:
+L<OpenInteract2::ContentGenerator::TextTemplate|OpenInteract2::ContentGenerator::TextTemplate>.
+
+=item *
+
+The C<OpenInteract::CommonHandler> megalith has been split up into
+separate classes to deal with searching, displaying, updating, adding,
+and removing objects.
+
+=item *
+
+All actions in the core packages have been modified to use these
+common handlers where possible, and when not possible they don't
+overload as much functionality into a single task. For instance,
+'display' will just display a non-editable object; 'display_form' will
+just display an existing object in a form for updating; 'display_add'
+will display a form without an object.
+
+=item *
+
+The procedures for installing SQL structures, initial data and
+security has been totally overhauled. It's B<much> to create an
+installer now.
+
+=item *
+
+Authentication is more flexible and can be adapted to different
+systems (e.g., HTTP authentication instead of cookies) more easily.
+
+=item *
+
+The package and repository code was entirely rewritten. The repository
+now holds the bare minimum to keep track of objects and it should
+never become corrupted.
+
+=item *
+
+Everything in OI2 should throw an exception object rather than issue a
+C<die>. This allows us to discern the different types of errors more
+easily, keep track of where they were thrown, etc.
+
+=item *
+
+An ever-growing testing suite ensures that OI2 can adapt easily and
+also provides a separate bunch of documentation.
+
+=back
+
+=head2 OI2 INTERFACES
+
+An 'interface' refers to how OpenInteract2 interacts with the outside
+world. An interface consists of three parts:
+
+=over 4
+
+=item *
+
+Adapter to take the user's request, login the user and create the
+necessary OpenInteract2 objects
+(L<OpenInteract2::Request|OpenInteract2::Request>,
+L<OpenInteract2::Response|OpenInteract2::Response>,
+L<OpenInteract2::Controller|OpenInteract2::Controller>).
+
+=item *
+
+Subclass of L<OpenInteract2::Request|OpenInteract2::Request> to take
+the parameters, cookies, and other user information from the user's
+request and put it into the OpenInteract2 framework.
+
+=item *
+
+Subclass of L<OpenInteract2::Response|OpenInteract2::Response> to take
+the generated headers, cookies, and content generated by OpenInteract2
+and send it back to the client.
+
+=back
+
+Since most of the functionality is pushed down into the Request and
+Response subclasses, adapters are generally pretty simple. For
+instance, here's an example of the Adapter for Apache 1.x/mod_perl
+1.x:
+
+ package Apache::OpenInteract2;
+
+ use strict;
+ use OpenInteract2::Auth;
+ use OpenInteract2::Request;
+ use OpenInteract2::Response;
+
+ sub handler($$) {
+     my ( $class, $r ) = @_;
+     my $response = OpenInteract2::Response->new({ apache => $r });
+     my $request  = OpenInteract2::Request->new({ apache => $r });
+     OpenInteract2::Auth->login( $r->pnotes( 'login_user' ) );
+     my $controller = eval {
+         OpenInteract2::Controller->new( $request, $response )
+     };
+     if ( $@ ) {
+         $response->content( $@ );
+     }
+     else {
+         $controller->execute;
+     }
+     $response->send;
+     return $response->status;
+ }
+
+=head1 SEE ALSO
+
+OpenInteract Wiki
+
+L<http://openinteract.sourceforge.net/cgi-bin/twiki/view/OI/>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

@@ -1,0 +1,45 @@
+package OpenInteract2::SQLInstall::[% class_name %];
+
+# This is a simple example of a SQL installer you might write. It uses
+# your package name as the base and assumes you want to create a
+# separate table for Oracle users and include a sequence for Oracle
+# and PostgreSQL users.
+
+# It also assumes that you're installing security of some type, either
+# default handler or default object.
+
+use strict;
+use base qw( OpenInteract2::SQLInstall );
+
+my %FILES = (
+   oracle  => [ '[% package_name %]_oracle.sql',
+                '[% package_name %]_sequence.sql' ],
+   pg      => [ '[% package_name %].sql',
+                '[% package_name %]_sequence.sql' ],
+   default => [ '[% package_name %].sql' ],
+);
+
+sub get_structure_set {
+    return '[% package_name %]';
+}
+
+sub get_structure_file {
+    my ( $self, $set, $type ) = @_;
+    return $FILES{oracle} if ( $type eq 'oracle' );
+    return $FILES{pg}     if ( $type eq 'Pg' );
+    return $FILES{default};
+}
+
+# Uncomment this if you're passing along initial data
+
+#sub get_data_file {
+#    return 'initial_data.dat';
+#}
+
+# Uncomment this if you're using security
+
+#sub get_security_file {
+#    return 'install_security.dat';
+#}
+
+1;

@@ -1,0 +1,8 @@
+[%########################################
+  form_button( name, value, field_label, onclick )
+     Form button, generally used for JavaScript clicks
+  ########################################-%]
+[%- DEFAULT value = 'Click Me' -%]
+<input type="button" value="[% value %]"
+    [%- IF onclick %] onClick="[% onclick %]"[% END -%]
+    [%- IF name %] name="[% name %]"[% END %]> [% field_label %]
