@@ -1,12 +1,12 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.5 2001/08/27 22:09:48 lachoy Exp $
+# $Id: Auth.pm,v 1.6 2001/08/29 13:22:57 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -72,9 +72,10 @@ sub user {
     # If the user didn't previously exist, try to create
     # from the fields login_name and password
 
-    my $login_field    = $R->CONFIG->{login}{login_field};
-    my $password_field = $R->CONFIG->{login}{password_field};
-    my $remember_field = $R->CONFIG->{login}{remember_field};
+    my $CONFIG = $R->CONFIG;
+    my $login_field    = $CONFIG->{login}{login_field};
+    my $password_field = $CONFIG->{login}{password_field};
+    my $remember_field = $CONFIG->{login}{remember_field};
     unless ( $login_field and $password_field ) {
         $R->throw({ code => 205, type => 'system' });
         return undef;
@@ -122,6 +123,18 @@ sub user {
     $R->{auth}{logged_in} = 1;
     $R->{session}{user_id} = $user->id;
     $R->{auth}{user} = $user;
+
+    if ( my $custom_class = $CONFIG->{login}{custom_login_handler} ) {
+        $R->scrib( 1, "Custom login handler being used: ($custom_class)" );
+        eval { $custom_class->handler };
+        if ( $@ ) {
+            $R->scrib( 0, "Custom login handler died with: $@" );
+            $R->{auth}{logged_in} = 0;
+            delete $R->{session}{user_id};
+            delete $R->{auth}{user};
+        }
+    }
+
     return undef;
 }
 
@@ -228,13 +241,21 @@ the password. (Both are stored as constants in this module.)
 However, you can define your own variable names in your
 C<conf/server.perl> file. Just set:
 
- {
    login => { login_name => 'xxx',
-              password   => 'xxx' },
- }
+              password   => 'xxx', ... },
 
 (If you modify the template for logging in to have new names under the
 'INPUT' variables you will want to change these.)
+
+You can also define custom behavior for a login by specifying in the
+server configuration:
+
+   login => { custom_login_handler => 'My::Handler::Login' },
+
+The C<handler()> method will then be called on
+'My::Handler::Login'. It will only be called after a successful
+login. No arguments are passed into the handler, but C<$R> is fully
+stocked with the user object.
 
 B<group()>
 

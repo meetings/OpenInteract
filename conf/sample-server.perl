@@ -203,6 +203,11 @@ $data = {
        login_field      => 'login_login_name',
        password_field   => 'login_password',
        remember_field   => 'login_remember',
+
+       # This handler defines custom actions that happen when a user
+       # logs in.
+
+       custom_login_handler => '',
      },
 
      ########################################
@@ -428,5 +433,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.20 $',
+     'ConfigurationRevision' => '$Revision: 1.21 $',
 };

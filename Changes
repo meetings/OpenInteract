@@ -1,5 +1,32 @@
 Revision history for Perl extension OpenInteract.
 
+1.21
+
+Overall:
+
+Quick bugfix release: browser-based security editing doesn't work with
+the package base_security-1.45, which was shipped with OI 1.2. Bug
+fixed and this version ships with base_security-1.46.
+
+Individual:
+
+ * conf/sample-server.perl:
+
+   - Added {login}->{custom_login_handler} key
+
+ * OpenInteract/Auth.pm:
+
+   - Added ability to define custom login behavior by specifying a
+   custom login handler in the configuration. Thanks to Stefano
+   <stefano@antartide.org> for the idea.
+
+Packages changed:
+
+   OpenInteract    1.2  -> 1.21
+   ----------------------------
+   base_security:  1.45 -> 1.46
+
+
 1.2  Tue Aug 28 17:20:44 EDT 2001
 
 Overall:

@@ -91,7 +91,7 @@ pkg/base_box-0.30.tar.gz
 pkg/base_component-1.25.tar.gz
 pkg/base_error-1.30.tar.gz
 pkg/base_group-1.25.tar.gz
-pkg/base_security-1.45.tar.gz
+pkg/base_security-1.46.tar.gz
 pkg/base_template-1.27.tar.gz
 pkg/base_theme-1.26.tar.gz
 pkg/base_user-1.34.tar.gz
