@@ -1,6 +1,6 @@
 BEGIN { print "1..1\n" }
 
-eval { require OpenInteract::Package };
+eval { require OpenInteract::Startup };
 if ( $@ ) {
  print "not ";
 }

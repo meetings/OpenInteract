@@ -144,6 +144,9 @@ your option) any later version.
  OpenInteract::Auth
  OpenInteract::CommonHandler
  OpenInteract::Config
+ OpenInteract::Config::GlobalOverride
+ OpenInteract::Config::Ini
+ OpenInteract::Config::IniFile
  OpenInteract::Config::PerlFile
  OpenInteract::Cookies::Apache
  OpenInteract::Cookies::CGI
@@ -158,6 +161,8 @@ your option) any later version.
  OpenInteract::Request
  OpenInteract::Session
  OpenInteract::Session::DBI
+ OpenInteract::Session::File
+ OpenInteract::Session::SQLite
  OpenInteract::SPOPS
  OpenInteract::SPOPS::DBI
  OpenInteract::SPOPS::LDAP
@@ -198,4 +203,4 @@ Every other package, whether developed by intes.net, inc. or other
 party, is licensed under its own terms.
 
 =========================
-$Id: README,v 1.6 2002/02/26 03:02:40 lachoy Exp $
+$Id: README,v 1.7 2002/05/07 05:35:33 lachoy Exp $

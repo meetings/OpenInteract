@@ -170,8 +170,21 @@ PostgreSQL      --driver=SPOPS::DBI::Pg
 Sybase ASA/ASE  --driver=SPOPS::DBI::Sybase
 MS SQL Server   --driver=SPOPS::DBI::Sybase
 MySQL           --driver=SPOPS::DBI::MySQL
+Oracle          --driver=SPOPS::DBI::Oracle
 
 (MySQL given just in case you need to change it back!)
+
+*****NOTE*****
+
+As of version 1.40 there is a more permanent way to do
+this.
+
+ - Create a file %%WEBSITE_DIR%%/conf/override_spops.ini
+
+ - Open the file %%WEBSITE_DIR%%/conf/sample-override_spops.ini and
+ copy the first 10 entries under 'REPLACE SPOPS DRIVER' and use the
+ above table of database mappings to modify the relevant entries as
+ directed.
 
 
 (5) Install SQL files and data
@@ -323,4 +336,4 @@ the 'site admin' group to pull up a form).
 Now: have some fun!
 
 ========================================
-$Id: INSTALL.website,v 1.11 2002/01/21 14:24:02 lachoy Exp $
+$Id: INSTALL.website,v 1.12 2002/05/07 05:35:17 lachoy Exp $

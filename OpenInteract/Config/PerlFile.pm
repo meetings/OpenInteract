@@ -1,13 +1,19 @@
 package OpenInteract::Config::PerlFile;
 
-# $Id: PerlFile.pm,v 1.5 2002/01/02 02:43:53 lachoy Exp $
+# $Id: PerlFile.pm,v 1.6 2002/04/17 12:44:29 lachoy Exp $
 
 use strict;
 use Data::Dumper         qw( Dumper );
 use OpenInteract::Config qw( _w DEBUG );
 
 @OpenInteract::Config::PerlFile::ISA     = qw( OpenInteract::Config );
-$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+
+sub valid_keys {
+    my ( $self ) = @_;
+    return grep ! /^_/, keys %{ $self };
+}
+
 
 sub read_config {
     my ( $class, $filename ) = @_;
@@ -54,7 +60,7 @@ sub read_config {
 
 sub save_config {
     my ( $self, $filename ) = @_;
-    $filename ||= join( '/', $self->get_dir( 'config' ), $self->{config_file} ); 
+    $filename ||= join( '/', $self->get_dir( 'config' ), $self->{config_file} );
     unless ( -f $filename ) {
         my $msg = 'Cannot read configuration file!';
         my $system_msg = "No valid filename ($filename) for saving configuration information!";
@@ -92,7 +98,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Config::PerlFile - Subclass OpenInteract::Config to read/write information from/to a perl file
+OpenInteract::Config::PerlFile - Read/write information from/to a perl file
 
 =head1 DESCRIPTION
 

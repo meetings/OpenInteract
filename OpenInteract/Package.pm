@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.35 2002/01/16 17:36:41 lachoy Exp $
+# $Id: Package.pm,v 1.36 2002/03/15 15:44:43 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.35 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -729,8 +729,14 @@ sub check {
         $status->{msg} .= "\n$sig File ($perl_file) $filestatus";
     }
 
-    # Next all the .pm files -- note that we suppress warnings within
-    # this block
+    # Next all the .pm files - stick the package directory (cwd) into
+    # @INC so we don't have any ambiguity about where the modules
+    # being tested come from
+
+    unshift @INC, cwd;
+
+    # We suppress warnings within this block so all the interesting
+    # stuff goes into the status
 
     {
         local $SIG{__WARN__} = sub { return undef };

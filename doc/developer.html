@@ -489,11 +489,10 @@ $ cat conf/spops.perl
 $spops = {
             'fruit' => {
               class        => 'OpenInteract::Fruit',
-              isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  
+              isa          => [ qw/ OpenInteract::SPOPS::DBI
                                     SPOPS::DBI::MySQL  SPOPS::DBI / ],
               field        => [ qw/ id name taste price / ], 
               id_field     => 'id',
-
               no_update    => [ qw/ id / ],
               skip_undef   => [ qw/ name taste price / ],
               base_table   => 'fruit',
@@ -524,10 +523,10 @@ and you should have only one table per file.
 
 $ cat struct/create-table-fruit.sql
 create table fruit (
-    id %%INCREMENT%%,
-    name varchar(255),
-    taste varchar(255),
-    price varchar(255),
+    id     %%INCREMENT%%,
+    name   varchar(255),
+    taste  varchar(255),
+    price  varchar(255),
     primary key (id)
 )
 </font></pre>
@@ -687,11 +686,10 @@ $OpenInteract::Handler::Fruit::author = 'lemburg@aixonix.de';
 sub handler {
   my ( $class, $p ) = @_;
   my $R = OpenInteract::Request->instance;
-  my $fruits = $R->fruit->fetch_group( { 'order' => 'name' } ); 
+  my $fruits = $R->fruit->fetch_group({ 'order' => 'name' }); 
   my $params = { fruits_in_store => $fruits };
   return $R->template->handler( {}, $params, 
-                                { db      => 'fruit-display', 
-                                  package => 'fruit' } );
+                                { name => 'fruit::fruit-display' } );
 }
 
 1;

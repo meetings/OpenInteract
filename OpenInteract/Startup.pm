@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.30 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Startup.pm,v 1.31 2002/04/23 13:05:44 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -8,13 +8,14 @@ use Data::Dumper  qw( Dumper );
 use File::Path    qw();
 use Getopt::Long  qw( GetOptions );
 use OpenInteract::Config;
+use OpenInteract::Config::GlobalOverride;
 use OpenInteract::Error;
 use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -72,6 +73,25 @@ sub main_initialize {
         foreach my $pkg_require_class ( @{ $pkg_require_list } ) {
             $require_class{ $pkg_require_class } = $pkg_info->{name};
         }
+    }
+
+    # Do any global overrides for both SPOPS and the action table
+    # entries.
+
+    my $override_spops_file = join( '/', $C->{dir}{base},
+                                         $C->{override}{spops_file} );
+    my $override_action_file = join( '/', $C->{dir}{base},
+                                          $C->{override}{action_file} );
+
+    if ( -f $override_spops_file ) {
+        my $override_spops = OpenInteract::Config::GlobalOverride->new(
+                                        { filename => $override_spops_file } );
+        $override_spops->apply_rules( $C->{SPOPS} );
+    }
+    if ( -f $override_action_file ) {
+        my $override_action = OpenInteract::Config::GlobalOverride->new(
+                                        { filename => $override_action_file } );
+        $override_action->apply_rules( $C->{action} );
     }
 
     # Read in all the classes specified by the packages

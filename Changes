@@ -1,5 +1,144 @@
 Revision history for Perl extension OpenInteract.
 
+1.40  Tue May  7 08:54:49 EDT 2002
+
+Overall:
+
+ - OpenInteract runs on Oracle! Many thanks to Ben Avery
+   <ben@thesite.org.uk> for patient debugging and installs.
+
+ There is one caveat, at least for the time being: you need to use
+ something else to store your sessions. The new
+ OpenInteract::Session::File and OpenInteract::Session::SQLite
+ implementations may help -- you also have the option of implementing
+ with another DBI database.
+
+ - Package configuration customization is much easier now -- you can
+ centralize your modifications in a single file that doesn't get
+ overwritten with package upgrades. See
+ OpenInteract::Config::GlobalOverride notes below and module for
+ details.
+
+ - Different session storage is now available through
+ OpenInteract::Session::File and OpenInteract::Session::SQLite. See
+ more below.
+
+
+Individual:
+
+ * INSTALL.website:
+
+   - Add note about the override_spops.ini file while discussing
+   changing the SPOPS driver.
+
+ * conf/sample-override_spops.ini:
+
+   - Create file with sample override rules you can use. This file
+   gets copied into the $WEBSITE_DIR/conf file whenever you run a
+   'create_website', but upgraders can copy it manually.
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Ensure we pass along parameters to the relevant method whenever
+   we fail a task. This ensures that the initial security (etc.) gets
+   passed along as well. This is still a little messy, but it should
+   work. Thanks to Sloan Seaman for bringing up the issue.
+
+   - Fix documentation of _edit_customize() so it's testing for the
+   right thing. (Thanks to Sloan again.)
+
+ * OpenInteract/Config/GlobalOverride.pm:
+
+   - Add class to process overriding rules for configuration
+   directives. This enables you to make changes to lots of
+   configuration items from one place, overriding the values in a
+   package's 'conf/spops.perl', for example, so you don't have to run
+   'oi_manage change_spops_driver' every time you upgrade the package.
+
+   Note that if you use this along with the 'insert_alter' directives,
+   you must upgrade to SPOPS 0.60, since this feature is new as of
+   that version.
+
+ * OpenInteract/Package.pm:
+
+   - When running check(), stick the package dir at the head of @INC
+   so there's no ambiguity about where the tested modules are coming
+   from. (For instance, if you have the website templib directory in
+   @INC for whatever reason.)
+
+ * OpenInteract/Session/DBI.pm:
+
+   - Allow a datasource to be specified in the server
+   configuration. So you could use a "heavy" database (like Oracle)
+   for most of your application while using a "light" database (like
+   MySQL) for your sessions.
+
+   - Improve documentation for existing features and add docs for new
+   ones.
+
+ * OpenInteract/Session/File.pm:
+
+   - Add implementation for using the filesystem as a session store.
+
+ * OpenInteract/Session/SQLite.pm:
+
+   - Add implementation for using a SQLite database as a session
+   store. (Note that this uses the fairly new Apache::Session::SQLite
+   CPAN module, YMMV.)
+
+ * OpenInteract/SPOPS.pm:
+
+   - Modify how we store and retrieve object tracking information
+   since it's now a normal SPOPS object. Previous interfaces should
+   still hold, except for 'fetch_creator()' which returns a single
+   object (or undef) instead of an arrayref.
+
+ * OpenInteract/SQLInstall.pm:
+
+   - Add translations for Oracle, SQLite and InterBase.
+
+   - Change %%INCREMENT%% for Postgres from 'SERIAL' to 'INT NOT
+   NULL'. Rather than relying on the Postgres auto-sequence naming
+   code, we're going to create our own sequences to be consistent with
+   Oracle. (See UPGRADE for upgrade notes.)
+
+ * OpenInteract/Startup.pm:
+
+   - If relevant files are present, apply
+   OpenInteract::Config::GlobalOverride to SPOPS and action table once
+   they're generated but before they're processed.
+
+ * script/oi_manage:
+
+   - Fixed message returned by initialize_request() on error (Thanks
+   to Sloan Seaman for the spot)
+
+   - Copy over 'conf/sample-override_spops.ini' to website when
+   'create_website' run.
+
+Packages updated:
+
+   OpenInteract     1.39 -> 1.40
+   ----------------------------
+   base:            1.63 -> 1.67
+   base_box:        0.44 -> 0.45
+   base_component:  1.30 -> 1.30
+   base_error:      1.39 -> 1.42
+   base_group:      1.32 -> 1.36
+   base_page:       0.90 -> 0.98
+   base_security:   1.54 -> 1.57
+   base_template:   1.27 -> 1.31
+   base_theme:      1.29 -> 1.33
+   base_user:       1.49 -> 1.55
+   lookup:          0.20 -> 0.20
+   object_activity: 0.11 -> 0.18
+   results_manage:  0.07 -> 0.08
+   system_doc:      1.29 -> 1.29
+   classified:      1.32 -> 1.35
+   full_text:       1.30 -> 1.31
+   news:            1.33 -> 1.39
+
+
 1.39  Mon Mar  4 07:45:35 EST 2002
 
 Individual:

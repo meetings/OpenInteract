@@ -1,12 +1,12 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.10 2002/02/24 06:29:57 lachoy Exp $
+# $Id: Session.pm,v 1.11 2002/05/02 04:25:37 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
@@ -169,9 +169,14 @@ order they are meant to be called?
 
 This class also requires you to implement a subclass that overrides
 the _create_session method with one that returns a valid
-C<Apache::Session> tied hashref. OpenInteract provides
-C<OpenInteract::Session::DBI> for DBI databases. Implementations using
-DB_File, GDBM, NFS, etc. are left as an exercise for the reader.
+L<Apache::Session|Apache::Session> tied hashref. OpenInteract provides
+L<OpenInteract::Session::DBI|OpenInteract::Session::DBI> for DBI
+databases,
+L<OpenInteract::Session::SQLite|OpenInteract::Session::SQLite> for
+SQLite databases, and ,
+L<OpenInteract::Session::File|OpenInteract::Session::File> using the
+filesystem. Implementations using other media are left as an exercise
+for the reader.
 
 Subclasses should refer to the package variable
 C<$OpenInteract::Session::COOKIE_NAME> for the name of the cookie to
@@ -179,7 +184,7 @@ create, and should throw a '310' error of type 'session' if unable to
 connect to the session data source to create a session.
 
 You can create sessions that will expire if not used by setting the
-C<session_info::expires_in> server configuration key. See the
+C<session_info.expires_in> server configuration key. See the
 description below in L<CONFIGURATION> for more information.
 
 =head1 METHODS
@@ -187,9 +192,9 @@ description below in L<CONFIGURATION> for more information.
 B<parse()>
 
 Get the session_id and fetch a session for this user; if one does not
-exist, just set the {session} property of $r to an anonymous hash. If
-data exist when we want to save it, we will create a session form it
-then. Otherwise we will not bother.
+exist, just set the {session} property of C<$R> to an anonymous
+hashref. If data exist when we want to save it, we will create a
+session form it then. Otherwise we will not bother.
 
 B<save()>
 
@@ -204,14 +209,14 @@ The following configuration keys are used:
 
 =item *
 
-B<session_info::expiration> (optional)
+B<session_info.expiration> (optional)
 
 Used to set the time a session lasts. See L<CGI|CGI> for an explanation of
 the relative date strings accepted.
 
 =item *
 
-B<session_info::expires_in> (optional)
+B<session_info.expires_in> (optional)
 
 Used to set the time (in number of minutes) greater than which a
 session will expire due to inactivity.

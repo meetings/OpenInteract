@@ -1,15 +1,16 @@
 package OpenInteract::Error::System;
 
-# $Id: System.pm,v 1.8 2002/01/16 13:11:49 lachoy Exp $
+# $Id: System.pm,v 1.9 2002/04/13 16:10:06 lachoy Exp $
 
 use strict;
 use Carp                   qw( cluck );
 use Data::Dumper           qw( Dumper );
 use OpenInteract::Error::Main;
 use OpenInteract::Utility;
+use SPOPS::Utility;
 
 @OpenInteract::Error::System::ISA     = ();
-$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 my $ERROR_HOLD = $OpenInteract::Error::Main::ERROR_HOLD;
 
@@ -108,7 +109,7 @@ sub cannot_connect_db {
     $R->DEBUG &&  cluck ">> Error: Cannot connect to db. Info:\n",
                         Dumper( $err->{tmp_db_info} ) ;
     my $C = $R->CONFIG;
-    $err->{error_id} = $err->generate_random_code( 16 );
+    $err->{error_id} = SPOPS::Utility->generate_random_code( 16 );
 
     # First send an email
 

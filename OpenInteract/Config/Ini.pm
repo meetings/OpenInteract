@@ -1,12 +1,11 @@
 package OpenInteract::Config::Ini;
 
-# $Id: Ini.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Ini.pm,v 1.8 2002/04/22 05:05:17 lachoy Exp $
 
 use strict;
 use OpenInteract::Config qw( _w DEBUG );
 
-@OpenInteract::Config::Ini::ISA     = ();
-$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::Ini::VERSION = substr(q$Revision: 1.8 $, 10);
 
 # Stuff in metadata (_m):
 #   sections (\@): all full sections, in the order they were read
@@ -50,6 +49,11 @@ sub delete {
     delete $self->{ $section }{ $param };
 }
 
+
+sub sections {
+    my ( $self ) = @_;
+    return @{ $self->{_m}{order} };
+}
 
 ########################################
 # INPUT

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.58 2002/02/06 13:17:22 lachoy Exp $
+# $Id: oi_manage,v 1.60 2002/04/25 11:23:06 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.58 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.60 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -1695,6 +1695,7 @@ TMPLMSG
       "conf/sample-server.perl"             => "conf/server.perl",
       "conf/sample-server.ini"              => "conf/server.ini",
       "conf/sample-startup.pl"              => "conf/startup.pl",
+      "conf/sample-override_spops.ini"      => "conf/sample-override_spops.ini",
       "INSTALL.website"                     => "INSTALL.website"
     );
     my $replace_keys = [ '%%INTERACT_DIR%%', '%%WEBSITE_DIR%%',
@@ -2732,14 +2733,18 @@ sub initialize_request {
     my ( $p ) = @_;
     my $R = eval { OpenInteract::Startup->setup_static_environment(
                                                   $p->{website_dir} ) };
-
     if ( $@ ) {
+        my $bc = OpenInteract::Startup->read_base_config({
+                                             dir => $p->{website_dir} });
+        my $config_msg = ( ref $bc eq 'HASH' )
+                           ? join( '/', "$p->{website_dir}/conf", $bc->{config_file} )
+                           : 'Could not be determined';
         my $error_msg = <<MSG;
 [oi_manage]: Failed to $p->{action}.
 
 Error: $@
 
-Configuration file used: $p->{website_dir}/conf/server.perl
+Configuration file used: $config_msg
 MSG
         die $error_msg;
     }
@@ -4058,6 +4063,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.58 $
+Revision: $Revision: 1.60 $
 
 =cut

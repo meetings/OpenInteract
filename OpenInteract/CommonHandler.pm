@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.37 2002/02/04 13:06:35 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.39 2002/04/15 19:14:29 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.37 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -87,12 +87,12 @@ sub search {
 
             if ( ! $iterator and $msg ) {
                 my $cap_task = $class->MY_SEARCH_RESULTS_CAP_FAIL_TASK;
-                return $class->$cap_task({ error_msg => $msg });
+                return $class->$cap_task({ %params, error_msg => $msg });
             }
 
             if ( $@ ) {
                 my $fail_task = $class->MY_SEARCH_FAIL_TASK;
-                return $class->$fail_task({ error_msg => "Search failed: $@" });
+                return $class->$fail_task({ %params, error_msg => "Search failed: $@" });
             }
 
             $results->save( $iterator );
@@ -130,13 +130,13 @@ sub search {
 
         if ( ! $params{iterator} and $msg ) {
             my $cap_task = $class->MY_SEARCH_RESULTS_CAP_FAIL_TASK;
-            return $class->$cap_task({ error_msg => $msg });
+            return $class->$cap_task({ %params, error_msg => $msg });
         }
 
         if ( $@ ) {
             my $fail_task = $class->MY_SEARCH_FAIL_TASK;
             $R->scrib( 0, "Got error from running search: $@" );
-            return $class->$fail_task({ error_msg => "Search failed: $@" });
+            return $class->$fail_task({ %params, error_msg => "Search failed: $@" });
         }
     }
 
@@ -453,7 +453,7 @@ sub show {
     unless ( $p->{is_new_object} ) {
         $object = $p->{ $object_type } ||
                   eval { $class->fetch_object( $p->{ $id_field }, $id_field ) };
-        return $class->$fail_method({ error_msg => $@ }) if ( $@ );
+        return $class->$fail_method({ %params, error_msg => $@ }) if ( $@ );
     }
 
     # If this is a saved object, see if we're supposed to ensure it's
@@ -465,7 +465,7 @@ sub show {
         unless ( $status =~ /^\s*(y|yes|1)\s*$/i ) {
             $R->scrib( 0, "Object failed 'active' status check (Status: $status)" );
             my $error_msg = "This object is currently inactive. Please check later.";
-            return $class->$fail_method({ error_msg => $error_msg });
+            return $class->$fail_method({ %params, error_msg => $error_msg });
         }
         $R->DEBUG && $R->scrib( 1, "Object passed 'active' status check (Status: $status)" );
     }
@@ -502,6 +502,7 @@ sub show {
 
 sub edit {
     my ( $class, $p ) = @_;
+    $p ||= {};
     my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_EDIT ) {
         $R->scrib( 0, "User requested edit for ($class) and it's not allowed." );
@@ -523,7 +524,7 @@ sub edit {
     # display form.
 
     if ( $@ ) {
-        return $class->$fail_method({ error_msg => $@ });
+        return $class->$fail_method({ %{ $p }, error_msg => $@ });
     }
 
     # Assumption: SEC_LEVEL_WRITE is necessary. (Probably ok.)
@@ -533,7 +534,7 @@ sub edit {
     if ( $object_level < SEC_LEVEL_WRITE ) {
         my $error_msg = 'Sorry, you do not have access to modify this ' .
                         'object. No modifications made.';
-        return $class->$fail_method({ error_msg => $error_msg });
+        return $class->$fail_method({ %{ $p }, error_msg => $error_msg });
     }
 
     # We pass this to the customization routine so you can do
@@ -557,7 +558,7 @@ sub edit {
         return $class->_execute_options( $opts );
     }
 
-    my %show_params = ( $object_type => $object, object => $object );
+    my %show_params = ( %{ $p }, $object_type => $object, object => $object );
     eval { $object->save( $opts ) };
     if ( $@ ) {
         my $ei = OpenInteract::Error->set( SPOPS::Error->get );
@@ -680,6 +681,7 @@ sub _read_field_date_object {
 
 sub remove {
     my ( $class, $p ) = @_;
+    $p ||= {};
     my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_REMOVE ) {
         $R->scrib( 0, "User requested remove for ($class) and it's not allowed." );
@@ -697,11 +699,11 @@ sub remove {
                                                     $id_field ) };
 
     if ( $@ ) {
-        return $class->$fail_method({ error_msg => $@ });
+        return $class->$fail_method({ %{ $p }, error_msg => $@ });
     }
     unless ( $object->is_saved ) {
         my $error_msg = 'Cannot fetch object for removal. No modifications made.';
-        return $class->$fail_method({ error_msg => $error_msg });
+        return $class->$fail_method({ %{ $p }, error_msg => $error_msg });
     }
 
 
@@ -710,10 +712,10 @@ sub remove {
     if ( $object->{tmp_security_level} < SEC_LEVEL_WRITE ) {
         my $error_msg = 'Sorry, you do not have access to remove this ' .
                         'object. No modifications made.';
-        return $class->$fail_method({ error_msg => $error_msg });
+        return $class->$fail_method({ %{ $p }, error_msg => $error_msg });
     }
 
-    my %show_params = ();
+    my %show_params = %{ $p };
 
     $class->_remove_customize( $object );
     eval { $object->remove };
@@ -1804,7 +1806,7 @@ Example. Data validation might look something like:
      my ( $class, $object, $old_data ) = @_;
      my @msg = ();
      foreach my $field ( keys %required_label ) {
-        unless ( $object->{ $field } ) {
+         if ( $object->{ $field } eq '' or ! defined $object->{ $field } ) {
             push @msg, "$required_label{ $field } is a required field. " .
                        "Please enter data for it.";
         }

@@ -1,18 +1,16 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.23 2002/03/03 17:52:34 lachoy Exp $
+# $Id: SPOPS.pm,v 1.26 2002/04/24 12:34:52 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
 use Digest::MD5     qw( md5_hex );
-use HTML::Entities  ();
 use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
-
 
 ########################################
 # RULESET
@@ -134,11 +132,16 @@ sub log_action_enter {
     if ( my $apr = $R->apache ) {
         $log_msg = $apr->param( '_log_message' );
     }
-    $R->DEBUG && $R->scrib( 1, "Entering action $action to $class ($id) by $uid on $now" );
-    eval { $self->db_insert({ db    => $R->db,
-                              table => 'object_track',
-                              field => [ qw/ class object_id action action_by action_on notes / ],
-                              value => [ $class, $id, $action, $uid, $now, $log_msg ] } ); };
+    $R->DEBUG && $R->scrib( 1, "Log [$action] to [$class] [$id] by ",
+                               "[$uid] on [$now]" );
+    my $object_action = eval { $R->object_action->new({
+                                        class     => $class,
+                                        object_id => $id,
+                                        action    => $action,
+                                        action_by => $uid,
+                                        action_on => $now,
+                                        notes     => $log_msg })
+                                 ->save() };
     if ( $@ ) {
         $R->scrib( 0, "Log entry failed: $@" );
         OpenInteract::Error->set( SPOPS::Error->get );
@@ -151,8 +154,7 @@ sub log_action_enter {
 }
 
 
-# Retrieve the users who have 'creator' rights on a particular
-# object.
+# Retrieve the user who created a particular object
 
 sub fetch_creator {
     my ( $self ) = @_;
@@ -160,13 +162,7 @@ sub fetch_creator {
     # Bail if it's not an already-existing object
     return undef  unless ( ref $self and $self->id );
     my $R = OpenInteract::Request->instance;
-    my $data = eval { $self->db_select({
-                               db     => $R->db,
-                               select => [ 'action_by' ],
-                               from   => [ 'object_track' ],
-                               where  => 'class = ? AND object_id = ? and action = ?',
-                               value  => [ ref $self, $self->id, 'create' ],
-                               return => 'single-list' }) };
+    my $track = eval { $R->object_action->fetch_object_creation( $self ) };
     if ( $@ ) {
         $OpenInteract::Error::user_msg = 'Cannot retrieve object creator(s)';
         $OpenInteract::Error::extra    = { class     => ref $self,
@@ -174,8 +170,9 @@ sub fetch_creator {
         $R->throw( { code => 306 } );
         return undef;
     }
-    my $user_class = $R->user;
-    return [ map { $user_class->fetch( $_ ) } @{ $data } ];
+    my $creator = eval { $track->action_by_user };
+    if ( $@ ) { warn "Error fetching creator: $@" }
+    return $creator;
 }
 
 
@@ -191,15 +188,12 @@ sub is_creator {
     # the great and powerful superuser sees all
 
     return 1     if ( $uid eq $R->CONFIG->{default_objects}{superuser} );
-
-    my $creator_list = eval { $self->fetch_creator } || [];
-    foreach my $creator ( @{ $creator_list } ) {
-        return 1 if ( $uid eq $creator->{user_id} );
-    }
-    return undef;
+    my $creator = $self->fetch_creator;
+    return ( $creator->id eq $uid );
 }
 
-
+# TODO: Update this to just return the object...
+#
 # Retrieve an arrayref of arrayrefs where item 0 is the uid
 # of the user who last did the update and item 1 is the
 # date of the update
@@ -210,15 +204,11 @@ sub fetch_updates {
     # Bail if it's not an already-saved object
 
     return []  unless ( ref $self and $self->id );
-    my $return = ( $opt eq 'last' ) ? 'single' : 'list';
+    my $limit = ( $opt eq 'last' ) ? '1' : int( $opt );
     my $R = OpenInteract::Request->instance;
-    my $data = eval { $self->db_select({
-                               db     => $R->db,
-                               select => [ qw/ action_by  action_on  notes / ],
-                               from   => [ 'object_track' ],
-                               where  => 'class = ? AND object_id = ? and ( action = ? OR action  = ? )',
-                               value  => [ ref $self, $self->id, 'create', 'update' ],
-                               order  => 'action_on DESC', return => $return } ); };
+    my $updates = eval { $R->object_action->fetch_actions(
+                              $self, { limit        => $limit,
+                                       column_group => 'base' } ) };
     if ( $@ ) {
         $OpenInteract::Error::user_msg = 'Cannot retrieve object updates';
         $OpenInteract::Error::extra    = { class     => ref $self,
@@ -226,14 +216,8 @@ sub fetch_updates {
         $R->throw( { code => 306 } );
         return undef;
     }
-    if ( my $num = int( $opt ) ) {
-        my @updates = splice( @{ $data }, 0, $num );
-        my $num_removed = scalar @{ $data };
-        push @updates, [ 'system', "... $num_removed additional updates ... " ]  if ( $num_removed );
-        $data = \@updates;
-    }
-    $R->DEBUG && $R->scrib( 2, "Data from updates:\n", Dumper( $data ) );
-    return $data;
+    $R->DEBUG && $R->scrib( 2, "Data from updates:\n", Dumper( $updates ) );
+    return [ map { [ $_->{action_by}, $_->{action_on} ] } @{ $updates } ];
 }
 
 

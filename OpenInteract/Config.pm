@@ -1,6 +1,6 @@
 package OpenInteract::Config;
 
-# $Id: Config.pm,v 1.6 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Config.pm,v 1.7 2002/04/23 13:01:33 lachoy Exp $
 
 use strict;
 use OpenInteract::Error;
@@ -11,7 +11,7 @@ require Exporter;
 #$AUTOLOAD = '';
 
 @OpenInteract::Config::ISA       = qw( Exporter );
-$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Config::EXPORT_OK = qw( _w DEBUG );
 my %CONFIG_TYPES = (
    'perl' => 'OpenInteract::Config::PerlFile',
@@ -46,6 +46,16 @@ sub instance {
     return bless( $data, $class );
 }
 
+
+sub read_file {
+    my ( $class, $filename ) = @_;
+    DEBUG && _w( 1, "Config trying to read file [$filename]" );
+    open( CONF, $filename )
+          || die "Cannot open [$filename] for reading: $!\n";
+    my @lines = <CONF>;
+    close( CONF );
+    return \@lines;
+}
 
 # Copy items from the default action into all the other actions --
 # this method doesn't quite belong here but since we don't have

@@ -293,7 +293,7 @@ $data = {
        # cache_size: How many templates the Template Toolkit should
        # cache in memory
 
-       'cache_size => 75,
+       'cache_size' => 75,
 
        # If true, will remove all compiled files on server restart
        # (production boxes can set this to false so that startup costs
@@ -328,6 +328,18 @@ $data = {
        'custom_variable_class'  => '',
        'custom_variable_method' => '',
 
+     },
+
+     ########################################
+     # Override filenames
+     #
+     # Set thse to the filename(s) with your override rules. (If the
+     # files are no!t defined nothing bad will happen.) You probably
+     # do not need to change them.
+
+     'override' => {
+       spops_file  => 'conf/override_spops.ini',
+       action_file => 'conf/override_action.ini',
      },
 
      ########################################
@@ -498,5 +510,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.31 $',
+     'ConfigurationRevision' => '$Revision: 1.32 $',
 };

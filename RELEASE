@@ -1,6 +1,15 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.40  Tue May  7 08:54:49 EDT 2002
+
+ - Runs on Oracle (except for sessions)
+
+ - Centralized package configuration customization
+
+ - Expanded ession storage options
+
+
 1.39  Mon Mar  4 07:45:35 EST 2002
 
  - Bugfix in OpenInteract.pm
@@ -182,4 +191,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.18 2002/03/04 12:17:42 lachoy Exp $
+$Id: RELEASE,v 1.20 2002/05/07 12:20:51 lachoy Exp $

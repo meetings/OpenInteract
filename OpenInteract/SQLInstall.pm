@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.18 2002/01/02 02:43:53 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.21 2002/05/02 04:53:56 lachoy Exp $
 
 use strict;
 use Class::Date;
@@ -9,7 +9,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -468,11 +468,22 @@ sub sql_modify_increment {
         if ( $driver_name eq 'mysql' ) {
             s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
         }
-        elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
+        elsif ( $driver_name eq 'Sybase' or
+                $driver_name eq 'ASAny' or
+                $driver_name eq 'FreeTDS' ) {
             s/%%INCREMENT%%/NUMERIC( 10, 0 ) IDENTITY NOT NULL/g;
         }
         elsif ( $driver_name eq 'Pg' ) {
-            s/%%INCREMENT%%/SERIAL/g;
+            s/%%INCREMENT%%/INT NOT NULL/g;
+        }
+        elsif ( $driver_name eq 'Oracle' ) {
+            s/%%INCREMENT%%/INT NOT NULL/g;
+        }
+        elsif ( $driver_name eq 'SQLite' ) {
+            s/%%INCREMENT%%/INTEGER NOT NULL/g;
+        }
+        elsif ( $driver_name eq 'InterBase' ) {
+            s/%%INCREMENT%%/INT NOT NULL/g;
         }
     }
     return wantarray ? @sql : $sql[0];
@@ -488,10 +499,21 @@ sub sql_modify_increment_type {
         if ( $driver_name eq 'mysql' ) {
             s/%%INCREMENT_TYPE%%/INT/g;
         }
-        elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
+        elsif ( $driver_name eq 'Sybase' or
+                $driver_name eq 'ASAny' or
+                $driver_name eq 'FreeTDS' ) {
             s/%%INCREMENT_TYPE%%/NUMERIC( 10, 0 )/g;
         }
         elsif ( $driver_name eq 'Pg' ) {
+            s/%%INCREMENT_TYPE%%/INT/g;
+        }
+        elsif ( $driver_name eq 'Oracle' ) {
+            s/%%INCREMENT_TYPE%%/INT/g;
+        }
+        elsif ( $driver_name eq 'SQLite' ) {
+            s/%%INCREMENT_TYPE%%/INTEGER/g;
+        }
+        elsif ( $driver_name eq 'InterBase' ) {
             s/%%INCREMENT_TYPE%%/INT/g;
         }
     }
