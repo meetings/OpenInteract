@@ -63,8 +63,8 @@ $spops = {
 #              code_class   => 'OpenInteract::User',
 
 # isa - Define the parents of this class. Every class should have at
-# least 'OpenInteract::SPOPS' and some sort of SPOPS implementation,
-# usually 'SPOPS::DBI'
+# least 'OpenInteract::SPOPS::DBI' or 'OpenInteract::SPOPS::LDAP' and
+# some sort of SPOPS implementation, usually 'SPOPS::DBI'
 
 #              isa          => [ qw/ OpenInteract::SPOPS::DBI  SPOPS::Secure  
 #                                    SPOPS::DBI::MySQL  SPOPS::DBI / ],

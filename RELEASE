@@ -1,6 +1,22 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.50  Mon Aug 26 01:37:23 EDT 2002
+
+ - Templates are now read only from the filesystem and the
+ browser-based template editing works again. If you're upgrading and
+ using templates from the database you will need to run a migration
+ script (see 'base_template' docs for more info).
+
+ - Component handler has moved from 'base_component' package, which is
+ no longer used.
+
+ - Documentation updates: much of the docs from the 'base' package are
+ now in HTML in the main docs
+
+ - Small bugfixes.
+
+
 1.41  Tue Aug 13 07:28:10 EDT 2002
 
  - Add centralized template storage in filesystem, so they will not
@@ -203,4 +219,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.21 2002/08/13 11:24:18 lachoy Exp $
+$Id: RELEASE,v 1.23 2002/08/26 05:42:25 lachoy Exp $

@@ -58,6 +58,32 @@ yet developed a utility to integrate these changes automatically,
 check here to see what updates there have been between the versions.
 
 ==============================
+UPGRADING TO 1.50
+==============================
+
+ - Added configuration keys:
+
+    'system_alias.site_template' = 'OpenInteract::SiteTemplate'
+    'system_alias.sitetemplate'  = 'OpenInteract::SiteTemplate'
+
+   These are MANDATORY -- OpenInteract will not run without them.
+
+ - If you have templates in the database you will need to run a
+ migration script; please see docs in 'base_template' package.
+
+ - Change configuration key:
+
+   'system_alias.component'  --> 'OpenInteract::Component'
+
+   This is MANDATORY -- OpenInteract will not function properly
+   without it.
+
+ - Removed configuration key (optional)
+
+    'template_info.source'
+
+
+==============================
 UPGRADING TO 1.41
 ==============================
 
@@ -75,6 +101,7 @@ Added configuration key:
 
 These are optional: doing nothing won't affect operation unless you've
 got a custom login handler defined.
+
 
 ==============================
 UPGRADING TO 1.40
@@ -525,4 +552,4 @@ process to have the changes take effect.
 
 
 ========================================
-$Id: UPGRADE,v 1.16 2002/08/13 11:24:43 lachoy Exp $
+$Id: UPGRADE,v 1.19 2002/08/26 05:42:25 lachoy Exp $

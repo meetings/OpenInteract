@@ -59,16 +59,17 @@ this as painless as possible.)
 OpenInteract uses a number of CPAN modules, relying heavily on the
 following required modules:
 
-B<SPOPS> (Simple Perl Object Persistence with Security). This module was
-developed in tandem with this framework but stands on its own as a
-full-featured object serialization system. It also implements security.
+L<SPOPS|SPOPS> (Simple Perl Object Persistence with Security). This
+module was developed in tandem with this framework but stands on its
+own as a full-featured object serialization system. It also implements
+security.
 
-B<Template Toolkit>. This is the best templating environment available
-for Perl. Version 2 has major performance improvements and also
-includes usability enhancements. It's also required by OI.
+L<Template Toolkit|Template>. This is the best templating environment
+available for Perl. Version 2 has major performance improvements and
+also includes usability enhancements. It's also required by OI.
 
-B<Apache::Session>. Provide datasource-independent means of session
-management.
+L<Apache::Session|Apache::Session>. Provide datasource-independent
+means of session management.
 
 Many others are also used -- why reinvent the wheel when there are so
 many other well-built ones already around around and so many
@@ -251,7 +252,31 @@ OpenInteract::Cache::IPC
 
 =item *
 
+OpenInteract::CommonHandler
+
+=item *
+
+OpenInteract::Component
+
+=item *
+
 OpenInteract::Config
+
+=item *
+
+OpenInteract::Config::GlobalOverride.pm
+
+=item *
+
+OpenInteract::Config::Ini.pm
+
+=item *
+
+OpenInteract::Config::IniFile.pm
+
+=item *
+
+OpenInteract::Config::PerlFile
 
 =item *
 
@@ -260,10 +285,6 @@ OpenInteract::Cookies::Apache
 =item *
 
 OpenInteract::Cookies::CGI
-
-=item *
-
-OpenInteract::Config::PerlFile
 
 =item *
 
@@ -280,6 +301,14 @@ OpenInteract::Error::Main
 =item *
 
 OpenInteract::Error::System
+
+=item *
+
+OpenInteract::Handler::GenericDispatcher
+
+=item *
+
+OpenInteract::LDAP
 
 =item *
 
@@ -303,11 +332,15 @@ OpenInteract::Session::DBI
 
 =item *
 
-OpenInteract::Session::MySQL
+OpenInteract::SPOPS
 
 =item *
 
-OpenInteract::SPOPS
+OpenInteract::SPOPS::DBI
+
+=item *
+
+OpenInteract::SPOPS::LDAP
 
 =item *
 
@@ -319,11 +352,19 @@ OpenInteract::Startup
 
 =item *
 
-OpenInteract::Template
+OpenInteract::Template::Context
 
 =item *
 
-OpenInteract::Template::Toolkit
+OpenInteract::Template::Plugin
+
+=item *
+
+OpenInteract::Template::Process
+
+=item *
+
+OpenInteract::Template::Provider
 
 =item *
 
@@ -349,15 +390,15 @@ base_box
 
 =item *
 
-base_component
-
-=item *
-
 base_error
 
 =item *
 
 base_group
+
+=item *
+
+base_page
 
 =item *
 
@@ -381,11 +422,15 @@ base_user
 
 =item *
 
-results_manage
+lookup
 
 =item *
 
-static_page
+object_activity
+
+=item *
+
+results_manage
 
 =back
 

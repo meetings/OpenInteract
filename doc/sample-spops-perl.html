@@ -73,10 +73,10 @@ $spops = {
 #              code_class   => 'OpenInteract::User',
 
 # isa - Define the parents of this class. Every class should have at
-# least 'OpenInteract::SPOPS' and some sort of SPOPS implementation,
-# usually 'SPOPS::DBI'
+# least 'OpenInteract::SPOPS::DBI' or 'OpenInteract::SPOPS::LDAP' and
+# some sort of SPOPS implementation, usually 'SPOPS::DBI'
 
-#              isa          => [ qw/ OpenInteract::SPOPS  SPOPS::Secure  
+#              isa          => [ qw/ OpenInteract::SPOPS::DBO  SPOPS::Secure  
 #                                    SPOPS::DBI::MySQL  SPOPS::DBI / ],
 
 # field - List of fields/properties of this object
@@ -186,7 +186,7 @@ $spops = {
     <address><a href="mailto:chris@cwinters.com">Chris Winters</a></address>
 <!-- Created: Tue Nov  7 10:49:19 EST 2000 -->
 <!-- hhmts start -->
-Last modified: Fri Feb  2 00:59:18 EST 2001
+Last modified: Sun Aug 25 13:44:20 EDT 2002
 <!-- hhmts end -->
   </body>
 </html>

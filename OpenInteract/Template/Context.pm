@@ -1,12 +1,11 @@
 package OpenInteract::Template::Context;
 
-# $Id: Context.pm,v 1.4 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Context.pm,v 1.5 2002/08/25 00:09:21 lachoy Exp $
 
 use strict;
 use base qw( Template::Context );
 
-$OpenInteract::Template::Context::VERSION  = '1.2';
-$OpenInteract::Template::Context::Revision = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Context::VERSION  = substr(q$Revision: 1.5 $, 10);
 
 # Overriding Template::Context so we can get around the issue of the
 # template name 'x::y' being interpreted as a directive to have a
@@ -28,17 +27,18 @@ sub template {
         # we first look in the BLOCKS hash for a BLOCK that may have
         # been imported from a template (via PROCESS)
 
-        return $template      if ( $template = $self->{ BLOCKS }->{ $name } );
+        return $template  if ( $template = $self->{BLOCKS}->{ $name } );
 
         # then we iterate through the BLKSTACK list to see if any of the
         # Template::Documents we're visiting define this BLOCK
 
-        foreach my $blocks (@{ $self->{ BLKSTACK } }) {
+        foreach my $blocks (@{ $self->{BLKSTACK} }) {
             return $template  if ( $blocks && ( $template = $blocks->{ $name } ) );
         }
     }
 
-    my $providers = $self->{ PREFIX_MAP }->{ default } || $self->{ LOAD_TEMPLATES };
+    my $providers = $self->{PREFIX_MAP}->{default} ||
+                    $self->{LOAD_TEMPLATES};
 
     # Finally we try the regular template providers which will
     # handle references to files, text, etc., as well as templates
@@ -61,8 +61,6 @@ sub template {
 
 __END__
 
-=pod
-
 =head1 NAME
 
 OpenInteract::Template::Context - Provide a custom context for templates in OpenInteract
@@ -84,8 +82,9 @@ TT context is the same.
 
 B<template( $name )>
 
-Override the method from L<Template::Context> and replicate its
-functionality, except the check for a template prefix is removed.
+Override the method from L<Template::Context|Template::Context> and
+replicate its functionality, except the check for a template prefix is
+removed.
 
 =head1 BUGS
 
@@ -97,7 +96,7 @@ Nothing known.
 
 =head1 SEE ALSO
 
-L<Template::Context>
+L<Template::Context|Template::Context>
 
 =head1 COPYRIGHT
 
@@ -109,5 +108,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

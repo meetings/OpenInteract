@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.37 2002/05/13 12:31:35 lachoy Exp $
+# $Id: Package.pm,v 1.39 2002/08/24 19:57:13 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.37 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -778,7 +778,9 @@ sub check {
 
     require Template;
     my $template = Template->new();
-    my @template_files = grep /^(template\/.*\.tmpl|widget)/, keys %{ $pkg_files };
+    my @template_files = grep ! /(\.meta|~|\.bak)$/,
+                         grep /^(template|widget)/,
+                              keys %{ $pkg_files };
     my ( $out );
     my @template_errors_ok = ( 'plugin not found', 'no providers for template prefix', 'file error' );
     my $template_errors_re = '(' . join( '|', @template_errors_ok ) . ')';
@@ -1295,7 +1297,9 @@ sub _copy_action_config_file {
             next if ( ref $action_base->{ $action_key }{ $action_item_key } eq 'CODE' );
             my $value = $action_base->{ $action_key }{ $action_item_key };
             if ( $action_item_key eq 'class' ) {
-                $value = $class->_change_class_name( $info, $value );
+                if ( $value =~ /^OpenInteract::Handler/ ) {
+                    $value = $class->_change_class_name( $info, $value );
+                }
             }
             $action_pkg->{ $action_key }{ $action_item_key } = $value;
         }
@@ -1452,7 +1456,8 @@ sub _change_class_name {
         $new_name = $info->{website_name};
     }
     $old_class =~ s/OpenInteract/$new_name/g;
-    return $old_class;}
+    return $old_class;
+}
 
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.60 2002/04/25 11:23:06 lachoy Exp $
+# $Id: oi_manage,v 1.62 2002/08/26 05:16:28 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.60 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.62 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -66,7 +66,7 @@ my @WEBSITE_SUBDIR    = qw( cache cache/tt conf data doc error
 
 # Packages shipped with OI -- the 'base' packages necessary to run the system
 
-my @WEBSITE_BASE_PKG  = qw( base base_box base_component base_error
+my @WEBSITE_BASE_PKG  = qw( base base_box base_error
                             base_group base_page base_security base_template
                             base_theme base_user lookup object_activity
                             results_manage system_doc );
@@ -1640,7 +1640,7 @@ sub create_website {
         }
         else {
             my @file_list = grep ! /old$/,
-                                 grep { -f "$oi_doc_root/$_" }
+                            grep { -f "$oi_doc_root/$_" }
                                  readdir( DOC );
             foreach my $file_name ( @file_list ) {
                 cp( "$oi_doc_root/$file_name", "$html_doc_root/$file_name" )
@@ -2940,13 +2940,13 @@ Details:
     is being dumped), but sometimes you might want to put the data
     elsewhere.
 
---driver=SPOPS::DBI::Pg
+ --driver=SPOPS::DBI::Pg
 
     Specify some sort of driver -- this can be used to name an SPOPS
     driver (such as 'SPOPS::DBI::Pg') or a DBD driver ('DBD::mysql')
     when necessary.
 
---object=SPOPS-object-tag
+ --object=SPOPS-object-tag
 
     Specify the name of an SPOPS object tag. This is not an object
     class but rather the 'alias' by which OpenInteract can refer to an
@@ -2954,7 +2954,7 @@ Details:
     'site_template' and the alias for the page objects stored in the
     database is 'basic_page'.
 
---sql_action=(all|structure|data|security|all_data)
+ --sql_action=(all|structure|data|security|all_data)
 
     Specify an action to take with the 'install_sql' command. The
     action 'all' is the default if not specified. You should not need
@@ -3450,7 +3450,7 @@ other types of access. In addition, your command-line environment
 might be set up properly to connect to your database while the web
 server environment is not. More is in the entry: I<When I run a perl
 script from the command line, it works, but, when I run it under the
-httpd, it fails!  Why?> in C<perldoc DBI::FAQ>.
+httpd, it fails!  Why?> in L<DBI::FAQ|DBI::FAQ>.
 
 =head2 TEST LDAP
 
@@ -3575,6 +3575,20 @@ support the more complicated task of trying to find the differences
 between your files and the new files -- you are left to your own
 devices.
 
+NOTE: As of OpenInteract 1.41, you can place your templates in a
+subdirectory of the site-wide template directory and maintain them
+throughout package upgrades. For instance, if you are editing
+templates in the package 'recipe_box', you can place your templates
+in:
+
+ $WEBSITE_DIR/template/recipe_box/recipe_listing.tmpl
+ $WEBSITE_DIR/template/recipe_box/recipe_detail.tmpl
+ $WEBSITE_DIR/template/recipe_box/recipe_form.tmpl
+ ...
+
+And when you run an 'upgrade_package' these templates will not be
+overwritten and will continue to be used by the new package.
+
 =head2 CHANGE SPOPS DRIVER
 
 Command: change_spops_driver
@@ -3600,10 +3614,16 @@ like this configuration from the User object class:
     ],
     ...,
 
-For this, we would replace C<SPOPS::DBI::MySQL> with the appropriate
-SPOPS driver. This will normally take the form
-C<SPOPS::DBI::xxxx>. For example: C<SPOPS::DBI::Sybase> or
-C<SPOPS::DBI::Pg>.
+For this, we would replace L<SPOPS::DBI::MySQL|SPOPS::DBI::MySQL> with
+the appropriate SPOPS driver. This will normally take the form
+C<SPOPS::DBI::xxxx>. For example:
+L<SPOPS::DBI::Sybase|SPOPS::DBI::Sybase> or
+L<SPOPS::DBI::Pg|SPOPS::DBI::Pg>.
+
+NOTE: You can accomplish this same task in a more permanent way by
+editing the global override options file for SPOPS. See
+L<OpenInteract::Config::GlobalOverride|OpenInteract::Config::GlobalOverride>
+for details.
 
 =head2 UPDATE OBJECTS
 
@@ -4063,6 +4083,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.60 $
+Revision: $Revision: 1.62 $
 
 =cut

@@ -1,6 +1,6 @@
 package OpenInteract::Template::Process;
 
-# $Id: Process.pm,v 1.22 2002/02/16 15:09:30 lachoy Exp $
+# $Id: Process.pm,v 1.23 2002/08/25 00:10:08 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
@@ -9,8 +9,7 @@ use OpenInteract::Template::Plugin;
 use OpenInteract::Template::Provider;
 use Template;
 
-$OpenInteract::Template::Process::VERSION  = '1.2';
-$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Process::VERSION  = substr(q$Revision: 1.23 $, 10);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
 use constant DEFAULT_CACHE_SIZE  => 75;
@@ -112,10 +111,10 @@ sub handler {
                                    ref $template_source->{text}, ") for processing" );
     }
     elsif ( $template_source->{object} ) {
-        $to_process = \$template_source->{object}{template};
+        $to_process = \$template_source->{object}{contents};
         $name       = $template_source->{object}->create_name;
         push @{ $R->{templates_used} }, $name;
-        $R->DEBUG && $R->scrib( 1, "Using template object ($name) for processing" );
+        $R->DEBUG && $R->scrib( 1, "Using template object [$name] for processing" );
     }
 
     # Using 'db' will be deprecated soon...
@@ -128,14 +127,14 @@ sub handler {
         $name = join( '::', $template_source->{package}, $template_source->{db} );
         $to_process = $name;
         push @{ $R->{templates_used} }, $name;
-        $R->DEBUG && $R->scrib( 1, "Using template name ($name) for processing" );
+        $R->DEBUG && $R->scrib( 1, "Using template name [$name] for processing" );
     }
 
     elsif ( $template_source->{name} ) {
         $name = $template_source->{name};
         $to_process = $name;
         push @{ $R->{templates_used} }, $name;
-        $R->DEBUG && $R->scrib( 1, "Using template name ($name) for processing" );
+        $R->DEBUG && $R->scrib( 1, "Using template name [$name] for processing" );
     }
 
     # Uh oh...
@@ -176,7 +175,7 @@ sub handler {
 
     my ( $html );
     $template->process( $to_process, $template_vars, \$html )
-         || die "Cannot process template!", $template->error();
+                    || die "Cannot process template!", $template->error();
     return $html;
 }
 
@@ -222,8 +221,6 @@ sub _package_template_config {
 
 __END__
 
-=pod
-
 =head1 NAME
 
 OpenInteract::Template::Process - Process OpenInteract templates
@@ -250,7 +247,7 @@ OpenInteract::Template::Process - Process OpenInteract templates
 
  # Pass the already-created object for parsing (rare)
 
- my $site_template_obj = $R->site_template->fetch( 51 );
+ my $site_template_obj = $R->site_template->fetch( 'mypkg::myname' );
  my $html = $R->template->handler( {}, { key => 'value' },
                                    { object => $site_template_obj } );
 
@@ -508,5 +505,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut

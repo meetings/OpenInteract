@@ -283,14 +283,6 @@ $data = {
 
        'template_ext' => 'tmpl',
 
-       # Whether to look into the database or the filesystem first
-       # when checking templates. The default is filesystem, but if
-       # you make changes to templates via the browser you'll want to
-       # change this to 'database'. Otherwise your changes will never
-       # be seen. Options are: 'database', 'filesystem'
-
-       'source' => 'filesystem',
-
        # cache_size: How many templates the Template Toolkit should
        # cache in memory
 
@@ -354,6 +346,8 @@ $data = {
      # need to use 'OpenInteract::Cookies::CGI')
 
      'system_alias' => {
+       site_template   => 'OpenInteract::SiteTemplate',
+       sitetemplate    => 'OpenInteract::SiteTemplate',
        cookies         => 'OpenInteract::Cookies::Apache',
        session         => 'OpenInteract::Session::DBI',
        template        => 'OpenInteract::Template::Process',
@@ -368,7 +362,7 @@ $data = {
        security        => '%%WEBSITE_NAME%%::Security',
        secure          => 'SPOPS::Secure',
        error_handler   => 'OpenInteract::Error::Main',
-       component       => 'OpenInteract::Handler::Component',
+       component       => 'OpenInteract::Component',
      },
 
      ########################################
@@ -511,5 +505,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.33 $',
+     'ConfigurationRevision' => '$Revision: 1.36 $',
 };

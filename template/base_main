@@ -46,6 +46,7 @@
   <td width="25%" align="right">
    <br>
 
+[%- IF OI.is_admin; OI.box_add( 'templates_used_box' ); END -%]
 [%- OI.comp( 'boxes' ) -%]
 
  </td></tr>

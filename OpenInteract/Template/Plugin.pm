@@ -1,20 +1,17 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.21 2002/05/21 21:06:26 lachoy Exp $
+# $Id: Plugin.pm,v 1.23 2002/08/26 05:15:35 lachoy Exp $
 
 use strict;
+use base qw( Template::Plugin );
 use Class::Date     qw( -DateParse );
 use Data::Dumper    qw( Dumper );
 use HTML::Entities  qw();
 use SPOPS::Secure   qw( :level :scope );
 use SPOPS::Utility;
-use Template::Plugin;
 use Text::Sentence;
 
-@OpenInteract::Template::Plugin::ISA     = qw( Template::Plugin );
-$OpenInteract::Template::Plugin::VERSION  = '1.2';
-$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
-
+$OpenInteract::Template::Plugin::VERSION  = substr(q$Revision: 1.23 $, 10);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -570,8 +567,8 @@ Example:
 
  [% OI.comp( 'error_display', error_msg = error_msg ) %]
 
-See the C<base_component> package for more information about
-components.
+See L<OpenInteract::Component|OpenInteract::Component> package for
+more information about components.
 
 B<box_add( $box, \%params )>
 
