@@ -1,5 +1,17 @@
 Revision history for Perl extension OpenInteract.
 
+1.53  Thu Nov  7 07:57:11 EST 2002
+
+Individual:
+
+ * OpenInteract/Handler/GenericDispatcher.pm:
+
+   - Don't use the cache unless it's been defined. Thanks to Raúl
+   Romero <raul@bgta.homeip.net> for the bug report.
+
+Package updates: none
+ 
+
 1.52  Mon Sep 16 16:19:33 EDT 2002
 
 Individual:

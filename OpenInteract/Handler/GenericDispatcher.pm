@@ -1,6 +1,6 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.90 2002/09/16 20:20:55 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.91 2002/11/07 13:02:18 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
@@ -10,7 +10,7 @@ use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
 
 my $CLASS_TRACKING_KEY = 'class_cache_track';
 
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.90 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.91 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 
@@ -167,8 +167,9 @@ sub _check_task_security {
 sub check_cache {
     my ( $class, $p, $key_params ) = @_;
     my $R = OpenInteract::Request->instance;
-    return undef if ( $R->{auth}{is_admin} );
-    return undef if ( $p->{skip_cache} );
+    if ( $R->{auth}{is_admin} || $p->{skip_cache} || $R->cache ) {
+        return undef;
+    }
 
     my $key = $class->_make_cache_key( $p, $key_params );
     return undef unless ( $key );
@@ -205,8 +206,9 @@ sub generate_content {
     }
     my $R = OpenInteract::Request->instance;
     my $content = $R->template->handler( $template_params, $variables, $template_source );
-    return $content if ( $R->{auth}{is_admin} );
-    return $content if ( $p->{skip_cache} );
+    if ( $R->{auth}{is_admin} || $p->{skip_cache} || $R->cache ) {
+        return $content;
+    }
 
     my $key = $class->_make_cache_key( $p, $key_params );
     if ( $key ) {
@@ -227,8 +229,10 @@ sub generate_content {
 sub clear_cache {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    $R->scrib( 0, "Trying to clear cache for items in class [$class]" );
     my $cache = $R->cache;
+    return unless ( $cache );
+
+    $R->scrib( 0, "Trying to clear cache for items in class [$class]" );
     my $tracking = $cache->get({ key => $CLASS_TRACKING_KEY });
     unless ( ref $tracking eq 'HASH' and scalar keys %{ $tracking } ) {
         $R->scrib( 0, "Nothing has yet been tracked, nothing to clear" );

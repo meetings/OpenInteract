@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.53  Thu Nov  7 07:57:11 EST 2002
+
+ - Small bugfix in OI::Handler::GenericDispatcher
+
+
 1.52  Mon Sep 16 16:19:33 EDT 2002
 
  - Small bugfixes and enhancements. Mostly to fix CPAN version issue.
@@ -232,4 +237,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.25 2002/09/16 20:16:00 lachoy Exp $
+$Id: RELEASE,v 1.26 2002/11/07 12:56:27 lachoy Exp $
