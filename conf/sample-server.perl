@@ -17,8 +17,8 @@ $data = {
 
      # CHANGE THIS (if necessary -- if you're not using MySQL,
      # you can use something like 'Apache::Session::File' for the
-     # class entry and then create entries for 'Directory' and
-     # 'LockDirectory'). You can also set the expiration for the
+     # class entry and then create entries in 'params' for 'Directory'
+     # and 'LockDirectory'). You can also set the expiration for the
      # session cookie -- if you set it to be empty the cookie will be
      # 'short-lived', meaning it will expire when the user shuts down
      # the browser. Otherwise, pass something like the following:
@@ -28,26 +28,48 @@ $data = {
      'session_info' => {
        'class'      => 'Apache::Session::MySQL',
        'expiration' => '+3M',
+       'params'     => {},
      },
 
 
      # CHANGE THIS (enter your db parameters -- see
      # 'OpenInteract::DBI' for more information about them). Briefly:
-     #   db_owner:    optional: who owns the db? (this should only be set
-     #                if your database requires it!)
-     #   username:    who do we login as?
-     #   password:    what password do we login with?
-     #   dsn:         last part of the DBI DSN
-     #   db_name:     name of database
-     #   driver_name: name of driver -- second part of the DBI DSN
+     #
+     #   db_owner
+     #     optional: who owns the db? (this should only be set if your
+     #     database requires it!)
+     #   username
+     #     who do we login as?
+     #   password
+     #     what password do we login with?
+     #   dsn
+     #     last part of the DBI DSN
+     #   db_name
+     #     name of database
+     #   driver_name
+     #     name of driver -- second part of the DBI DSN
+     #   sql_install
+     #     if name of driver and name of SQL installer to use differ,
+     #     put the SQL installer here. For instance, if you use
+     #     DBD::ODBC and Sybase, you'd put 'ODBC' under the
+     #     'driver_name' and 'Sybase' under 'sql_install'
+     #   long_read_len
+     #     length of longest TEXT/LOB to read (see DBI docs under
+     #     'LongReadLen')
+     #   long_trunc_ok
+     #     whether it's okay to truncate TEXT/LOB values that exceed
+     #     long_read_len (see DBI docs under 'LongTruncOk')
 
      'db_info' => { 
-       'db_owner'    => '',
-       'username'    => '',
-       'password'    => '',
-       'dsn'         => '',
-       'db_name'     => '',
-       'driver_name' => '',
+       'db_owner'      => '',
+       'username'      => '',
+       'password'      => '',
+       'dsn'           => '',
+       'db_name'       => '',
+       'driver_name'   => '',
+       'sql_install'   => '',
+       'long_read_len' => 65536,
+       'long_trunc_ok' => 0,
      },
 
      # These settings are good for when the system first gets
@@ -89,6 +111,7 @@ $data = {
        crypt_password   => 1,
        login_field      => 'login_login_name',
        password_field   => 'login_password',
+       remember_field   => 'login_remember',
      },
 
      # Various simple miscellaneous display items can go here
@@ -131,12 +154,12 @@ $data = {
      # different session serialization scheme.
 
      'system_alias' => {
+       'OpenInteract::Cookies::Apache'    => [ qw/ cookies / ],
        'OpenInteract::Session::MySQL'     => [ qw/ session / ],
        'OpenInteract::Template::Toolkit'  => [ qw/ template / ],
        'OpenInteract::PackageRepository'  => [ qw/ repository / ],
        'OpenInteract::Package'            => [ qw/ package / ],
        'OpenInteract::Error'              => [ qw/ error / ],
-       'OpenInteract::Cookies'            => [ qw/ cookies / ],
        'OpenInteract::Auth'               => [ qw/ auth auth_user auth_group / ],
        '%%WEBSITE_NAME%%::Security'       => [ qw/ security_object object_security security / ],
        'SPOPS::Secure'                    => [ qw/ secure / ],
@@ -255,6 +278,6 @@ $data = {
 
      # Used for testing purposes only
 
-     'ConfigurationRevision' => '$Revision: 1.5 $',
+     'ConfigurationRevision' => '$Revision: 1.8 $',
 
 };

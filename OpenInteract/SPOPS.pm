@@ -1,16 +1,14 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.2 2001/02/13 12:42:29 lachoy Exp $
+# $Id: SPOPS.pm,v 1.5 2001/06/01 01:19:54 lachoy Exp $
 
 use strict;
-use Carp         qw( carp );
 use Data::Dumper qw( Dumper );
 use HTML::Entities  ();
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
-use constant DEBUG => 0;
 
 # Just a wrapper for log_action_enter, although we make sure that the
 # action is allowed before doing it.
@@ -30,19 +28,20 @@ sub log_action_enter {
   my ( $self, $action, $id, $uid ) = @_;
   my $R = OpenInteract::Request->instance;
   $uid ||= ( ref $R->{auth}->{user} ) ? $R->{auth}->{user}->{user_id} : 0;
-  my $now = $self->now;
-  my $class = ref $self;
-  my $log_msg = eval { $R->apache->param( '_log_message' ) };
-  $R->scrib( 1, "Entering action $action to $class ($id) by $uid on $now" );
-  eval { $self->db_insert( { db => $R->db, table => 'object_track', 
-                             field => [ qw/ class oid action action_by action_on notes / ],
+  my $now = SPOPS::Utility->now;
+  my $class = ref $self || $self;
+  my $log_msg = $R->apache->param( '_log_message' );
+  $R->DEBUG && $R->scrib( 1, "Entering action $action to $class ($id) by $uid on $now" );
+  eval { $self->db_insert( { db    => $R->db, 
+                             table => 'object_track', 
+                             field => [ qw/ class object_id action action_by action_on notes / ],
                              value => [ $class, $id, $action, $uid, $now, $log_msg ] } ); };
   if ( $@ ) {
     $R->scrib( 0, "Log entry failed: $SPOPS::Error::system_msg" );
     OpenInteract::Error->set( SPOPS::Error->get ); 
     $OpenInteract::Error::user_msg = "Cannot log object action: $action";
     $OpenInteract::Error::notes    = "Object: $class ($id) by $uid on $now";
-    $R->throw( { code => 302 } );
+    $R->throw({ code => 302 });
     return undef;
   }
   return 1;
@@ -59,14 +58,16 @@ sub fetch_creator {
   return undef  unless ( ref $self and $self->id );
   my $R = OpenInteract::Request->instance;
   my $data = eval { $self->db_select({ 
-                               db => $R->db, select => [ 'action_by' ],
-                               from => [ 'object_track' ],
-                               where => 'class = ? AND oid = ? and action = ?',
-                               value => [ ref $self, $self->id, 'create' ],
+                               db     => $R->db, 
+                               select => [ 'action_by' ],
+                               from   => [ 'object_track' ],
+                               where  => 'class = ? AND object_id = ? and action = ?',
+                               value  => [ ref $self, $self->id, 'create' ],
                                return => 'single-list' }) };
   if ( $@ ) {
     $OpenInteract::Error::user_msg = 'Cannot retrieve object creator(s)';
-    $OpenInteract::Error::extra    = { class => ref $self, oid => $self->id };
+    $OpenInteract::Error::extra    = { class     => ref $self, 
+                                       object_id => $self->id };
     $R->throw( { code => 306 } );
     return undef;
   }
@@ -105,15 +106,16 @@ sub fetch_updates {
   my $return = ( $opt eq 'last' ) ? 'single' : 'list';
   my $R = OpenInteract::Request->instance;
   my $data = eval { $self->db_select({ 
-                               db => $R->db, 
+                               db     => $R->db, 
                                select => [ qw/ action_by  action_on  notes / ],
-                               from => [ 'object_track' ], 
-                               where => 'class = ? AND oid = ? and ( action = ? OR action  = ? )',
-                               value => [ ref $self, $self->id, 'create', 'update' ],
-                               order => 'action_on DESC', return => $return } ); };
+                               from   => [ 'object_track' ], 
+                               where  => 'class = ? AND object_id = ? and ( action = ? OR action  = ? )',
+                               value  => [ ref $self, $self->id, 'create', 'update' ],
+                               order  => 'action_on DESC', return => $return } ); };
   if ( $@ ) {
     $OpenInteract::Error::user_msg = 'Cannot retrieve object updates';
-    $OpenInteract::Error::extra    = { class => ref $self, oid => $self->id };
+    $OpenInteract::Error::extra    = { class     => ref $self, 
+                                       object_id => $self->id };
     $R->throw( { code => 306 } );
     return undef;
   }
@@ -123,7 +125,7 @@ sub fetch_updates {
     push @updates, [ 'system', "... $num_removed additional updates ... " ]  if ( $num_removed );
     $data = \@updates;
   }
-  $R->scrib( 2, "Data from updates:\n", Dumper( $data ) );
+  $R->DEBUG && $R->scrib( 2, "Data from updates:\n", Dumper( $data ) );
   return $data;
 }
  
@@ -142,11 +144,11 @@ sub notify {
 
   # If we were just called by an object, make it our message 
 
-  push @{ $p->{object} }, $item  if ( ! scalar @{ $p->{object} } );
+  push @{ $p->{object} }, $item  unless ( scalar @{ $p->{object} } );
   my $num_objects = scalar @{ $p->{object} };
   my $subject = $p->{subject} || "Object notification: $num_objects objects in mail";
   my $separator = '=' x 25;
-  my $msg = ( $p->{notes} ) ? "Notes\n$separator$p->{notes}\n$separator\n\n" : '';
+  my $msg = ( $p->{notes} ) ? join( "\n", 'Notes', "$separator$p->{notes}", $separator, "\n" ) : '';
   foreach my $obj ( @{ $p->{object} } ) {
     my $info = $obj->object_description;
     my $object_url = join( '', 'http://', $R->{server_name}, $info->{url} );
@@ -156,12 +158,12 @@ sub notify {
             "\n$separator\nEnd $p->{type} object\n\n\n";
   }
   eval { OpenInteract::Utility->send_email({ 
-                                    to => $p->{email},
-                                    from => $R->CONFIG->{admin_email},
+                                    to      => $p->{email},
+                                    from    => $R->CONFIG->{admin_email},
                                     subject => $subject,
                                     message => $msg }) };
   if ( $@ ) {   
-    $R->throw( { code => 203 } );
+    $R->throw({ code => 203 });
     return undef;
   }
   return 1;
@@ -205,24 +207,22 @@ __END__
 
 =head1 NAME
 
-OpenInteract::SPOPS - Define common behaviors for all SPOPS objects in
-the OpenInteract Framework
+OpenInteract::SPOPS - Define common behaviors for all SPOPS objects in the OpenInteract Framework
 
 =head1 SYNOPSIS
 
  # In configuration file
  'myobj' => {
-    'isa'   => [ qw/ ... Interact::SPOPS ... / ],
+    'isa'   => [ qw/ ... OpenInteract::SPOPS ... / ],
  }
 
 =head1 DESCRIPTION
 
 Here we provide some common operations within OpenInteract that are
-not implmented within the data abstraction layer itself. One of the
-reasons for that is that we want to continue using both separately, so
-we cannot embed ideas like a configuration object or a particular
-cache implementation within SPOPS. Think of this class as a bridge
-between the two.
+not implmented within the data abstraction layer itself. Since we want
+to continue using both separately we cannot embed ideas like a
+configuration object or a particular cache implementation within
+SPOPS. Think of this class as a bridge between the two.
 
 =head1 METHODS
 
@@ -232,7 +232,23 @@ Wrapper for the I<log_action_enter> method below, decides whether it
 gets called. (Wrapper exists so subclasses can call log_action_enter
 directly and not deal with this step.)
 
-Returns undef on failure, true value on success.
+Parameters:
+
+=over 4
+
+=item *
+
+B<action> ($)
+
+Should be 'create', 'update', 'remove'.
+
+B<id> ($)
+
+ID of the object.
+
+=back
+
+B<Returns> undef on failure, true value on success.
 
 B<log_action_enter( $action, $id )>
 
@@ -240,7 +256,23 @@ Makes an entry into the 'object_track' table, which logs all object
 creations, updates and deletions. We do not note the content that
 changes, but we do note who did the action and when it was done. 
 
-Returns undef on failure, true value on success.
+Parameters:
+
+=over 4
+
+=item *
+
+B<action> ($)
+
+Should be 'create', 'update', 'remove'.
+
+B<id> ($)
+
+ID of the object.
+
+=back
+
+B<Returns> undef on failure, true value on success.
 
 B<fetch_creator()>
 
@@ -249,11 +281,23 @@ to a particular object.
 
 B<is_creator( $uid )>
 
-Return 1 if the object was created by $uid, undef if not.
+Parameters:
+
+=over 4
+
+=item *
+
+B<uid> ($)
+
+User ID to check and see if that user created this object.
+
+=back
+
+B<Returns> 1 if the object was created by $uid, undef if not.
 
 B<fetch_updates()>
 
-Return an arrayref of arrayrefs, formatted:
+B<Returns> an arrayref of arrayrefs, each formatted:
 
  [ uid of updater, date of update ]
 
@@ -268,10 +312,34 @@ want to use in the listing along with associated labels.
 
 B<html_encode( $text )>
 
-Returns: escaped version of $text (e.g., the character '"' will be
+Parameters:
+
+=over 4
+
+=item *
+
+B<text> ($)
+
+Text to encode.
+
+=back
+
+B<Returns>: escaped version of $text (e.g., the character '"' will be
 replaced by &quot;)
 
 B<html_decode( $text )>
+
+Parameters:
+
+=over 4
+
+=item *
+
+B<text> ($)
+
+Text to decode.
+
+=back
 
 Returns: unescaped version of $text (e.g., the entity &quot; will be
 replaced by the character '"')
@@ -281,11 +349,13 @@ call the method of an external module, but we might wish to do more in
 the future (for example, screen out javascript>. This way, we have a
 central place to change it.
 
-=head1 NOTES
-
 =head1 TO DO
 
+Nothing known.
+
 =head1 BUGS
+
+None known.
 
 =head1 COPYRIGHT
 

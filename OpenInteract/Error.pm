@@ -1,6 +1,6 @@
 package OpenInteract::Error;
 
-# $Id: Error.pm,v 1.1.1.1 2001/02/02 06:18:18 lachoy Exp $
+# $Id: Error.pm,v 1.2 2001/05/30 17:30:42 lachoy Exp $
 
 use strict;
 
@@ -29,7 +29,7 @@ sub clear {
   $OpenInteract::Error::extra      = {};
   $OpenInteract::Error::notes      = undef;
 }
- 
+
 # Retrieve all the package variables in a hashref
 sub get {
   my ( $class ) = @_;
@@ -50,14 +50,14 @@ sub get {
 sub set {
   my ( $class, $p ) = @_;
   no strict 'refs';
-  
+
   # First clean everything up so there's nothing 
   # hanging around from a previous error
-  
+
   OpenInteract::Error->clear;
-  
+
   # Then set everything passed in
-  
+
   foreach my $key ( keys %{ $p } ) {
     warn "OpenInteractI::Error::set >> Setting error $key to $p->{ $key }\n" if ( DEBUG );
     ${ 'OpenInteract::Error::' . $key } = $p->{ $key };
@@ -151,8 +151,17 @@ B<type> ($)
 Interact knows about a few types of errors. Some depend on your Interact
 implementation (e.g., DBI, dbm, LDAP, etc.). Others can be:
 
- -security: There is a security violation and the action could not be
-            completed
+=over 4
+
+=item *
+
+security: There is a security violation and the action could not be completed.
+
+=item *
+
+config: There was a problem reading/writing configuration information.
+
+=back
 
 B<package> ($)
 
@@ -190,12 +199,13 @@ B<get()>
 
 Returns a hashref with all the currently set error values.
 
-B<set( \% )>
+B<set( \%params )>
 
 First clears the variables then sets them all in one fell swoop. The
 variables that are set are passed in the first argument, a
-hashref. Also sets both the package and method variables for you,
-although you can override by setting manually.
+hashref. (See L<VARIABLES> for the names and purposes.) Also sets both
+the package and method variables for you, although you can override by
+setting manually.
 
 No return value;
 
@@ -233,7 +243,11 @@ And then refer to the alias in your local package:
 
 =head1 TO DO
 
+Nothing known.
+
 =head1 BUGS
+
+None known.
 
 =head1 COPYRIGHT
 

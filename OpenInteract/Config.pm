@@ -1,14 +1,20 @@
 package OpenInteract::Config;
 
-# $Id: Config.pm,v 1.1.1.1 2001/02/02 06:18:16 lachoy Exp $
+# $Id: Config.pm,v 1.3 2001/06/01 01:19:11 lachoy Exp $
 
 use strict;
-use vars qw( $AUTOLOAD );
+require Exporter;
 
-$AUTOLOAD = '';
+# AUTOLOAD not being used any longer... see below
+#use vars qw( $AUTOLOAD );
+#$AUTOLOAD = '';
 
-@OpenInteract::Config::ISA      = ();
-$OpenInteract::Config::VERSION  = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::Config::ISA       = qw( Exporter );
+$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::Config::EXPORT_OK = qw( _w DEBUG );
+my %CONFIG_TYPES = (
+   'perl' => 'OpenInteract::Config::PerlFile',
+);
 
 use constant DEBUG => 0;
 
@@ -18,12 +24,23 @@ sub read_config { return $_[0]; }
 sub save_config { return undef; }
 
 
-# Create a new configu object
+# Create a new config object. This is a factory method: rather than
+# creating new objects of the class OpenInteract::Config, we use the
+# variable $type and create an object based on it.
 
 sub instance {
-  my $pkg = shift;
-  my $class = ref( $pkg ) || $pkg;
-  my $data = $class->read_config( @_ );
+  my ( $pkg, $type, @params ) = @_;
+
+  # Backwards compatibility fix -- this probably won't be here forever.
+
+  $type ||= 'perl';
+  my $class = $CONFIG_TYPES{ $type };  
+  die "No configuration class corresponding to type ($type)" unless ( $class );
+  eval "require $class";
+  if ( $@ ) {
+    die "Configuration class ($class) cannot be used. Error: $@";
+  }
+  my $data = $class->read_config( @params );
   return bless( $data, $class );
 }
 
@@ -43,24 +60,13 @@ sub flatten_action_config {
     foreach my $def ( keys %{ $default_action } ) {
       $self->{action}->{ $action_key }->{ $def } ||= $default_action->{ $def };
     }
-    
+
     # Also ensure that the action information knows its own key
-    
+
     $self->{action}->{ $action_key }->{name} = $action_key;
     push @names, $action_key;
   }
   return \@names;
-}
-
-
-# Allow you to call config keys as methods -- we should probably get
-# rid of this and force you to use it as a hashref...
-
-sub AUTOLOAD {
-  my $self = shift;
-  my $request = $AUTOLOAD;
-  $request =~ s/.*://;
-  return $self->param_set( $request, @_ );
 }
 
 
@@ -83,7 +89,7 @@ sub get {
     push @configs, $self->param_set( $conf );
   }
   if ( scalar @configs == 1 ) {
-    return $configs[ 0 ];
+    return $configs[0];
   }
   return @configs;
 }
@@ -117,17 +123,39 @@ sub get_dir {
   my $dir_hash = $self->{dir};
   $dir_tag =~ s/_dir$//;
   my $dir = $dir_hash->{ lc $dir_tag };
-  warn " get_dir(): start out with <<$dir>>\n"                              if ( DEBUG );
+  DEBUG && _w( 1, "get_dir(): start out with <<$dir>>" );
   return undef if ( ! $dir );
   while ( $dir =~ m|^\$([\w\_]+)/| ) {
     my $orig_lookup = $1;
     my $lookup_dir = lc $orig_lookup;
-    warn " get_dir(): found lookup dir of <<$lookup_dir>>\n"                if ( DEBUG );
+    DEBUG && _w( 1, " get_dir(): found lookup dir of <<$lookup_dir>>" );
     return undef if ( ! $dir_hash->{ $lookup_dir } );
     $dir =~ s/^\$$orig_lookup/$dir_hash->{ $lookup_dir }/;
-    warn " get_dir(): new directory: <<$dir>>\n"                            if ( DEBUG );
+    DEBUG && _w( 1, " get_dir(): new directory: <<$dir>>" );
   }
   return $dir;
+}
+
+# Allow you to call config keys as methods -- we should probably get
+# rid of this and force you to use it as a hashref...
+
+# AUTOLOAD no longer supported -- please email Chris if you have an
+# issue with this.
+
+#sub AUTOLOAD {
+#  my ( $self, @params ) = @_;
+#  my $request = $AUTOLOAD;
+#  $request =~ s/.*://;
+#  DEBUG && _w( 1, "Trying to fulfill request ($request) from AUTOLOAD" );
+#  return $self->param_set( $request, @params);
+#}
+
+
+sub _w {
+  return unless ( DEBUG >= shift );
+  my ( $pkg, $file, $line ) = caller;
+  my @ci = caller(1);
+  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;
@@ -143,24 +171,24 @@ OpenInteract::Config -- centralized configuration information
 =head1 SYNOPSIS
 
  use OpenInteract::Config;
- 
- my $config = OpenInteract::Config->new();
- $config->read_file( '/path/to/dbi-config.info' );
- $config->set( 'debugging', 1 );
 
- my $dbh = DBI->connect( $config->db_dsn(),
-                         $config->db_username() ),
-                         $config->db_password() ),
+ my $config = OpenInteract::Config::PerlFile->new();
+ $config->read_file( '/path/to/dbi-config.info' );
+ $config->{debugging} = 1;
+
+ my $dbh = DBI->connect( $config->{db_dsn},
+                         $config->{db_username},
+                         $config->{db_password}
                          { RaiseError => 1 } );
 
- if ( my $debug = $config->get( 'debugging' ) ) {
+ if ( my $debug = $config->{debugging} ) {
    print $LOG "Trace level $debug: fetching user $user_id...";
-   if ( $self->fetch( $user_id ) ) {
+   if ( my $user = $self->fetch( $user_id ) ) {
       print $LOG "successful fetching $user_id\n";
    }
    else { 
-      print $LOG "cannot retrieve $user_id. Error info: ", 
-                 $self->error()->pop_error();
+      print $LOG "No such user with ID $user_id", 
+                 ;
    }
  }
 
@@ -177,12 +205,12 @@ it in the always-accessible Request object.
 
 Very simple interface and idea: information held in key/value
 pairs. You can either retrieve the information using the I<get()>
-method or by calling the key name method on the config object. For
+method or by referring to the config object like a hashref. For
 instance, to retrieve the information related to DBI, you could do:
 
- my ( $dsn, $uid, $pass ) = ( $config->db_dsn(),
-                              $config->db_username(),
-                              $config->db_password() );
+ my ( $dsn, $uid, $pass ) = ( $config->{db_dsn},
+                              $config->{db_username},
+                              $config->{db_password} );
 
 or you could do:
 
@@ -190,24 +218,22 @@ or you could do:
 
 Setting values is similarly done:
 
- my $font_face = $config->font_face( 'Arial, Helvetica' );
+ my $font_face = $config->{font_face} = 'Arial, Helvetica';
 
 or:
 
  my $font_face = $config->set( font_face => 'Arial, Helvetica' );
 
 Note that you might want to use the get/set method calls 
-more frequently for the sake of clarity.
+more frequently for the sake of clarity. Or not. TMTOWTDI.
 
 =head2 METHODS
 
 A description of each method follows:
 
-B<new( %params )>
+B<instance( $type, @params )>
 
-Parameters:
-
-  Unknown. Depends on what is being configured.
+Unknown. Depends on what is being configured.
 
 Create the Config object. Just bless an anonymous hash and stick every
 name/value pair passed into the method into the hash.
@@ -217,6 +243,22 @@ getting/setting parameters and values should only be done via the
 interface. So, in theory, we should not allow the user to set
 B<any>thing here...
 
+Parameters:
+
+=over 4
+
+=item * 
+
+B<type> ($)
+
+Type of configuration file to create. Currently the only supported
+type is 'perl', which keeps the configuration information in a perl
+data structure.
+
+=back
+
+B<Returns>: Configuration object.
+
 B<flatten_action_config()>
 
 Copies information from the default action into all the other action
@@ -225,16 +267,6 @@ presumably private.)
 
 Returns: an arrayref of action keys (tags) for which information was
 set.
-
-B<AUTOLOAD( %params )>
-
-Parameters:
-
-  Unknown (this is AUTOLOAD!)
-
-The first parameter, or name of the method call, is assumed to be a
-configration key. Call the I<param_set() method with that and the
-remainder of the values passed into the call.
 
 B<param_set( $key, [ $value ] )>
 
@@ -256,9 +288,7 @@ list.
 
 B<set( %params )>
 
-Parameters: 
-
-  config key/value pairs
+Parameters are config key => config/value pairs
 
 Set the config key to its value for each pair passed in.  Return a
 hash of the new key/value pairs, or a single value if only one pair
@@ -309,9 +339,11 @@ B<save_config()>
 Abstract method for subclasses to override with their
 own means of writing config to disk/eleswhere.
 
-Returns: 1 on success; undef on failure.
+Returns: true on success; undef on failure.
 
 =head1 TODO
+
+B<Permanent Configuration Values>
 
 Future work should include setting configuration values permanently
 for future uses of the module. We could instantiate the configuration

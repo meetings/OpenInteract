@@ -1,34 +1,35 @@
 package OpenInteract::Config::PerlFile;
 
-# $Id: PerlFile.pm,v 1.1.1.1 2001/02/02 06:18:34 lachoy Exp $
+# $Id: PerlFile.pm,v 1.3 2001/06/01 02:20:06 lachoy Exp $
 
 use strict;
-use Data::Dumper     qw( Dumper );
-use OpenInteract::Config;
+use Data::Dumper         qw( Dumper );
+use OpenInteract::Config qw( _w DEBUG );
 
 @OpenInteract::Config::PerlFile::ISA     = qw( OpenInteract::Config );
-$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
-
-use constant DEBUG => 0;
+$OpenInteract::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 sub read_config {
   my ( $class, $filename ) = @_;
   unless ( -f $filename ) {
     my $msg = 'Cannot read configuration file!';
-    OpenInteract::Error->set( { user_msg => $msg, type => 'config',
-                                system_msg => "No valid filename ($filename) for reading configuration information!",
-                                method => 'read_config',
-                                extra => { filename => $filename } } );
+    my $system_msg = "No valid filename ($filename) for reading configuration information!";
+    OpenInteract::Error->set({ user_msg   => $msg,
+                               type       => 'config',
+                               system_msg => $system_msg,
+                               method     => 'read_config',
+                               extra      => { filename => $filename } });
     die $msg;
   }
-  if ( DEBUG ) { warn " (Config/PerlFile): Reading configuration from $filename\n"; }
+  DEBUG && _w( 1, "Reading configuration from: ($filename)" );
   eval { open( CONF, "$filename" ) || die $! };
   if ( $@ ) {
     my $msg = 'Cannot read configuration file!';
-    OpenInteract::Error->set( { user_msg => $msg, type => 'config',
-                                system_msg => "Error trying to open $filename: $@",
-                                method => 'read_config',
-                                extra => { filename => $filename } } );
+    OpenInteract::Error->set({ user_msg   => $msg,
+                               type       => 'config',
+                               system_msg => "Error trying to open $filename: $@",
+                               method     => 'read_config',
+                               extra      => { filename => $filename } });
     die $msg;
   }
   local $/ = undef;
@@ -38,13 +39,14 @@ sub read_config {
   eval $config;
   if ( $@ ) {
     my $msg = 'Cannot read configuration file!';
-    OpenInteract::Error->set( { user_msg => $msg, type => 'config',
-                                system_msg => "Error trying to eval $filename: $@",
-                                method => 'read_config',
-                                extra => { config => $config } } );
+    OpenInteract::Error->set({ user_msg   => $msg,
+                               type       => 'config',
+                               system_msg => "Error trying to eval $filename: $@",
+                               method     => 'read_config',
+                               extra      => { config => $config } });
     die $msg;
   }
-  if ( DEBUG > 1 ) { warn " (Config/PerlFile): Structure of config:\n", Dumper( $data ), "\n"; }
+  DEBUG && _w( 1, "Structure of config:\n", Dumper( $data ) );
   return $data;
 }
 
@@ -55,19 +57,24 @@ sub save_config {
   $filename ||= join( '/', $self->get_dir( 'config' ), $self->{config_file} ); 
   unless ( -f $filename ) {
     my $msg = 'Cannot read configuration file!';
-    OpenInteract::Error->set( { user_msg => $msg, type => 'config',
-                                system_msg => "No valid filename for saving configuration information!",
-                                method => 'save_config',
-                                extra => { filename => $filename } } );
+    my $system_msg = "No valid filename ($filename) for saving configuration information!";
+    OpenInteract::Error->set({ user_msg   => $msg,
+                               type       => 'config',
+                               system_msg => $system_msg,
+                               method     => 'save_config',
+                               extra      => { filename => $filename } });
     die $msg;
   }
+
+  DEBUG && _w( 1, "Trying to save configuration to: ($filename)" );
   eval { open( CONF, "> $filename" ) || die $! };
   if ( $@ ) {
     my $msg = 'Cannot read configuration file!';
-    OpenInteract::Error->set( { user_msg => $msg, type => 'config',
-                                system_msg => "Error trying to write $filename: $@",
-                                method => 'save_config',
-                                extra => { filename => $filename } } );
+    OpenInteract::Error->set({ user_msg   => $msg,
+                               type       => 'config',
+                               system_msg => "Error trying to write $filename: $@",
+                               method     => 'save_config',
+                               extra      => { filename => $filename } });
     die $msg;
   }
   my %data = %{ $self };
@@ -85,29 +92,28 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Config::PerlFile - subclass of OpenInteract::Config for reading information from a perl file
+OpenInteract::Config::PerlFile - Subclass OpenInteract::Config to read/write information from/to a perl file
 
 =head1 DESCRIPTION
 
-Create a 'read_config' method to override the base Config
-method. See I<OpenInteract::Config> for usage of this base object.
+Create a 'read_config' method to override the base Config method. See
+I<OpenInteract::Config> for usage of this base object.
 
-The information in the config file is perl, so we do not 
-have to go through any nutty contortions with types, etc.
+The information in the config file is perl, so we do not have to go
+through any nutty contortions with types, etc.
 
 =head1 METHODS
 
 B<read_config( $filename )>
 
-Read configuration directives from $filename. The 
-configuration directives are actually perl data structures
-saved in an I<eval>able format using I<Data::Dumper>.
+Read configuration directives from $filename. The configuration
+directives are actually perl data structures saved in an I<eval>able
+format using I<Data::Dumper>.
 
 B<save_config( $filename )>
 
-Saves the current configuration to $filename. Normally
-not needed since you are not always changing configurations
-left and right.
+Saves the current configuration to $filename. Normally not needed
+since you are not always changing configurations left and right.
 
 =head1 TO DO
 

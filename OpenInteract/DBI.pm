@@ -1,45 +1,48 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.1.1.1 2001/02/02 06:18:18 lachoy Exp $
+# $Id: DBI.pm,v 1.4 2001/05/30 17:30:42 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
+
+use constant DEFAULT_READ_LEN => 32768;
+use constant DEFAULT_TRUNC_OK => 0;
 
 sub connect {
   my ( $class, $db_info, $p ) = @_;
   $p ||= {};
- 
+
   # Allow callback to modify the connection info; note that we 
   # dereference $db_info for a reason here -- so we don't mess up the 
   # original information, say, in the config hashref
-  
+
   if ( ref $p->{pre_connect} eq 'CODE' ) {
-    warn "DBI::connect >> DB info before pre_connect code: ", Dumper( $db_info ), "\n" if ( DEBUG > 1 );
+    DEBUG && _w( 2, "before pre_connect code: ", Dumper( $db_info ) );
     my $new_db_info = $p->{pre_connect}->( \%{ $db_info } );
     $db_info = $new_db_info  if ( $new_db_info->{dsn} );
   }
-  
+
   # Make the actual connection -- let the 'die' trickle up to our
   # caller if it happens
 
   my $dsn      = "DBI:$db_info->{driver_name}:$db_info->{dsn}";
   my $username = $db_info->{username};
   my $password = $db_info->{password};
-  warn " DBI::connect >> Connecting with ($dsn) ($username) ($password)\n" if ( DEBUG > 1 );
+  DEBUG && _w( 2, "Connecting with ($dsn) ($username) ($password)" );
   my $db = DBI->connect( $dsn, $username, $password )
                || die "Connect failed: $DBI::errstr\n";
-  warn "DBI::connect >> Connected ok\n"                                     if ( DEBUG );
+  DEBUG && _w( 1, "DBI::connect >> Connected ok" );
 
   # If we have specified a 'db_name', go ahead and 'use' that
 
   if ( $db_info->{db_name} ) {
-    warn "DBI::connect >> Use right database ($db_info->{db_name}).\n"      if ( DEBUG );
+    DEBUG && _w( 1, "Use right database ($db_info->{db_name})." );
     my $rv = $db->do( "use $db_info->{db_name}" );
     unless ( $rv ) {
       my $msg = $DBI::errstr;
@@ -51,19 +54,28 @@ sub connect {
   # We don't set this until here so we can control the format of the
   # error...
 
-  $db->{RaiseError} = 1;
-  $db->{PrintError} = 0;
-  $db->{ChopBlanks} = 1;
-  $db->{AutoCommit} = 1;
+  $db->{RaiseError}  = 1;
+  $db->{PrintError}  = 0;
+  $db->{ChopBlanks}  = 1;
+  $db->{AutoCommit}  = 1;
+  $db->{LongReadLen} = $db_info->{long_read_len} || DEFAULT_READ_LEN;
+  $db->{LongTruncOk} = $db_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
 
   # Allow callback to do something with the database handle along with
-  # the parameters used to connect to it. 
+  # the parameters used to connect to it.
 
   if ( ref $p->{post_connect} eq 'CODE' ) {
-    warn "DBI::connect >> Calling post_connect code with handle and info\n" if ( DEBUG );
+    DEBUG && _w( 1, "Calling post_connect code with handle and info" );
     $p->{post_connect}->( \%{ $db_info }, $db );
   }
   return $db;
+}
+
+sub _w {
+  return unless ( DEBUG >= shift );
+  my ( $pkg, $file, $line ) = caller;
+  my @ci = caller(1);
+  warn "$ci[3] ($line) >> ", join( ' ', @_ ), "\n";
 }
 
 1;
@@ -135,11 +147,16 @@ should include:
 
 =item *
 
-B<dsn>: the last part of a fully-formed DBI data source name used to
-connect to this database. Examples: 
+B<dsn> ($)
+
+The last part of a fully-formed DBI data source name used to
+connect to this database. Examples:
 
  Full DBI DSN:     DBI:mysql:webdb
  OpenInteract DSN: webdb
+
+ Full DBI DSN:     DBI:Pg:dbname=web
+ OpenInteract DSN: dbname=web
 
  Full DBI DSN:     DBI:Sybase:server=SYBASE;database=web
  OpenInteract DSN: server=SYBASE;database=web
@@ -152,25 +169,38 @@ your DBD driver for what to do.
 
 =item *
 
-B<db_name>: the name of your database
+B<username> ($)
+
+What username should we use to login to this database?
 
 =item *
 
-B<username>: what username should we use to login to this database?
+B<password> ($)
+
+What password should we use in combination with the username to login
+to this database?
 
 =item *
 
-B<password>: what password should we use in combination with the username
-to login to this database?
+B<driver_name> ($)
+
+What DBD driver is used to connect to your database?  (Examples:
+'Pg', 'Sybase', 'mysql', 'Oracle')
 
 =item *
 
-B<driver_name>: what DBD driver is used to connect to your database?
-(Examples: 'Sybase', 'mysql', 'Oracle')
+B<db_name> ($) (optional)
+
+The name of your database -- only include if you want to 'share
+connections' among different websites and if you do not specify the
+database name in your B<dsn>.
 
 =item *
 
-B<db_owner>: (optional) who owns this database?
+B<db_owner> ($) (optional)
+
+Who owns this database? Only use if your database uses the database
+owner to differentiate different tables.
 
 =back
 
@@ -181,9 +211,11 @@ keys:
 
 =item *
 
-B<pre_connect>: the coderef stored here is called before the database
-handle is requested, allowing you to modify any of the information in
-the first parameter before it is sent to DBI.
+B<pre_connect> (\&) (optional)
+
+The coderef stored here is called before the database handle is
+requested, allowing you to modify any of the information in the first
+parameter before it is sent to DBI.
 
 Takes the hashref of database connection info as its first parameter,
 and it B<must> return a hashref of database connection info with the
@@ -192,9 +224,11 @@ changes are discarded.
 
 =item *
 
-B<post_connect>: the coderef stored here is called after the database
-handle is requested and allows you to perform whatever actions on it
-that you like.
+B<post_connect> (\&) (optional)
+
+The coderef stored here is called after the database handle is
+requested and allows you to perform whatever actions on it that you
+like.
 
 Takes the hashref of database connection info as its first parameter
 and the newly created database handle as its second parameter.
@@ -223,7 +257,10 @@ error reported by DBI.
 
 B<Use database error>: This means you connected to the database
 server, but were not able to 'use' your database. (If your database
-does not support the 'use' command, please contact the author.) 
+does not support the 'use' command, please contact the author.) If you
+get this error you might want to investigate specifying your database
+name in the 'dsn' paramter and not specifying a database name in the
+'db_name' parameter.
 
 You can find this error by matching the returned error string on
 C</^Use database failed: />. Everything after this string is the

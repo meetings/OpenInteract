@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.7 2001/02/22 12:45:57 lachoy Exp $
+# $Id: Package.pm,v 1.11 2001/05/30 17:30:42 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files. 
@@ -18,7 +18,7 @@ use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
 
 @OpenInteract::Package::ISA       = qw();
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 # Define the subdirectories present in a package
 
@@ -26,9 +26,9 @@ my @PKG_SUBDIR        = qw( conf data doc struct template script html html/image
 
 # Fields in our package/configuration
 
-my @PKG_FIELDS = qw( name version author url description notes 
-                     dependency script_install script_upgrade 
-                     script_uninstall sql_installer installed_on 
+my @PKG_FIELDS = qw( name version author url description notes
+                     dependency script_install script_upgrade
+                     script_uninstall sql_installer installed_on
                      installed_by last_updated_on last_updated_by
                      base_dir website_dir package_dir website_name );
 
@@ -68,7 +68,7 @@ my $ARCHIVE_ERROR     = undef;
 # website from base installation (the first three are ones we
 # manipulate by hand)
 
-my %SPOPS_CONF_KEEP   = map { $_ => 1 } qw( class has_a links_to);
+my %SPOPS_CONF_KEEP   = map { $_ => 1 } qw( class has_a links_to );
 
 use constant DEBUG => 0;
 
@@ -109,37 +109,37 @@ sub create_skeleton {
   chdir( $name );
 
   # Then create the subdirectories for the package
-  
+
   $class->create_subdirectories( '.' );
-  
+
   # This does a replacement so that 'static_page' becomes StaticPage
-  
+
   my $uc_first_name = ucfirst $name;
   $uc_first_name =~ s/_(\w)/\U$1\U/g;
-  
+
   # Copy over files from the samples (located in the base OpenInteract
   # directory), doing replacements as necessary
-  
+
   $class->replace_and_copy({ from_file => "$base_dir/conf/sample-package.conf",
                              to_file   => "package.conf",
                              from_text => [ '%%NAME%%', '%%UC_FIRST_NAME%%' ],
                               to_text   => [ $name, $uc_first_name ] });
-  
+
   $class->replace_and_copy({ from_file => "$base_dir/conf/sample-package.pod",
                              to_file   => "doc/$name.pod",
                              from_text => [ '%%NAME%%' ],
                              to_text   => [ $name ] });
-  
+
   $class->replace_and_copy({ from_file => "$base_dir/conf/sample-doc-titles",
                              to_file   => "doc/titles",
                              from_text => [ '%%NAME%%' ],
                              to_text   => [ $name ] });
-  
+
   $class->replace_and_copy({ from_file => "$base_dir/conf/sample-SQLInstall.pm",
                              to_file   => "OpenInteract/SQLInstall/$uc_first_name.pm",
                              from_text => [ '%%NAME%%', '%%UC_FIRST_NAME%%' ],
                              to_text   => [ $name, $uc_first_name ] });
-  
+
   $class->replace_and_copy({ from_file => "$base_dir/conf/sample-Handler.pm",
                              to_file   => "OpenInteract/Handler/$uc_first_name.pm",
                              from_text => [ '%%NAME%%', '%%UC_FIRST_NAME%%' ],
@@ -157,7 +157,7 @@ sub create_skeleton {
      || _w( 0, "Cannot copy sample (template/dummy.tmpl): $!" );
 
  # Create a 'Changes' file 
-  
+
   eval {  open( CHANGES, "> Changes" ) || die $! };
   if ( $@ ) {
     _w( 0, "Cannot open 'Changes' file ($!). Please create your own so people can follow your progress." );
@@ -180,7 +180,7 @@ INIT
   $class->_create_manifest();
 
   # Go back to the original dir and return the name
-  
+
   chdir( $pwd );
   return $name; 
 }
@@ -193,30 +193,52 @@ INIT
 sub install_distribution {
   my ( $class, $p ) = @_;
   my $old_pwd = cwd;
-  
+
+  # --- Taken from CGI.pm
+  # FIGURE OUT THE OS WE'RE RUNNING UNDER
+  # Some systems support the $^O variable.  If not
+  # available then require() the Config library
+  my $OS = undef;
+  unless ($OS = $^O) {
+    require Config;
+    $OS = $Config::Config{'osname'};
+  }
+  if ($OS=~/Win/i) {
+    $OS = 'WINDOWS';
+  }
+  # ---
+
   unless ( -f $p->{package_file} ) {
     die "Package file for installation ($p->{package_file}) does not exist\n";
   }
-  unless ( $p->{package_file} =~ /^\// ) {
-    $p->{package_file} = join( '/', $old_pwd, $p->{package_file} );
+  if ( $OS eq 'WINDOWS' ) {
+    unless ( $p->{package_file} =~ /^\w:\// ) {
+      $p->{package_file} = join( '/', $old_pwd, $p->{package_file} );      
+    }
   }
+  else {
+    unless ( $p->{package_file} =~ /^\// ) {
+      $p->{package_file} = join( '/', $old_pwd, $p->{package_file} );
+    }
+  }
+  DEBUG && _w( 1, "Package file used for distribution: ($p->{package_file}" );
 
   # This is the repository we'll be using
 
   my $repos = $p->{repository} ||
-              eval { OpenInteract::Package->fetch( 
+              eval { OpenInteract::PackageRepository->fetch( 
                               undef, 
                               { directory => $p->{base_dir}, perm => 'write' } ) };
   unless ( $repos ) { die "Cannot open repository: $@\n" }
   my $base_dir = $repos->{META_INF}->{base_dir};
-  
+
   my $base_package_file = File::Basename::basename( $p->{package_file} );
   my ( $package_base ) = $base_package_file =~ /^(.*)\.tar\.gz$/;
-  _w( 1, "Package base: $package_base" );
+  DEBUG && _w( 1, "Package base: $package_base" );
 
   my $rv = $class->_extract_archive( $p->{package_file} );
   unless ( $rv ) {
-    my $msg = "Failure! Error found trying to unpack the distribution! " .
+    my $msg = "Error found trying to unpack the distribution! " .
               "Error: " . $ARCHIVE_ERROR;
     my $removed_files = $class->_remove_directory_tree( $package_base );
     die $msg;
@@ -225,30 +247,30 @@ sub install_distribution {
  # Read in the package config and grab the name/version
 
   chdir( $package_base );
-  _w( 1, "Trying to find config file in ($package_base/)" );
+  DEBUG && _w( 1, "Trying to find config file in ($package_base/)" );
   my $conf_file = $p->{package_conf_file} || $DEFAULT_CONF_FILE;
-  my $conf    = $class->read_config( { file => $conf_file } );
+  my $conf    = $class->read_config({ file => $conf_file });
   die "No valid package config read!\n" unless ( scalar keys %{ $conf } );
   my $name    = $conf->{name};
   my $version = $conf->{version};
   chdir( $old_pwd );
-  
+
   # We're all done with the temp stuff, so get rid of it.
-  
+
   my $removed_files = $class->_remove_directory_tree( $package_base );
-  _w( 1, "Removed extracted tree so we could get the config file." );
+  DEBUG && _w( 2, "Removed extracted tree, config file found ok." );
 
   # Check to see if the package/version already exists
-  
+
   my $error_msg = undef;
   my $exist_info = $repos->fetch_package_by_name({ name => $name, 
                                                    version => $version });
   if ( $exist_info ) {
-    die "Failure! Cannot install since package $name-$version already " .
+    die "Cannot install since package $name-$version already " .
         "exists in the base installation repository. (It was installed on " .
         "$exist_info->{installed_on}).\n\nAborting package installation.\n";
   }
-  _w( 1, "Package does not currently exist in repository." );
+  DEBUG && _w( 1, "Package does not currently exist in repository." );
 
   # Create some directory names and move to the base package directory
   # -- the directory that holds all of the package definitions
@@ -256,7 +278,7 @@ sub install_distribution {
   my $new_pkg_dir  = join( '/', 'pkg', "$name-$version" );
   my $full_pkg_dir = join( '/', $base_dir, $new_pkg_dir );
   if ( -d $full_pkg_dir ) {
-    die "Failure! The directory into which the distribution should be unpacked ",
+    die "The directory into which the distribution should be unpacked ",
         "($full_pkg_dir) already exists. Please remove it and try again.\n";
   }
   chdir( join( '/', $base_dir, 'pkg' ) );
@@ -264,15 +286,15 @@ sub install_distribution {
  # Unarchive the package; note that since the archive creates a
  # directory name-version/blah we don't need to create the directory
  # ourselves and then chdir() to it.
-  
+
   my $extract_rv = $class->_extract_archive( $p->{package_file} );
   unless ( $extract_rv ) {
     chdir( $base_dir );
     $class->_remove_directory_tree( $full_pkg_dir );
-    die "Failure! Cannot unpack the distribution into its final " .
+    die "Cannot unpack the distribution into its final " .
         "directory ($full_pkg_dir)! Error: " . $ARCHIVE_ERROR;
   }
-  _w( 1, "Unpackaged package into $base_dir/pkg ok" );
+  DEBUG && _w( 1, "Unpackaged package into $base_dir/pkg ok" );
 
  # Create the package info and try to save; if we're successful, return the
  # package info.
@@ -285,18 +307,18 @@ sub install_distribution {
   foreach my $conf_field ( keys %{ $conf } ) {
     $info->{ $conf_field } = $conf->{ $conf_field };
   }
-  _w( 1, "Trying to save package info: ", Dumper( $info ) );
-  
+  DEBUG && _w( 1, "Trying to save package info: ", Dumper( $info ) );
+
   $repos->save_package( $info );
   eval { $repos->save() };
   if ( $@ ) {
     chdir( $base_dir );
     $class->_remove_directory_tree( $full_pkg_dir );
-    die "Failure! Could not save data to installed package database. " .
+    die "Could not save data to installed package database. " .
         "Error returned: $@ " .
         "Aborting package installation.";
   }
-  _w( 1, "Saved repository ok." );
+  DEBUG && _w( 1, "Saved repository ok." );
   chdir( $old_pwd );
   return $info;
 }
@@ -310,26 +332,26 @@ sub install_to_website {
   my ( $class, $base_repository, $website_repository, $info ) = @_;
 
   # Be sure to have the website directory, website name, and package directory set
-    
+
   die "Website name not set in package object.\n"        unless ( $info->{website_name} );
   my $package_name_version = "$info->{name}-$info->{version}";
   $info->{website_dir} ||= $website_repository->{META_INF}->{base_dir};
   $info->{package_dir} ||= join( '/', 'pkg', $package_name_version );
-  
+
   # Then create package directory within the website directory
-  
+
   my $pkg_dir = join( '/', $info->{website_dir}, $info->{package_dir} );
   if ( -d $pkg_dir ) { die "Package directory $pkg_dir already exists.\n" }
   mkdir( $pkg_dir, 0775 ) || die "Cannot create $pkg_dir : $!";
-  
+
   # Next move to the base package directory (we return to the original
   # directory just before the routine exits)
-  
+
   my $pwd = cwd;
   chdir( "$info->{base_dir}/pkg/$package_name_version" );
-  
+
   # ...then ensure that it has all its files
-  
+
   my @missing = ExtUtils::Manifest::manicheck;
   if ( scalar @missing ) {
     die "Cannot install package $info->{name}-$info->{version} to website ",
@@ -338,15 +360,15 @@ sub install_to_website {
   }
 
  # ...and get all the filenames from MANIFEST
-  
+
   my $BASE_FILES = ExtUtils::Manifest::maniread;
-  
+
   # Now create the subdirectories
-  
+
   $class->create_subdirectories( $pkg_dir, $info->{website_name} );
-  
+
   $class->_copy_spops_config_file( $info );
-  
+
   $class->_copy_action_config_file( $info );
 
   # Now copy over the struct/, script/, data/, template/, html/,
@@ -373,7 +395,7 @@ sub install_to_website {
   # Now copy the MANIFEST.SKIP file and package.conf, so we can run
   # 'check_package' on the package directory (once complete) as well as
   # generate a MANIFEST once we're done copying files
-  
+
   foreach my $root_file ( 'MANIFEST.SKIP', 'package.conf' ) {
     cp( $root_file, "$pkg_dir/$root_file" )
          || _w( 0, "Cannot copy $root_file to $pkg_dir/$root_file : $!" );
@@ -382,7 +404,7 @@ sub install_to_website {
   $class->_copy_handler_files( $info, $BASE_FILES );
  
   # Now go to our package directory and create a new MANIFEST file
-  
+
   chdir( $pkg_dir );
   $class->_create_manifest();
 
@@ -407,37 +429,38 @@ sub export {
   chdir( $p->{directory} ) if ( -d $p->{directory} );
 
   my $cwd = cwd;
-  _w( 1, "Current directory exporting from: ($cwd)" );
-  
+  DEBUG && _w( 1, "Current directory exporting from: ($cwd)" );
+
   # If necessary, Read in the config and ensure that it has all the
   # right information
-  
+
   my $config_file = $p->{config_file} || $DEFAULT_CONF_FILE;
   my $config = $p->{config} || eval { $class->read_config( { file => $config_file } ) };
   if ( $@ ) {
-    die "Failure! Package configuration file cannot be opened -- \n" ,
+    die "Package configuration file cannot be opened -- \n" ,
         "are you chdir'd to the package directory? (Reported reason \n",
         "for failure: $@\n";
   }
-  _w( 1, "Package config read in: ", Dumper( $config ) );
+  DEBUG && _w( 2, "Package config read in: ", Dumper( $config ) );
 
  # Check to ensure that all required fields have something in them; we
  # might do a 'version' check in the future, but not until it proves
  # necessary
-  
+
   my @missing_fields = ();
   foreach my $required_field ( @EXPORT_REQUIRED ) {
     push @missing_fields, $required_field unless ( $config->{ $required_field } );
   } 
   if ( scalar @missing_fields ) {
-    die "Failure! Configuration file exists ($cwd/$DEFAULT_CONF_FILE) ",
+    die "Configuration file exists ($cwd/$DEFAULT_CONF_FILE) ",
         "but is missing the following fields: (",
         join( ', ', @missing_fields ), "). Please add these fields and try again.\n";
   }
+  DEBUG && _w( 1, "Required fields ok in package configuration file." );
 
  # Now, do a check on this package's MANIFEST - are there files in
  # MANIFEST that don't exist?
-  
+
   warn "Package $config->{name}: checking MANIFEST for discrepancies\n";
   my @missing = ExtUtils::Manifest::manicheck();
   if ( scalar @missing ) {
@@ -464,7 +487,7 @@ sub export {
   # Read in the MANIFEST
 
   my $package_files = ExtUtils::Manifest::maniread();
-  _w( 2, "Package info read in:\n", Dumper( $package_files ) );
+  DEBUG && _w( 2, "Package info read in:\n", Dumper( $package_files ) );
 
   # Now, create a directory of this name-version and copy the files
 
@@ -484,15 +507,15 @@ sub export {
   # Create the tardist
 
   my $filename = "$cwd/$package_id.tar.gz";
-  my $rv = Archive::Tar->create_archive( $filename, 9, @archive_files );
+  my $rv = $class->_create_archive( $filename, @archive_files );
 
   # And remove the directory we just created
-  
+
   $class->_remove_directory_tree( "$cwd/$package_id" );
-  
+
   # Return the filename and the name/version information for the
   # package distribution we just created
-  
+
   chdir( $old_pwd );
   if ( $rv ) {
     warn "\n";
@@ -500,7 +523,7 @@ sub export {
              version => $config->{version},
              file    => "$filename" };
   }
-  die "Failure! Cannot create distribution ($filename). Error: ", Archive::Tar->error(), "\n";
+  die "Cannot create distribution ($filename). Error: ", Archive::Tar->error(), "\n";
 }
 
 
@@ -556,11 +579,11 @@ sub check {
   }
 
   my $pkg_files = ExtUtils::Manifest::maniread();
-  
+
   # Now, first go through the config perl files
 
   my @perl_files = grep /^conf.*\.perl$/, keys %{ $pkg_files };
-  foreach my $perl_file ( @perl_files ) {
+  foreach my $perl_file ( sort @perl_files ) {
     my $filestatus = 'ok';
     my $obj = eval { SPOPS::HashFile->new( { filename => $perl_file } ) };
     my $sig = '++';
@@ -578,7 +601,7 @@ sub check {
   {
     local $SIG{__WARN__} = sub { return undef };
     my @pm_files = grep /\.pm$/, keys %{ $pkg_files };
-    foreach my $pm_file ( @pm_files ) {
+    foreach my $pm_file ( sort @pm_files ) {
       my $filestatus = 'ok';
       my $sig = '++';
       eval { require "$pm_file" };     
@@ -675,27 +698,27 @@ sub read_config {
     s/\r//g;
     my ( $k, $v ) = split /\s+/, $_, 2;
     last if ( $k eq 'description' );
-    
+
     # If there are multiple values possible, make a list
-    
+
     if ( $CONF_LIST_KEYS{ $k } ) {
       push @{ $config->{ $k } }, $v;
     }
-    
+
     # Otherwise, if it's a key -> key -> value set; add to list
-    
+
     elsif ( $CONF_HASH_KEYS{ $k } ) {
       my ( $sub_key, $sub_value ) = split /\s+/, $v, 2;
       $config->{ $k }->{ $sub_key } = $sub_value;
     }
-    
+
     # If not all that, then simple key -> value
-    
+
     else {
       $config->{ $k } = $v;
     }
   }
-  
+
   # Once all that is done, read the description in all at once
   { 
     local $/ = undef;
@@ -746,14 +769,14 @@ sub find_file {
   foreach my $base_file ( @file_list ) {
     if ( $info->{website_dir} ) {
       my $filename = join( '/', $info->{website_dir}, $info->{package_dir}, $base_file );   
-      _w( 1, "Created filename <<$filename>> using the website directory" );
+      DEBUG && _w( 1, "Created filename <<$filename>> using the website directory" );
       return $filename if ( -f $filename );
     }
     my $filename = join( '/', $info->{base_dir}, $info->{package_dir}, $base_file );
-    _w( 1, "Created filename <<$filename>> using the base installation directory" );
+    DEBUG && _w( 1, "Created filename <<$filename>> using the base installation directory" );
     return $filename if ( -f $filename );
   }
-  _w( 1, "No existing filename found matching @file_list" );
+  DEBUG && _w( 1, "No existing filename found matching @file_list" );
   return undef;
 }
 
@@ -774,6 +797,31 @@ sub add_to_inc {
 }
 
 
+sub _create_archive {
+  my ( $class, $filename, @files ) = @_;
+  return undef unless ( $filename and scalar @files );
+  DEBUG && _w( 2, "Creating archive ($filename) with files:\n", join( ' -- ', @files ) );
+  my $rv = undef;
+  if ( Archive::Tar->VERSION >= 0.20 ) {
+    DEBUG && _w( 1, "Creating archive using NEW Archive::Tar syntax." );
+    $rv = Archive::Tar->create_archive( $filename, 9, @files );
+    unless ( $rv ) { $ARCHIVE_ERROR = Archive::Tar->error() }
+  }
+  else {
+    DEBUG && _w( 1, "Creating archive using OLD Archive::Tar syntax." );
+    my $tar = Archive::Tar->new();
+    $tar->add_files( @files );
+    $tar->write( $filename, 1 );
+    if ( $Archive::Tar::error ) { 
+      $ARCHIVE_ERROR = "Possible errors: $Archive::Tar::error / $@ / $!";
+    }
+    else {
+      $rv++;
+    }
+  }
+  return $rv;
+}
+
 # Used to accommodate earlier versions of Archive::Tar (such as those
 # shipped with ActivePerl, sigh)
 
@@ -792,7 +840,8 @@ sub _extract_archive {
     unless ( $rv ) { $ARCHIVE_ERROR = Archive::Tar->error() }
   }
   else {
-    my $tar = Archive::Tar->new( $filename, 1 );
+    my $tar = Archive::Tar->new();
+    $tar->read( $filename, 1 );
     my @files = $tar->list_files();
     $tar->extract( @files );
     if ( $Archive::Tar::error ) { 
@@ -815,7 +864,7 @@ sub _copy_spops_config_file {
   my ( $class, $info ) = @_;
   my $interact_pkg_dir = join( '/', $info->{base_dir}, $info->{package_dir} );
   my $website_pkg_dir  = join( '/', $info->{website_dir}, $info->{package_dir} );
-  
+
   my $spops_conf = 'conf/spops.perl';
   unless ( -f "$interact_pkg_dir/$spops_conf" ) {
     return undef;
@@ -832,9 +881,9 @@ sub _copy_spops_config_file {
                              perm => 'new' });
 
   foreach my $spops_key ( keys %{ $spops_base } ) {
-    
+
     # Change the class to reflect the website name
-    
+
     if ( my $old_class = $spops_base->{ $spops_key }->{class} ) {
       $spops_pkg->{ $spops_key }->{class} = $class->_change_class_name( $info, $old_class );
     }
@@ -849,25 +898,26 @@ sub _copy_spops_config_file {
         $spops_pkg->{ $spops_key }->{has_a}->{ $new_class } = $old_has_a->{ $old_class };
       }
     }
-    
+
     if ( my $old_links_to = $spops_base->{ $spops_key }->{links_to} ) {
       foreach my $old_class ( keys %{ $old_links_to } ) {
         my $new_class = $class->_change_class_name( $info, $old_class );
         $spops_pkg->{ $spops_key }->{links_to}->{ $new_class } = $old_links_to->{ $old_class };
       }
     }
-    
+
     # Copy over all the fields verbatim except those specified in the
     # global %SPOPS_CONF_KEEP. Note that it's ok we're copying
     # references here since we're going to dump the information to a
     # file anyway
-    
+
     foreach my $to_copy ( keys %{ $spops_base->{ $spops_key } } ) {
       next if ( $SPOPS_CONF_KEEP{ $to_copy } );
+      next if ( ref $spops_base->{ $spops_key }->{ $to_copy } eq 'CODE' );
       $spops_pkg->{ $spops_key }->{ $to_copy } = $spops_base->{ $spops_key }->{ $to_copy };
     }
   }
-  
+
   eval { $spops_pkg->save({ dumper_level => 1 }) };
   die "Cannot save package spops file: $@\n"  if ( $@ );
   return $new_config_file;
@@ -882,17 +932,17 @@ sub _copy_action_config_file {
   my ( $class, $info  ) = @_;
   my $interact_pkg_dir = join( '/', $info->{base_dir}, $info->{package_dir} );
   my $website_pkg_dir          = join( '/', $info->{website_dir}, $info->{package_dir} );
-  _w( 1, "Coping action info from ($interact_pkg_dir) to ($website_pkg_dir)" );
+  DEBUG && _w( 1, "Coping action info from ($interact_pkg_dir) to ($website_pkg_dir)" );
 
   my $action_conf = 'conf/action.perl';
   my $base_config_file = "$interact_pkg_dir/$action_conf";
   my $action_base = eval { SPOPS::HashFile->new({ 
                               filename => $base_config_file }) };
   if ( $@ ) {
-    _w( 1, "No action info for $info->{name}-$info->{version} (generally ok: $@)" );
+    DEBUG && _w( 1, "No action info for $info->{name}-$info->{version} (generally ok: $@)" );
     return undef;
   }
-  
+
   my $new_config_file = "$website_pkg_dir/$action_conf";
   my $action_pkg  = eval { SPOPS::HashFile->new({ 
                               filename => $new_config_file, 
@@ -905,6 +955,7 @@ sub _copy_action_config_file {
 
   foreach my $action_key ( keys %{ $action_base } ) {
     foreach my $action_item_key ( keys %{ $action_base->{ $action_key } } ) {
+      next if ( ref $action_base->{ $action_key }->{ $action_item_key } eq 'CODE' );
       my $value = $action_base->{ $action_key }->{ $action_item_key };
       if ( $action_item_key eq 'class' ) {
         $value = $class->_change_class_name( $info, $value );
@@ -912,7 +963,7 @@ sub _copy_action_config_file {
       $action_pkg->{ $action_key }->{ $action_item_key } = $value;
     }
   }
-  
+
   eval { $action_pkg->save({ dumper_level => 1 }) };
   die "Cannot save package action file: $@\n"  if ( $@ );
   return $new_config_file;
@@ -947,14 +998,16 @@ sub _copy_handler_files {
   my $website_pkg_dir = join( '/', $info->{website_dir}, $info->{package_dir} );
   my @handler_file_list = grep /^OpenInteract\/Handler/, keys %{ $base_files };
   foreach my $handler_file ( @handler_file_list ) {
-    my $new_filename = $class->_change_class_name( $info, "$website_pkg_dir/$handler_file" );
+    my $new_filename = "$website_pkg_dir/$handler_file";
+    $new_filename =~ s|OpenInteract/Handler|$info->{website_name}/Handler|;
+    $class->_change_class_name( $info, "$website_pkg_dir/$handler_file" );
     open( OLDHANDLER, $handler_file )     || die "Cannot read handler ($handler_file): $!";
     open( NEWHANDLER, "> $new_filename" ) || die "Cannot write to handler ($new_filename): $!";
     my $handler_class = $handler_file;
     $handler_class  =~ s|/|::|g;
     $handler_class  =~ s/\.pm$//;
     my $new_handler_class = $class->_change_class_name( $info, $handler_class );
-    _w( 1, "Old name: $handler_class; New name: $new_handler_class" );
+    DEBUG && _w( 1, "Old name: $handler_class; New name: $new_handler_class" );
     while ( <OLDHANDLER> ) {        
       s/$handler_class/$new_handler_class/g;
       print NEWHANDLER;
@@ -964,6 +1017,7 @@ sub _copy_handler_files {
   }
   return \@handler_file_list;
 }
+
 
 # Create a manifest file in the current directory. (Note that the
 # 'Quiet' and 'Verbose' parameters won't work properly until
@@ -984,7 +1038,7 @@ sub _create_manifest {
 sub _remove_directory_tree {
   my ( $class, $dir ) = @_; 
   my $removed_files = File::Path::rmtree( $dir, undef, undef );
-  _w( 1, "Removed ($removed_files) files/directories from ($dir)" );
+  DEBUG && _w( 1, "Removed ($removed_files) files/directories from ($dir)" );
   return $removed_files;
 }
 
@@ -1024,6 +1078,9 @@ OpenInteract::Package - Perform actions on individual packages
 =head1 SYNOPSIS
 
 =head1 DESCRIPTION
+
+This module defines actions to be performed on individual
+packages. The first argument for many of the methods that 
 
 =head1 METHODS
 
@@ -1100,25 +1157,48 @@ Exports the package whose root directory is the current directory into
 a distribution file in tarred-gzipped format, also placed into the
 current directory.
 
+Parameters:
+
+=over 4
+
+=item *
+
+config_file ($) (optional)
+
+Name of configuration file for package.
+
+=item *
+
+config (\%) (optional)
+
+Hashref of package configuration file information. 
+
+=back
+
 Returns: Information about the new package in hashref format with the
 following keys:
 
- name
-   Name of package
+=over 4
 
- version
-   Version of package
+=item *
 
- file
-   Full filename of distribution file created
+name ($)
 
-Parameters:
+Name of package
 
- config_file ($) (optional)
-   Name of configuration file for package.
+=item *
 
- config (\%) (optional)
-   Hashref of package configuration file information. 
+version ($)
+
+Version of package
+
+=item *
+
+file ($)
+
+Full filename of distribution file created
+
+=back
 
 B<read_config( \%params )>
 
@@ -1142,14 +1222,27 @@ keys as hashref keys.
 
 Parameters:
 
- file
-   Full filename of package file to be read in
+=over 4
 
- info
-   Hashref of package information to read package config from
+=item *
 
- directory
-   Directory from which to read the package config.
+file ($)
+
+Full filename of package file to be read in
+
+=item *
+
+info ($)
+
+Hashref of package information to read package config from
+
+=item *
+
+directory ($)
+
+Directory from which to read the package config.
+
+=back
 
 B<replace_and_copy( \%params )>
 
@@ -1158,17 +1251,33 @@ search-and-replace of certain keys.
 
 Parameters:
 
- from_file ($)
-   File from which we should read text.
+=over 4
 
- to_file ($)
-   File to which we write changed text.
+=item *
 
- from_text (\@)
-   List of keys to replace
+from_file ($)
 
- to_text (\@)
-   Replacement values for each of the keys in 'from_text'
+File from which we should read text.
+
+=item *
+
+to_file ($)
+
+File to which we write changed text.
+
+=item *
+
+from_text (\@)
+
+List of keys to replace
+
+=item *
+
+to_text (\@)
+
+Replacement values for each of the keys in 'from_text'
+
+=back
 
 =head1 HELPER METHODS
 
@@ -1186,7 +1295,7 @@ B<_create_manifest>
 
 Creates a MANIFEST file in the current directory. This file follows
 the same rules as found in L<ExtUtils::Manifest> since we use the
-C<mkmanifest()> routine from that module. 
+C<mkmanifest()> routine from that module.
 
 Note that we turn on the 'Quiet' and turn off the 'Verbose' parameters
 in hopes that the operation will be silent (too confusing), but the
@@ -1215,11 +1324,15 @@ C<$object-E<gt>{website_name}>.
 
 =head1 TO DO
 
+Nothing known.
+
 =head1 BUGS
+
+None known.
 
 =head1 SEE ALSO
 
-L<OpenInteract::Package>
+L<OpenInteract::PackageRepository>
 
 =head1 COPYRIGHT
 

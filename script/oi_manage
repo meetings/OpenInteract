@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.9 2001/02/25 20:48:20 lachoy Exp $
+# $Id: oi_manage,v 1.21 2001/06/10 18:04:29 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -19,7 +19,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60; 
 
@@ -31,9 +31,10 @@ use constant DEBUG    => 0;
 my %COMMANDS          = map { $_ => 1 } 
                         qw( initial_packages list_packages list_actions
                             install upgrade create_skeleton export_package check_package
-                            create_website install_sql test_db refresh_doc
+                            create_website install_sql test_db change_spops_driver 
                             install_package apply_package remove_package upgrade_package 
                             install_template dump_template remove_template 
+                            refresh_doc
                             upgrade_website_repository upgrade_installation_repository );
 
 # These are aliases people might type by accident instead of the
@@ -63,7 +64,7 @@ my @WEBSITE_BASE_PKG  = qw(
 
 # Extra packages shipped with OI -- small applications that show how things work
 
-my @WEBSITE_EXTRA_PKG = qw( full_text classified news );
+my @WEBSITE_EXTRA_PKG = qw( full_text  classified  news );
 
 # Files that are copied from the directory where you untar/gz the main
 # OpenInteract distribution into the base installation, when you run
@@ -92,7 +93,7 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
 
   my ( $OPT_help, $OPT_man, $OPT_initial_pkg );
   my ( $OPT_base_dir, $OPT_website_dir, $OPT_website_name, $OPT_dump_dir );
-  my ( $OPT_package_file, $OPT_package_dir, $OPT_package_list_file );
+  my ( $OPT_package_file, $OPT_package_dir, $OPT_package_list_file, $OPT_driver );
   my ( @OPT_package );
   GetOptions( 'help|?' => \$OPT_help, 'man' => \$OPT_man, 
               'base_dir=s'          => \$OPT_base_dir,
@@ -103,6 +104,7 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
               'package_dir=s'       => \$OPT_package_dir,
               'package=s'           => \@OPT_package,
               'dump_dir=s'          => \$OPT_dump_dir,
+              'driver=s'            => \$OPT_driver,
             );
 
   # Give them the man page if they want
@@ -114,6 +116,11 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
   # of valid commands, then print the basic help page
   
   my $command = lc shift @ARGV;
+
+  # Allow (for example) 'install-package' to be used for
+  # 'install_package'
+
+  $command =~ s/\-/_/g;
 
   # If the command is one of the aliases, alias it and let them know so
   # the user can change his/her behavior.
@@ -281,11 +288,8 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
     if ( scalar @{ $status } ) {
       $status_text = join( "\n", map { print_status_line( $_ ) } @{ $status } ), "\n";
     }
-    else {
-      $status_text = 'None. All package versions were identical.';
-    }
     print "Packages upgraded:\n",
-          
+          $status_text,
           "\n$SEP\nUpgrade of OpenInteract packages complete! You can now ",
           "use the packages in your websites.\n";
     exit(0);
@@ -313,20 +317,25 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
     # Ensure that the website name fits Perl naming conventions: no
     # spaces, cannot begin with number, must begin with alpha
     # character. Note that Perl lets you begin a package with an
-    # underscore, but we disallow that here.
+    # underscore, but we disallow that here. Also, note that '\W' will
+    # NOT match an underscore.
 
-    if ( $OPT_website_name =~ /\s/ ) {
-      push @error_msg, "The parameter 'website_name' must not have any spaces!";
-    }
+    if ( $OPT_website_name ) {
 
-    if ( $OPT_website_name =~ /^\d/ ) {
-      push @error_msg, "The parameter 'website_name' must be a valid Perl identifier " .
-                       "so it cannot begin with a number.";
-    }
+      if ( $OPT_website_name =~ /\W/ ) {
+        push @error_msg, "The parameter 'website_name' must not have any non-word " .
+                         "characters except for '_'! (Ok: A-Z, 1-9, '_')";
+      }
 
-    if ( $OPT_website_name !~ /^\w/ ) {
-      push @error_msg, "The parameter 'website_name' must be a valid Perl identifier " .
-                       "so it must begin with a letter.";
+      if ( $OPT_website_name =~ /^\d/ ) {
+        push @error_msg, "The parameter 'website_name' must be a valid Perl " .
+                         "identifier so it cannot begin with a number.";
+      }
+
+      if ( $OPT_website_name =~ /^_/ ) {
+        push @error_msg, "OpenInteract requires that 'website_name' begin with " .
+                         "a letter, underscores not allowed.";
+      }
     }
     
     notify_error( @error_msg )  if ( @error_msg );
@@ -364,8 +373,8 @@ CREATEMSG
     }
     notify_error( @error_msg )  if ( @error_msg );
     print "Running list_packages...\n$SEP\n\n";
-    list_packages( { base_dir    => $OPT_base_dir,
-                     website_dir => $OPT_website_dir } );
+    list_packages({ base_dir    => $OPT_base_dir,
+                    website_dir => $OPT_website_dir });
     print "\n$SEP\nFinished listing packages!\n";
     exit(0);
   }
@@ -515,6 +524,13 @@ CREATEMSG
     unless ( -f $OPT_package_file ) {
       push @error_msg, "Command 'install_package' requires the parameter 'package_file' " .
                        "to be set to an existing package distribution \n";
+    }
+    if ( my $msg = base_dir_permission( $OPT_base_dir ) ) {
+      push @error_msg, "Cannot run 'install_package' because you have " .
+                       "insufficient access to the base installation " .
+                       "directory. (Message: $msg.) Please try this " .
+                       "action again as a user that has sufficient " .
+                       "permission.\n";
     }
     notify_error( @error_msg )  if ( @error_msg );
     print "Running install_package...\n$SEP\n\n"; 
@@ -755,6 +771,44 @@ INSTSQLMSG
   }
 
   #
+  # CHANGE SPOPS DRIVER
+  #
+  if ( $command eq 'change_spops_driver' ) {
+    unless ( -d $OPT_website_dir ) {
+      push @error_msg, "Command 'change_spops_driver' requires the parameter " .
+                       "'website_dir' to be set to an existing directory\n";
+    }
+    unless ( $OPT_driver ) {
+      push @error_msg, "Command 'change_spops_driver' requires the parameter " .
+                       "'driver' set to the new SPOPS driver you want to use. " .
+                       "(e.g.,  'SPOPS::DBI::MySQL' or 'SPOPS::DBI::Pg')";
+    }
+    notify_error( @error_msg )  if ( @error_msg );
+    print "Running change_spops_driver...\n$SEP\n\n";
+    my $status = change_spops_driver({ website_dir => $OPT_website_dir,
+                                       driver      => $OPT_driver });
+    my $changed = ( scalar @{ $status->{changed} } )
+                    ? '--' . join( "\n--", @{ $status->{changed} } )
+                    : '';
+    my $not     = ( scalar @{ $status->{not_changed} } )
+                    ? '--' . join( "\n--", @{ $status->{not_changed} } )
+                    : '';
+    print <<DBMSG;
+
+Files changed:
+$changed
+
+Files not changed:
+$not
+
+$SEP
+Finished change_spops_driver!
+DBMSG
+    exit(0);
+
+  }
+
+  #
   # TEST DB
   #
   if ( $command eq 'test_db' ) {
@@ -876,6 +930,29 @@ sub notify_error {
 }
 
 
+# Test to see whether this user has permission to write to the base
+# installation directory and the base installation package
+# repository. Returns error message on error, undef on success. (Hey,
+# just like 'system'!)
+
+# We should also test this in the package repository module...
+
+sub base_dir_permission {
+  my ( $base_dir ) = @_;
+  return "Directory not writable!"          unless ( -w $base_dir );
+  return "Repository not writable!"         unless ( -w "$base_dir/conf/package_repository.perl" );
+  return "Package directory not writeable!" unless ( -w "$base_dir/pkg" );
+  return undef;
+}
+
+sub base_dir_permission {
+  my ( $base_dir ) = @_;
+  return undef unless ( -w $base_dir );
+  return undef unless ( -w "$base_dir/package_repository.perl" );
+  return undef unless ( -w "$base_dir/pkg" );
+  return 1;
+}
+
 
 # 
 # list_packages
@@ -890,7 +967,7 @@ sub list_packages {
                            : 'installation directory';
   print "Available packages in the $package_location:\n";
   foreach my $pkg ( @{ $pkg_list } ) {
-    print "Package: $pkg->{name}-$pkg->{version}\n",
+    print "Package:   $pkg->{name}-$pkg->{version}\n",
           "Installed: $pkg->{installed_on}\n",
           "Directory: $use_dir/$pkg->{package_dir}\n\n";
   }
@@ -958,7 +1035,14 @@ sub list_actions {
                                                 alias_init => 1,
                                                 spops_init => 1 });
   my @actions = ();
+ACTION:
   foreach my $action ( sort keys %{ $C->{action} } ) {
+    next ACTION if ( $action eq '_default_action_info_' );
+    if ( ! $action or $action =~ /^_/ ) {
+      my $redir_action = $C->{action}->{ $action }->{redir};
+      push @actions, { action => "SYSTEM ($action) redirected to ($redir_action)" };
+      next ACTION;
+    }
     push @actions, { action => $action, 
                      package_name => $C->{action}->{ $action }->{package_name},
                      package_version => $C->{action}->{ $action }->{package_version},
@@ -1107,7 +1191,8 @@ REPOSMSG
   
   foreach my $file_frag ( @INITIAL_FILES ) {
     rename( "$base_dir/$file_frag", 
-            "$base_dir/$file_frag.old" );
+            "$base_dir/$file_frag.old" )
+          || _w( 0, "Could not rename $base_dir/$file_frag -> $base_dir/$file_frag.old" );
     cp( $file_frag, "$base_dir/$file_frag" ) 
         || _w( 0,  "Could not copy file ($file_frag) to new directory! Error: $!" );
   }
@@ -1140,21 +1225,27 @@ COPYDIR:
   foreach my $package_name ( @WEBSITE_BASE_PKG, @WEBSITE_EXTRA_PKG ) {
     _w( 1, " -- Trying to install package $package_name" );
     my $status = { ok => 0, name => $package_name };
-    unless ( $package_match->{ $package_name } ) {
+    unless ( -f $package_match->{ $package_name } ) {
       $status->{msg} = "Cannot match $package_name to file in distribution! Not installed!";
       push @package_status, $status;
-    }
-    
+      next;
+    }    
     my $info = eval { $PKG_CLASS->install_distribution({ 
                               repository => $repository,
                               package_file => $package_match->{ $package_name } }) };
+    _w( 2, "Results of install_distribution() for package ",
+           "($package_name)\n", Dumper( $info ) );
 
     # If we get an error, assume it's because this package already
     # exists; otherwise, just mark the status
 
-    next if ( $@ );
-    $status->{ok} = 1;
-    $status->{version} = $info->{version};
+    if ( $@ ) {
+      $status->{msg}  = $@;
+    }
+    else {
+      $status->{ok} = 1;
+      $status->{version} = $info->{version};
+    }
     push @package_status, $status;
   }
   return \@package_status;
@@ -1177,7 +1268,7 @@ sub _match_base_packages {
     my ( $package_name ) = $package_file =~ /^(.*)\-\d+\.\d+\.tar\.gz$/;
     $package_match{ $package_name } = "$dir/pkg/$package_file";
   }
-  _w( 2, " --Packages matched: ", Dumper( \%package_match ) );
+  _w( 2, "Packages matched: ", Dumper( \%package_match ) );
  return \%package_match;
 }
 
@@ -1581,16 +1672,29 @@ PKG:
 
     # If removal went ok, apply the package from the install directory
 
-    my $site_info = \%{ $base_info };
-    $site_info->{website_name} = $p->{website_name};
+    my $website_info = \%{ $base_info };
+    $website_info->{website_name} = $p->{website_name};
 
-    $PKG_CLASS->install_to_website( $base_repository, $website_repository, $base_info );
+    $PKG_CLASS->install_to_website( $base_repository, $website_repository, $website_info );
     $upg_status->{ok}++;
     $upg_status->{msg} = "upgraded to version $base_info->{version}";
 
     $this_status->{ok}++;
     $this_status->{msg} = "  Removal: " . print_status_line( $rmv_status, { same_line => 1 } ) . "\n" .
                           "  Apply:   " . print_status_line( $upg_status, { same_line => 1 } );
+
+    my $notes_file = join( '/', $website_info->{base_dir}, $website_info->{package_dir}, 'UPGRADE' );
+    if ( -f $notes_file ) {
+      eval { open( NOTES, $notes_file ) || die $! };
+      if ( $@ ) {
+        $this_status->{notes} = "Failed to open package installation notes file. Error: $@";
+      }
+      else {
+        local $/ = undef;
+        $this_status->{notes} = <NOTES>;
+        close( NOTES );
+      }
+    }
                           
     push @status, $this_status;
   }
@@ -1607,10 +1711,14 @@ sub install_sql {
   my ( $p ) = @_;
   my $R = initialize_db_actions({ website_dir => $p->{website_dir}, 
                                   action      => 'install SQL' });
-  my $repository = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} } );
-  my $pkg_exist = $repository->verify_package( @{ $p->{package} } );
+
+  # Grab the repository and existing packages
+
+  my $repository     = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} } );
+  my $pkg_exist      = $repository->verify_package( @{ $p->{package} } );
   my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' ) ? $pkg_exist : [ $pkg_exist ];
-  my @status = ();
+
+  my @status     = ();
   my %pkg_status = ();
 
   # Go through and do the structures first...
@@ -1621,8 +1729,8 @@ sub install_sql {
     $pkg_status{ $info->{name} }->{ok} = 1;
     my $installer_class = OpenInteract::SQLInstall->require_package_installer( $info );
     if ( $installer_class ) {
-      my %args = ( package => $info, config => $R->CONFIG, 
-                   db => $R->db, status => 'raw' );
+      my %args = ( package => $info,  config => $R->CONFIG, 
+                   db      => $R->db, status => 'raw' );
       my $struct_status = eval { $installer_class->apply({ 
                                             %args, action => 'create_structure' }) };
       if ( $@ ) { 
@@ -1630,17 +1738,19 @@ sub install_sql {
       }
       else {
         $pkg_status{ $info->{name} }->{installer} = $installer_class;
-        $pkg_status{ $info->{name} }->{structure} = join( "\n  * ", "Structure:", map { $_->{msg} } @{ $struct_status } );
+        $pkg_status{ $info->{name} }->{structure} = 
+                                        join( "\n  * ", "Structure:", map { $_->{msg} } @{ $struct_status } );
         my @notes = grep { defined $_ } map { $_->{note} } @{ $struct_status };
         if ( @notes ) { $pkg_status{ $info->{name} }->{note} = join( "\n", @notes ) }
       }
     }
   }
 
-  # Then the data and security; this is so we don't try to create data
-  # in (as yet) non-existent structures. We also check to see the 'ok'
-  # status before each entry so that we don't enter data and/or
-  # security when the table creation failed, etc.
+  # Then the data and security; this is separated from the structure
+  # step above so we don't try to create data in (as yet) non-existent
+  # structures. We also check to see the 'ok' status before each entry
+  # so that we don't enter data and/or security when the table
+  # creation failed, etc.
 
   foreach my $info ( @{ $pkg_exist_list } ) {
     my $installer_class = $pkg_status{ $info->{name} }->{installer};
@@ -1668,7 +1778,8 @@ sub install_sql {
          $pkg_status{ $info->{name} }->{ok} = 0;
        }
        else {
-         $pkg_status{ $info->{name} }->{security} = join( "\n  * ", 'Security: ', map { $_->{msg} } @{ $security_status } );
+         $pkg_status{ $info->{name} }->{security} = 
+                                        join( "\n  * ", 'Security: ', map { $_->{msg} } @{ $security_status } );
          my @notes = grep { defined $_ } map { $_->{note} } @{ $security_status };
          if ( @notes ) { $pkg_status{ $info->{name} }->{note} .= join( "\n", @notes ) }
        }
@@ -1679,8 +1790,8 @@ sub install_sql {
   $R->db->disconnect;
   
   foreach my $name ( sort keys %pkg_status ) {
-    my $this_status = { ok => $pkg_status{ $name }->{ok},
-                        name => $name, 
+    my $this_status = { ok      => $pkg_status{ $name }->{ok},
+                        name    => $name, 
                         version => $pkg_status{ $name }->{version} };
     if ( $pkg_status{ $name }->{installer} ) {
       $this_status->{msg} = "\n\n" . join( "\n", $pkg_status{ $name }->{structure},
@@ -1766,9 +1877,10 @@ PACKAGE:
       # package/name combo
 
       my $tmpl_list = $TMPL_CLASS->fetch_group({
-                             where => 'package = ? AND name = ?',
-                             value => [ $ti->{package}, $ti->{name} ],
-                             skip_security => 1, skip_cache => 1 });
+                             where         => 'package = ? AND name = ?',
+                             value         => [ $ti->{package}, $ti->{name} ],
+                             skip_security => 1, 
+                             skip_cache    => 1 });
      
       # ... if so, just set the title and description right now
 
@@ -1801,7 +1913,9 @@ PACKAGE:
 
       # Save the object
 
-      eval { $tmpl->save( { skip_security => 1, skip_log => 1, skip_cache => 1 } ) };
+      eval { $tmpl->save({ skip_security => 1, 
+                           skip_log      => 1, 
+                           skip_cache    => 1 } ) };
       if ( $@ ) {
         my $ei = SPOPS::Error->get;
         $this_status_msg .= "failed! Could not save template object. Error: $@ -- $ei->{system_msg}";       
@@ -1810,11 +1924,11 @@ PACKAGE:
       # If save ok, we need to set security
 
       else {
-        $tmpl->set_security({ scope => SEC_SCOPE_WORLD,
-                              level => SEC_LEVEL_READ });
-        $tmpl->set_security({ scope => SEC_SCOPE_GROUP,
-                              scope_id => $site_admin_id,
-                              level => SEC_LEVEL_WRITE });
+        $tmpl->set_security({ scope          => SEC_SCOPE_WORLD,
+                              security_level => SEC_LEVEL_READ });
+        $tmpl->set_security({ scope          => SEC_SCOPE_GROUP,
+                              scope_id       => $site_admin_id,
+                              security_level => SEC_LEVEL_WRITE });
         $this_status_msg .= "ok! Template saved and security set ok.";
       }
       $this_status_msg .= "\n";
@@ -1833,8 +1947,8 @@ PACKAGE:
 
 sub remove_template {
   my ( $p ) = @_;
-  my $R = initialize_db_action({ website_dir => $p->{website_dir},
-                                 action      => 'remove template' });
+  my $R = initialize_db_actions({ website_dir => $p->{website_dir},
+                                  action      => 'remove template' });
 
   # This is the class of our template object
 
@@ -1939,6 +2053,52 @@ PKG:
 
 
 #
+# change_spops_driver
+#
+sub change_spops_driver {
+  my ( $p ) = @_;
+
+  # Go through the packages installed to the website and find all the
+  # 'conf/spops.conf' files
+
+  my $repository = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} });
+  my $package_list = $repository->fetch_all_packages();
+  my @conf_files = ();
+  foreach my $pkg ( @{ $package_list } ) {
+    my $spops_file = $PKG_CLASS->find_file( $pkg, 'conf/spops.perl' );
+    push @conf_files, $spops_file if ( $spops_file );
+  }
+
+  my %status = ( changed => [], not_changed => [] );
+
+  # Now open up each spops.conf file and check the 'isa' value
+  foreach my $spops_file ( @conf_files ) {
+    my ( $is_changed );
+    my $spops_info = SPOPS::HashFile->new({ filename => $spops_file,
+                                            perm     => 'write' });
+    foreach my $spops_alias ( keys %{ $spops_info } ) {
+      next unless ( ref $spops_info->{ $spops_alias }->{isa} eq 'ARRAY' );
+      for my $i ( 0 .. ( scalar @{ $spops_info->{ $spops_alias }->{isa} } - 1 ) ) {
+        my $class_name = $spops_info->{ $spops_alias }->{isa}->[ $i ];
+        if ( $class_name =~ /^SPOPS::DBI::/ ) {
+          $spops_info->{ $spops_alias }->{isa}->[ $i ] = $p->{driver};
+          $is_changed++;
+        }
+      }
+    }
+    if ( $is_changed ) {
+      $spops_info->save;
+      push @{ $status{changed} }, $spops_file;
+    }
+    else {
+      push @{ $status{not_changed} }, $spops_file;
+    }
+  }
+  return \%status;
+}
+
+
+#
 # test_db_connection
 #
 
@@ -1948,37 +2108,61 @@ sub test_db_connection {
 
  # Grab the base config, then the config object
 
+  my @msg = ();
+
   my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
-  if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir}, 
-                                       error => $@, sub => 'test_db_connection' }) }
+  if ( $@ ) { 
+    base_config_file_error({ website_dir => $p->{website_dir}, 
+                             error       => $@, 
+                             sub         => 'test_db_connection' })
+  }
   my $C = OpenInteract::Startup->create_config({ base_config => $bc });
   unless ( $C->{db_info}->{dsn} ) {
     $status->{ok}  = 0;
-    $status->{msg} = "You must at least define 'dsn' in the 'db_info' key of the configuration information.";
+    push @msg, "You must at least define 'dsn' in the 'db_info' key of the configuration information.";
   }
   else {
     my $db = eval { OpenInteract::DBI->connect( $C->{db_info} ) };
     if ( $@ ) {
       my ( $error ) = $@ =~ /failed:\s*(.*)$/;
       $error ||= $@;
-      if ( $@ =~ /^Use/ ) {
-        $status->{msg} = "\n -- Basic connect: ok" .
-                         "\n -- Basic use database: failed -- $error";
+      if ( $@ =~ /^Connect/ ) {
+        push @msg, "-- Basic connect: failed -- $error",
+                   "-- Use database: not attempted",
+                   "-- Create table: not attempted";
+      }
+      elsif ( $@ =~ /^Use/ ) {
+        push @msg, "-- Basic connect: ok",
+                   "-- Use database: failed -- $error",
+                   "-- Create table: not attempted";
       }
       else {
-        $status->{msg} = "\n -- Basic connect: failed -- $error" .
-                         "\n -- Basic use database: not attempted";
+        $status->{msg} = "-- Other failure: $error";
       }
       $status->{ok}   = 0;
     }
     else {
-      $status->{msg} = "\n -- Basic connect: ok" .
-                       "\n -- Basic use database: ok";
-      $db->disconnect;
+      my $test_table = 'oi_test_create';
+      push @msg, "-- Basic connect: ok",
+                 "-- Use database: ok";
+      eval { $db->do( "CREATE TABLE $test_table ( oi_id int not null, primary key( oi_id ) )" ) };
+      if ( $@ ) {
+        push @msg, "-- Create table: failed -- $@";
+      }
+      else {
+        push @msg, "-- Create table: ok";
+        eval { $db->do( "DROP TABLE $test_table" ) };
+        if ( $@ ) {
+          push @msg, "(NOTE: 'DROP TABLE' failed -- $@; please remove table ($test_table) manually.)";
+        }
+      }
+      $db->disconnect; 
     }
   }
+  $status->{msg} = join "\n", @msg;
   return $status;
 }
+
 
 
 #
@@ -2031,7 +2215,8 @@ sub print_status_line {
   }
  
   $line .= ( $status->{ok} ) ? 'OK' : 'FAILED!';
-  $line .= ': ' . $status->{msg}   if ( $status->{msg} );
+  my $indent = ( $status->{ok} ) ? '      ' : '           ';
+  $line .= ': ' . wrap( undef, $indent, $status->{msg} )   if ( $status->{msg} );
   $line .= "\n\nNotes from Package Author (READ THESE)\n$status->{notes}\n$SEP\n"  if ( $status->{notes} );
   return $line;
 }
@@ -2070,7 +2255,8 @@ Website creator commands:
 
    create_website, apply_package, upgrade_package, 
    remove_package, install_sql, install_template, 
-   dump_template, remove_template, test_db, refresh_doc
+   dump_template, remove_template, refresh_doc,
+   test_db, change_spops_driver
 
 Other commands:
 
@@ -2102,8 +2288,9 @@ Commands by the Website Creator:
  install_template   - Install package templates to the database
  dump_template      - Dump package templates to the filesystem
  remove_template    - Remove package templates from the database
- test_db            - Test database settings in 'server.perl'
  refresh_doc        - Sync website docs to base installation docs
+ test_db            - Test database settings in 'server.perl'
+ change_spops_driver- Change the SPOPS driver for your objects
 
 Other commands:
 
@@ -2123,6 +2310,7 @@ Summary of common options:
  --package            List packages to operate on
  --package_list_file  File specifying packages to operate on
  --dump_dir           Directory to dump stuff into
+ --driver             A generic driver (DBI, SPOPS, etc.)
  --help               Display brief help
  --man                Display full help
 
@@ -2182,6 +2370,12 @@ Details:
     this (usually the 'dump/' directory in the area pertaining to what
     is being dumped), but sometimes you might want to put the data
     elsewhere.
+
+--driver=SPOPS::DBI::Pg
+
+    Specify some sort of driver -- this can be used to name an SPOPS
+    driver (such as 'SPOPS::DBI::Pg') or a DBD driver ('DBD::mysql')
+    when necessary.
 
 Other options depend on the I<command> you choose and are listed under
 that command below.
@@ -2422,10 +2616,14 @@ You can run this one of two ways:
 
 =over 4
 
-=item 1. Export a single package by changing to its directory and
-running this command without any parameters.
+=item 1.
 
-=item 2. Specify the following parameters for multiple packages:
+Export a single package by changing to its directory and running this
+command without any parameters.
+
+=item 2.
+
+Specify the following parameters for multiple packages:
 
  --package_dir=/path/to/my/packages
  --package=x (at least one)
@@ -2636,26 +2834,25 @@ Required options:
 
  --website_dir=/path/to/my_website
 
-Just tests out whether you can establish a connection to the database
-for which you have specified parameters in the C<conf/server.perl>
-configuration file in your website.
+Tests whether you can establish a connection to the database for which
+you have specified parameters in the C<conf/server.perl> configuration
+file in your website, as well as whether the user specified in that
+configuration can create a table. This is generally a good indicator
+of whether the user will have sufficient permissions to run
+OpenInteract, since a user who can create tables typically has full
+read/write privileges to the tables created by the account.
 
 ***NOTE***
 
 Just because your database connection works from the command line does
 B<NOT> mean that it will automatically work from your web
-server. Hopefully, your web server runs under a user with minimal
-permissions, which can affect shared library and other types of
-access. In addition, your command-line environment might be set up
-properly to connect to your database while the web server environment
-is not. More is in the entry: I<When I run a perl script from the
-command line, it works, but, when I run it under the httpd, it fails!
-Why?> in C<perldoc DBI::FAQ>.
-
-In the future it will also try to create a table, put data into the
-table, get information from the table, remove information from the
-table and remove it as well. (But this is also a relatively low
-priority, so if you are feeling industrious then have a go at it!)
+server. Hopefully (for security purposes), your web server runs under
+a user with minimal permissions. This can affect shared library and
+other types of access. In addition, your command-line environment
+might be set up properly to connect to your database while the web
+server environment is not. More is in the entry: I<When I run a perl
+script from the command line, it works, but, when I run it under the
+httpd, it fails!  Why?> in C<perldoc DBI::FAQ>.
 
 =head2 REFRESH DOC
 
@@ -2745,6 +2942,36 @@ intact, but they are no longer used. This program does not currently
 support the more complicated task of trying to find the differences
 between your files and the new files -- you are left to your own
 devices.
+
+=head2 CHANGE SPOPS DRIVER
+
+Command: change_spops_driver
+
+Required options:
+
+ --website_dir=/path/to/my_website
+ --driver=SPOPS::Driver::To::Use
+
+Modifies the SPOPS driver used for all the objects in your
+website. OpenInteract ships with all objects configured for the MySQL
+database. You can see this in the 'isa' configuration for the object,
+like this configuration from the User object class:
+
+    ...,
+    'object_name' => 'User',
+    'isa' => [
+      'OpenInteract::SPOPS',
+      'SPOPS::Utility',
+      'SPOPS::Secure',
+      'SPOPS::DBI::MySQL',
+      'SPOPS::DBI'
+    ],
+    ...,
+
+For this, we would replace <code>SPOPS::DBI::MySQL</code> with the
+appropriate SPOPS driver. This will normally take the form
+<code>SPOPS::DBI::xxxx</code>. For example:
+<code>SPOPS::DBI::Sybase</code> or <code>SPOPS::DBI::Pg</code>.
 
 =head1 SQL COMMANDS
 
@@ -3060,6 +3287,11 @@ And then create the SQL structures:
  >> /usr/local/bin/oi_manage --website_dir=~/OIApp \
        --package=mydevelpackage install_sql
 
+Moving to a new database -- change the SPOPS classes:
+
+ >> /usr/local/bin/oi_manage --website_dir=~/OIApp \
+       --driver=SPOPS::DBI::Pg change_spops_driver
+
 =head1 TO DO
 
 B<Put this into a module>
@@ -3100,6 +3332,8 @@ the object (in C<spops.perl>) so that it can tell which fields are
 
 =head1 BUGS
 
+None known.
+
 =head1 SEE ALSO
 
 L<OpenInteract::PackageRepository>, L<OpenInteract::Package>, 
@@ -3126,6 +3360,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.9 $
+Revision: $Revision: 1.21 $
 
 =cut

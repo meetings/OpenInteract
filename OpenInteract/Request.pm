@@ -1,14 +1,13 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.1.1.1 2001/02/02 06:18:25 lachoy Exp $
+# $Id: Request.pm,v 1.4 2001/06/06 19:43:27 lachoy Exp $
 
 use strict;
-use Carp              qw( carp );
-use Data::Dumper      qw( Dumper );
 use Class::Singleton  ();
+use Data::Dumper      qw( Dumper );
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -57,12 +56,14 @@ sub throw  {
 
 sub stash {
   my ( $self, $name, $obj ) = @_;
+  return {} unless ( ref $self );
   my $stash_class = $self->{stash_class};
   return $stash_class->set_stash( $name, $obj ) if ( $stash_class );
 }
 
 sub get_stash {
   my ( $self, $item ) = @_;
+  return {} unless ( ref $self );
   my $stash_class = $self->{stash_class};
   return $stash_class->get_stash( $item ) if ( $stash_class );
   return {};
@@ -107,19 +108,32 @@ sub setup_aliases {
 # debug value in a session, which gets copied to all http children via
 # a shared session
 #
-# Usage $R->scrib( $level, $msg, $msg,... );
+# Usage $R->DEBUG && $R->scrib( $level, $msg, $msg,... );
 #   -- nothing done if $level < $CONFIG->{DEBUG}
 #   -- all $msg get join'd with a ' ' character to form the message
 #   -- msg sent to STDERR with "package::sub ($line) >> $msg"
 
 sub scrib {
   my ( $self, $level, @msg ) = @_;
-  return undef if ( ( $self->CONFIG->{DEBUG} || $OpenInteract::Request::DEBUG ) < $level );
+  return undef if ( $self->DEBUG < $level );
   my ( $pkg, $file, $line ) = caller;
   my @ci = caller(1);
   warn "$ci[3] ($line) >> ", join( ' ', @msg ), "\n";
 }
 
+# The last (?) piece to the debugging puzzle. You should now always
+# call:
+#
+#   $R->DEBUG && $R->DEBUG && $R->scrib( 1, "xxx" );
+#
+# So that we don't have to do anything with the argument(s) to the
+# scrib() method even if we're not debugging.
+
+sub DEBUG {
+  my ( $self ) = @_;
+  my $app_debug = ( ref $self ) ? $self->CONFIG->{DEBUG} : 0;
+  return $app_debug || $OpenInteract::Request::DEBUG;
+}
 
 # Do some stuff with the configuration -- set defaults, etc.
 #
@@ -157,7 +171,7 @@ sub lookup_action {
 
 ACTION:
   foreach my $action ( @{ $action_list } ) {
-    $self->scrib( 1, "Find action corresponding to <<$action>>" );
+    $self->scrib( 1, "Find action corresponding to ($action)" );
     my $action_info = $self->CONFIG->{action}->{ lc $action };
     $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
 
@@ -174,10 +188,10 @@ ACTION:
     
     while ( my $action_redir = $action_info->{redir} ) {
       $action_info = $self->CONFIG->{action}->{ lc $action_redir };
-      $self->scrib( 2, "Info within redir $action_redir:\n", Dumper( $action_info ) );
+      $self->scrib( 3, "Info within redir ($action_redir):\n", Dumper( $action_info ) );
     }
     next ACTION unless ( $action_info );
-    $self->scrib( 1, "Found action info for (($action))" );
+    $self->scrib( 1, "Found action info for ($action)" );
     $self->{current_context} = $action_info;
     return \%{ $action_info } if ( $opt->{return} eq 'info' );
     my $method = $action_info->{method};
@@ -243,11 +257,11 @@ utility you are running by simply doing:
 
  my $R = OpenInteract::Request->intance;
 
-That's it. You don't need a 'use OpenInteract::Request;' statement,
-you don't need to pass the object around from method to method.
+That is it. You do not need a 'use OpenInteract::Request;' statement,
+you do not need to pass the object around from method to method.
 
 The other job of the OpenInteract::Request object is to keep track of
-where we are: which action we're using, what URL was originally
+where we are: which action we are using, what URL was originally
 requested. etc.
 
 =head2 PACKAGE LEXICALS
@@ -295,7 +309,7 @@ Note that you do not even need to instantiate an object for this:
  OpenInteract::Request->instance->throw( { ... } );
 
 See also documentation in L<OpenInteract::Error> and the
-L<OpenInteract::ErrorObject>.
+L<OpenInteract::ErrorObject>, particularly for the parameter names.
 
 B<stash( 'name', $obj )>
 
@@ -321,7 +335,7 @@ Creates subroutines in the symbol table for this class
 matching up to the entries in the lexical %ALIAS. You should
 call this when your website first starts.
 
-B<lookup_alias( $alias )> 
+B<lookup_alias( $alias )>
 
 Returns a class name matching up to $alias. Use this when you do not
 know the alias beforehand. You can use it in two different ways:
@@ -339,9 +353,19 @@ level. If that level is less than the level passed in, we do
 nothing. But if the value is equal to or greater than the level passed
 in then we 'warn' with the error.
 
+A common idiom is:
+
+  $R->DEBUG && $R->DEBUG && $R->scrib( 1, "Result:", $myobj->result() );
+
+This first checks to see if debugging is on, and if so only then calls
+the (more expensive) scrib() method. As seen below, C<DEBUG()> checks
+the application debugging level (generally from the server
+configuration), so this might send debugging info for one website but
+not another.
+
 Note that you can pass multiple messages at once to the method -- the
-method C<join> them with a single space between the messages.
-e
+method C<join>s them with a single space between the messages.
+
 None of the $msg items need to conetain the filename, package name,
 subroutine name or line number -- we pull all that from the reference
 material sent via L<caller>.
@@ -361,9 +385,19 @@ might want to use C<local> for setting this value if you really need
 to.
 
 Finally, any log messages sent with a debug level of '0' will always
-go to the log.. (We have not accounted for any weisenheimers setting
-the config/class debug level to a negative number, but who would do
-such a thing?)
+go to the log, as long as you do not check the result of C<DEBUG()>
+first.. (We have not accounted for any weisenheimers setting the
+config/class debug level to a negative number, but who would do such a
+thing?)
+
+B<DEBUG()>
+
+Class or object method to return the current debugging level. If this
+is called from an object, we query the configuration hashref in the
+stash class for the debugging level and return it. If that is not set,
+we also check the class variable 'DEBUG' and send its value. Most of
+the time you will not want to set this because you will get enormous
+logfiles. But hey, if that is what you want...
 
 B<lookup_conductor( [ $action ] )>
 
@@ -394,12 +428,22 @@ information about the action.
 
 Parameters:
 
- return
-   'info' means return all information about the action
+=over 4
 
- skip_default
-   any true value means to *not* use the default action name, even if
-   the action name is not found.
+=item *
+
+return ($)
+
+'info' means return all information about the action
+
+=item *
+
+skip_default (bool)
+
+Any true value means to *not* use the default action name, even if the
+action name is not found.
+
+=back
 
 B<finish_request()>
 
@@ -408,7 +452,11 @@ request to do the same.
 
 =head1 TO DO
 
+Nothing known.
+
 =head1 BUGS
+
+none known.
 
 =head1 COPYRIGHT
 

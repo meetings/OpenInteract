@@ -1,6 +1,6 @@
 package OpenInteract::Handler::%%UC_FIRST_NAME%%;
 
-# $Id: sample-Handler.pm,v 1.1.1.1 2001/02/02 06:18:34 lachoy Exp $
+# $Id: sample-Handler.pm,v 1.2 2001/05/14 03:16:28 lachoy Exp $
 
 # This is a sample handler. It exists only to provide a template for
 # you and some notes on what these configuration variables mean.
@@ -30,7 +30,7 @@ use SPOPS::Secure qw( :level );
 # Use whatever standard you like here -- it's always nice to let CVS
 # deal with it :-)
 
-$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 # This might seem cosmetic but actually the GenericDispatcher will
 # e-mail you if someone tries to call the handler without a method and
@@ -61,10 +61,6 @@ $OpenInteract::Handler::%%UC_FIRST_NAME%%::default_method    = 'listing';
 %OpenInteract::Handler::%%UC_FIRST_NAME%%::security          = ( 
  listing => SEC_LEVEL_READ,  
 );
-
-# This might be a default to be called from $R someday, but not yet
-
-my $TMPL_CLASS = 'OpenInteract::Template::Toolkit';
 
 sub listing {
 
@@ -116,9 +112,10 @@ sub listing {
 
  # Every method should return either a template processing directive
  # or a call to another handler which will return a template
- # processing directive.
+ # processing directive. Note that '$R->template' is an alias for the
+ # default template processing handler.
 
- return $TMPL_CLASS->handler( {}, $params, { db => 'myobj_list' } );
+ return $R->template->handler( {}, $params, { db => 'myobj_list' } );
 }
 
 1;

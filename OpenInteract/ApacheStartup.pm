@@ -1,19 +1,24 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.4 2001/02/22 12:46:17 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.8 2001/05/30 17:29:00 lachoy Exp $
 
 use strict;
 use OpenInteract::Startup;
 
 use constant DEBUG => 0;
 
-# Create a handler to put the X-Forwarded-For header 
-# into the IP address -- thanks Stas! (perl.apache.org/guide/)
+$OpenInteract::ApacheStartup::VERSION   = '1.07';
+$OpenInteract::ApacheStartup::Revision  = substr(q$Revision: 1.8 $, 10);
+
+# Create a handler to put the X-Forwarded-For header into the IP
+# address -- thanks Stas! (perl.apache.org/guide/)
+
 my $PROXY_SUB = <<'PROXY';
 
   sub OpenInteract::ProxyRemoteAddr ($) {
-    my $r = shift;
-    if ( my ( $ip ) = $r->headers_in->{'X-Forwarded-For'} =~ /([^,\s]+)$/ ) {
+    my ( $r ) = @_;
+    return unless ( ref $r );
+    if ( my ( $ip ) = $r->header_in( 'X-Forwarded-For' ) =~ /([^,\s]+)$/ ) {
       $r->connection->remote_ip( $ip );
     }
     return Apache::Constants::OK;
@@ -21,17 +26,16 @@ my $PROXY_SUB = <<'PROXY';
 PROXY
 
 sub initialize {
-  my $class   = shift;
-  my $bc_file = shift;
+  my ( $class, $bc_file ) = @_;
 
-  _w( 1, "ApacheStartup: Reading in information for configuration: $bc_file" );
+  DEBUG && _w( 1, "ApacheStartup: Reading in information for configuration: $bc_file" );
 
   # We read the base config in first, so we can snag the apache modules
 
   my $BASE_CONFIG = OpenInteract::Startup->read_base_config( { filename => $bc_file } );
   die "Cannot create base configuration from ($bc_file)!" unless ( $BASE_CONFIG );
-  _w( 1, " --base configuration read in ok." );
-  
+  DEBUG && _w( 1, " --base configuration read in ok." );
+
   # Read in all the Apache classes -- do this separately since we need
   # to ensure that Apache::DBI gets included before DBI
   #
@@ -41,93 +45,131 @@ sub initialize {
   # confusing in the future about it we might as well put the
   # 'PerlModule Apache::DBI' before the PerlRequire statement into the
   # modperl httpd.conf
-  
+
   my $config_dir = join( '/', $BASE_CONFIG->{website_dir}, $BASE_CONFIG->{config_dir} );
-  OpenInteract::Startup->require_module( { filename => "$config_dir/apache.dat" } );
-  _w( 1, " --apache modules read in ok." );
+  OpenInteract::Startup->require_module({ filename => "$config_dir/apache.dat" });
+  DEBUG && _w( 1, " --apache modules read in ok." );
 
  # The big enchilada -- do just about everything here and get back the 
  # list of classes that need to be initialized along with the config object. 
  # Note that we do not pass the necessary parameters to initialize aliases
  # and to create/initialize the SPOPS classes -- we do that in the child
  # init handler below
-  
-  my ( $init_class, $C ) = OpenInteract::Startup->main_initialize({ 
+
+  my ( $init_class, $C ) = OpenInteract::Startup->main_initialize({
                                base_config => $BASE_CONFIG });
   die "No configuration object returned from initialization!\n" unless ( $C );
-  _w( 1, " --main initialization completed ok." );
-  
+  DEBUG && _w( 1, " --main initialization completed ok." );
+
+  OpenInteract::Startup->require_module({ class => $C->{session_info}->{class} });
+
   # Figure out how to do this more cleanly in the near future -- maybe
   # just do it by hand for this special class?
-  
+
   push @{ $init_class }, 'OpenInteract::PackageRepository';
 
  # Stas Beckman (stas@stason.org) wrote up a section in the mod_perl
- # developer guide about how this 'install_driver' thing saves
- # memory. <shrug>
-  
+ # developer guide (perl.apache.org/guide/) about how this
+ # 'install_driver' thing saves memory. <shrug>
+
   my $db_info = $C->{db_info};
   DBI->install_driver( $db_info->{driver_name} );
-  _w( 1, " --installed DBD driver ($db_info->{driver_name}) ok." );
-  
+  DEBUG && _w( 1, " --installed DBD driver ($db_info->{driver_name}) ok." );
+
   # Check to see if the proxy subroutine has been loaded; if not, create it
-  
+
   eval { OpenInteract->ProxyRemoteAddr() };
   if ( $@ =~ /^Can\'t locate object method "ProxyRemoteAddr"/ ) {
-    _w( 1, "Creating proxy subroutine" );
-    eval $PROXY_SUB;   
+    DEBUG && _w( 1, "Creating proxy subroutine" );
+    eval $PROXY_SUB;
     die "Cannot create proxy subroutine! $@" if ( $@ );
-    _w( 1, " --installed proxy subroutine ok." );
+    DEBUG && _w( 1, " --installed proxy subroutine ok." );
   }
 
  # Setup caching info for use in the child init handler below
-  
+
   my $cache_info      = $C->{cache_info}->{data};
   my $cache_class     = $cache_info->{class};
   my $ipc_cache_class = $C->{cache}->{ipc}->{class};
 
-  # Do these initializations every time
+  # Do these initializations every time, unless we're on Win32 (they
+  # have just call the routine to call something else...)
 
-  Apache->push_handlers( PerlChildInitHandler => sub {
+  my ( $init_sub, $OS );
+  unless ($OS = $^O) {
+    require Config;
+    $OS = $Config::Config{'osname'};
+  }
+  if ($OS=~/Win/i) {
+    $OS = 'WINDOWS';
+  }
 
-    # seed the random number generator per child -- note that we can
-    # probably take this out as of mod_perl >= 1.25
+  # See the second sub for comments...
 
-    srand; 
-
-    # Connect to the db but throw away the handler that is returned --
-    # this just 'primes the pump' and makes the DB connection when the
-    # child is started versus when the first request is received
-    # (probably not necessary using mysql, but for heavier databases it
-    # can be a Good Thing)
-
-    OpenInteract::DBI->connect( $db_info );
-
+  if ( $OS eq 'WINDOWS' ) {
+    DEBUG && _w( 1, "Running initialization for Windows." );
+    srand;
     $cache_class->class_initialize(     { config => $C } )  if ( $cache_info->{use} );
     $ipc_cache_class->class_initialize( { config => $C } )  if ( $cache_info->{use_ipc} );
-
-    # Tell OpenInteract::Request to setup aliases if they haven't already
 
     my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
     $REQUEST_CLASS->setup_aliases;
 
-    # Initialize all the SPOPS object classes
+    OpenInteract::Startup->initialize_spops({ config => $C, class => $init_class });
 
-    OpenInteract::Startup->initialize_spops( { config => $C, class => $init_class } );
-
-    # Create the persistent template object for our website
-
-    eval { OpenInteract::Template::Toolkit->initialize( { config => $C } ); };
+    eval { OpenInteract::Template::Toolkit->initialize( { config => $C } ) };
     my $tmpl_status = ( $@ ) ? $@ : 'ok';
-    _w( 1, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
+    DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
 
-    # Create a list of error handlers for our website
-
-    eval { OpenInteract::Error::Main->initialize( { config => $C } ); };
+    eval { OpenInteract::Error::Main->initialize({ config => $C }) };
     my $err_status  = ( $@ ) ? $@ : 'ok';
-    _w( 1, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
+    DEBUG && _w( 1, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
   }
- );
+
+  else {
+    DEBUG && _w( 1, "Seeding childinit handler (non-Windows)" );
+
+    my $init_sub = sub {
+
+      # seed the random number generator per child -- note that we can
+      # probably take this out as of mod_perl >= 1.25
+
+      srand;
+
+      # Connect to the db but throw away the handler that is returned --
+      # this just 'primes the pump' and makes the DB connection when the
+      # child is started versus when the first request is received
+      # (probably not necessary using mysql, but for heavier databases it
+      # can be a Good Thing)
+
+      OpenInteract::DBI->connect( $db_info );
+
+      $cache_class->class_initialize(     { config => $C })  if ( $cache_info->{use} );
+      $ipc_cache_class->class_initialize( { config => $C })  if ( $cache_info->{use_ipc} );
+
+      # Tell OpenInteract::Request to setup aliases if they haven't already
+
+      my $REQUEST_CLASS = $BASE_CONFIG->{request_class};
+      $REQUEST_CLASS->setup_aliases;
+
+      # Initialize all the SPOPS object classes
+
+      OpenInteract::Startup->initialize_spops({ config => $C, class => $init_class });
+
+      # Create the persistent template object for our website
+
+      eval { OpenInteract::Template::Toolkit->initialize({ config => $C }) };
+      my $tmpl_status = ( $@ ) ? $@ : 'ok';
+      DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Template Toolkit", $tmpl_status ) );
+
+      # Create a list of error handlers for our website
+
+      eval { OpenInteract::Error::Main->initialize({ config => $C }) };
+      my $err_status  = ( $@ ) ? $@ : 'ok';
+      DEBUG && _w( 0, sprintf( "%-40s: %-30s","init: Error Dispatcher", $err_status ) );
+    }; 
+    Apache->push_handlers( PerlChildInitHandler => $init_sub );
+  }
 
 }
 
@@ -157,6 +199,7 @@ OpenInteract::ApacheStartup - Central module to call for initializing an OpenInt
  use OpenInteract::ApacheStartup;
  my $BASE_CONFIG = '/home/httpd/demo.openinteract.org/conf/base.conf';
  OpenInteract::ApacheStartup->initialize( $BASE_CONFIG );
+
  1;
 
 =head1 DESCRIPTION
@@ -182,7 +225,11 @@ contains.
 
 =head1 TO DO
 
+None.
+
 =head1 BUGS
+
+None known.
 
 =head1 SEE ALSO
 

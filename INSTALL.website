@@ -46,13 +46,6 @@ Change the following values:
 
    Set to your email address. You can change this later if you want.
 
- 'session_info' 
-
-   If you're using MySQL as your SQL database, you can leave this
-   alone. Otherwise you'll probably want to change it to either
-   'Apache::Session::Sybase' (if you're using a Sybase database) or
-   'Apache::Session::DBI' for most other SQL databases.
-
  'db_info'
 
    This tells OpenInteract how to connect to your database. Here are
@@ -68,6 +61,14 @@ Change the following values:
          'driver_name' => 'mysql',
        },
        ...
+
+ 'session_info' 
+
+   If you're using MySQL as your SQL database, you can leave this
+   alone. Otherwise you'll probably want to change it to either
+   'Apache::Session::Sybase' (if you're using a Sybase database) or
+   'Apache::Session::DBI' for most other SQL databases.
+
 
 That's it!
 
@@ -90,7 +91,46 @@ from OpenInteract's point of view:
 If everything comes back marked 'ok', then you're in good shape.
 
 
-(4) Install SQL files
+(4) Change SPOPS classes (optional)
+
+OpenInteract comes configured to work with the MySQL DBMS. If you're
+not using MySQL, you need to tell OpenInteract to use a different
+SPOPS database driver. Otherwise you'll get lots of messages like:
+
+  =========================
+  static_page (1.31)
+    OK:
+
+      Structure:
+        * Created table from (basic_page.sql): ok
+      Data:
+        * install_data for Pg: no action taken
+      Security:
+        * Error: Cannot create SPOPS object!
+      Basic: Record saved, but ID of record unknown at
+      .../SPOPS/SPOPS/Key/DBI/HandleField.pm line 39.
+
+      Error: Cannot retrieve just-inserted ID from table
+      using field (mysql_insertid)
+
+
+Below is a mapping of databases to parameters. Use the appropriate
+parameter when running the following command:
+
+ oi_manage --website_dir=%%WEBSITE_DIR%% \
+           --driver=? change_spops_driver
+
+Database        Command
+==============  ===========================
+PostgreSQL      --driver=SPOPS::DBI::Pg
+Sybase ASA/ASE  --driver=SPOPS::DBI::Sybase
+MS SQL Server   --driver=SPOPS::DBI::Sybase
+MySQL           --driver=SPOPS::DBI::MySQL
+
+(MySQL given just in case you need to change it back!)
+
+
+(5) Install SQL files
 
 If you'd like, go into the 'pkg/' directory and explore the files in
 each package's 'data/' and 'struct' directories. These will be
@@ -111,16 +151,17 @@ execute with an 'ok' status.
 
 Be sure to view the status messages! Some packages might install
 default information and give you details about that information in
-these messages. For instance, the 'base_user' package creates a
-'superuser' user object and assigns it a random eight-character
-password. This password is displayed in the status messages, and if
-you chose 'crypt_password' in your configuration file you will NEVER
-be able to know the password for the superuser. If this happens,
-you'll have to just remove the directory tree with your website and
-reinstall. Yuck.
+these messages. 
+
+For instance, the 'base_user' package creates a 'superuser' user
+object and assigns it a random eight-character password. This password
+is displayed in the status messages, and if you chose 'crypt_password'
+in your configuration file you will NEVER be able to know the password
+for the superuser. If this happens, you'll have to just remove the
+directory tree with your website and reinstall. Yuck.
 
 
-(5) Import templates
+(6) Import templates
 
 Bring the templates used in the various packages into your
 database. Once this is done you can edit them via the web browser.
@@ -136,7 +177,7 @@ database. Note that you can make changes to the templates at any time
 and re-import them into the database using this same command.
 
 
-(6) Edit Apache virtual host configuration
+(7) Edit Apache virtual host configuration
 
 Using the static/modperl configuration assumes that you have already
 setup a front-end proxy configuration as discussed at the following
@@ -169,7 +210,7 @@ the <VirtualHost></VirtualHost> tags into your main config file and
 skip the next step.
 
 
-(7) Edit Apache configuration
+(8) Edit Apache configuration
 
 In your static httpd server configuration, add the line:
 
@@ -180,13 +221,13 @@ and in your mod_perl httpd server configuration, add the line:
  Include %%WEBSITE_DIR%%/conf/httpd_modperl.conf
 
 
-(8) Run Apache!
+(9) Run Apache!
 
 Startup Apache as you normally would, and hopefully everything will
 be up and running!
 
 
-(9) Connect to your website
+(10) Connect to your website
 
 Open up a web browser to your hostname or IP address. You should see a
 welcome page. Login with the username 'superuser' and the password you
@@ -201,8 +242,4 @@ Now you can start having fun!
 
 
 =========================
-
-Revision info: 
-  $Revision: 1.1.1.1 $
-  $Date: 2001/02/02 06:18:13 $
-  $Author: lachoy $
+$Id: INSTALL.website,v 1.3 2001/05/30 05:39:30 lachoy Exp $

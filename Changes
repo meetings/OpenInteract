@@ -1,5 +1,181 @@
 Revision history for Perl extension OpenInteract.
 
+1.07  Sun Jun 10 14:31:36 EDT 2001
+
+ * Overall
+
+   - This version runs on mod_perl/Win32 with a supported database.
+
+   - This version now runs on PostgreSQL (version dependencies
+   unknown) along with Sybase ASE, Sybase ASA, and MS SQL
+   Server. (This is in addition to MySQL from previously.)
+
+   - This version requires SPOPS 0.40, since it's the first version
+   which supports PostgreSQL, along with a few other items.
+
+   - Hopefully debugging is more efficient -- at least when you want
+   to turn debugging off. All files have been changed to use the
+   following construction:
+
+     $R->DEBUG && $R->scrib( 1, "..." );
+
+   so that (the relatively expensive) scrib() method doesn't even get
+   called if debugging isn't turned on for your app.
+
+ * script/oi_manage:
+
+   - fixed typo in method call in remove_template() (thanks to Olaf
+   Stauffer <olaf.stauffer@web.de> for spotting)
+
+   - tiny change so that you can call use the action name
+   'install-template' and 'install_template' synonymously (anyplace
+   you see a '_' you can also use a '-'. Note that this ONLY APPLIES
+   TO COMMANDS.
+
+   - added the command 'change_spops_driver' so you can modify the
+   drivers (e.g., 'SPOPS::DBI::MySQL' -> 'SPOPS::DBI::Sybase') for
+   many objects at once.
+
+   - when you run the 'upgrade_package' command, a file named
+   'UPGRADE' will be displayed in the status. You should put any
+   package-specific upgrading notes here.
+
+   - ensure that the 'website_name' parameter fits our naming
+   conventions (thanks to Nimrod Levy <nlevy@intes.net> for the catch)
+
+   - the 'test_db' command now tries to create a table, which tests
+   whether the given user has such permissions.
+
+   - ensure the user running 'install_package' has permission to write
+   to the base installation directory and to the base package
+   repository.
+
+ * conf/sample-package.pod:
+
+   - Added more headers to the skeleton documentation generated for a
+   package.
+
+ * conf/sample-server.perl: 
+
+   - Changed the default cookie processing class to
+   'OpenInteract::Cookies::Apache'
+   (change from {system_alias}->{'OpenInteract::Cookies'} to
+   {system_alias}->{'OpenInteract::Cookies::Apache'}), since right now
+   everyone is required to have Apache::Request for parameters
+   anyway. Unless you're running Win32, then use
+   {system_alias}->{'OpenInteract::Cookies::CGI'} since
+   Apache::Request had a few hiccups running there.
+
+   - Added 'long_read_len' and 'long_trunc_ok' in the db_info key.
+
+   - Added 'remember_field' to the 'login' key
+
+ * OpenInteract/DBI.pm:
+
+   - Added {LongReadLen} and {LongTruncOk} as database handle
+   properties. **NOTE** If you're upgrading, please add something like
+   the following to your conf/server.perl file:
+
+     db_info => {
+      ...,
+      long_read_len => 65536,
+      long_trunc_ok => 0,
+     },
+
+   There are defaults defined for these but it's better to make them
+   explicit in your configuration. 
+
+ * OpenInteract/Package.pm: 
+
+   - Make various modifications to work under Win32. Primarily to
+   check directory specifications and to accommodate the version of
+   Archive::Tar that is distributed with ActivePerl.
+
+   - Fix _copy_handler_files() to not replace ALL 'OpenInteract'
+   instances in the file/path, just the relevant one (thanks to Olaf
+   Stauffer <olaf.stauffer@web.de> for the spot)
+
+   - Small fixes to error reporting (primarily in
+   install_distribution())
+
+   - Small fix so we don't copy over coderefs from the
+   conf/action.perl and conf/spops.perl files when installing a
+   package from the base installation to a website
+
+ * OpenInteract/PackageRepository.pm:
+
+   - Fixed docs for the 'find_file' method to match the
+   implementation.
+
+   - Pass the package name from 'find_file' to 'fetch_package_by_name'
+   in a hashref rather than by itself (duh)
+
+ * OpenInteract/Request.pm: added 'DEBUG()' method to get (if
+   available) application-level debugging and if not, to use the class
+   variable 'DEBUG'. This allows '$R->DEBUG && $R->scrib( ... )' so
+   that scrib() won't get called if you're not using debugging in your
+   app. Cool.
+
+ * OpenInteract/SPOPS.pm: Updated the object tracking save/retrieval
+   so that it's not using the 'oid' field any longer.
+
+ * OpenInteract/SQLInstall.pm:
+
+   - Fixed Sybase IDENTITY specification (thanks to Harry Danilevsky
+   <hdanilevsky@DeerfieldCapital.com> for pointing it out)
+
+   - Allow user to specify a different database type than the driver
+   name (useful if you're using DBD::ODBC with MS SQL Server, which
+   uses the SPOPS driver 'Sybase' and the DBD driver 'ODBC')
+
+   - Document the 'field_type' parameter when you're specifying SQL
+   statements (rather than SPOPS objects) to be built with the data
+   files (thanks to Harry Danilevsky
+   <hdanilevsky@DeerfieldCapital.com> for pointing it out)
+
+   - New key in struct files: %%INCREMENT_TYPE%%. This allows you to
+   specify linking fields to be the same type -- for instance, an
+   IDENTITY field in T-SQL is NUMERIC( x, y ) while an AUTO_INCREMENT
+   field in MySQL is an INTEGER, as is a SERIAL (sequence) field in
+   PostgreSQL. (Example: 'pkg/base_group/struct/group_table.sql' and
+   'pkg/base_user/struct/user.sql' for the increment, then
+   'pkg/base_group/struct/link_table.sql' for the increment type.)
+
+ * OpenInteract/Startup.pm: require_module() can now take either an
+   arrayref of classes to include or a single class to
+   include. (Previously only an arrayref.)
+
+ * doc/database.html: Added some preliminary instructions for creating
+   a new database and user to work with OpenInteract -- currently only
+   with MySQL and PostgreSQL.
+
+ * Packages
+
+   Many packages have changed. One of the larger-scale changes
+   resulted from renaming the 'level' field in the security object to
+   'security_level'. See the each individual package's 'Changes' file
+   for more details.
+
+   Here are the different versions:
+
+   OpenInteract    1.06 -> 1.07
+   ----------------------------
+   base:           1.30 -> 1.42
+   base_box:       0.14 -> 0.20
+   base_component: 1.14 -> 1.18
+   base_error:     1.14 -> 1.21
+   base_group:     1.11 -> 1.16
+   base_security:  1.20 -> 1.30
+   base_template:  1.11 -> 1.17
+   base_theme:     1.11 -> 1.17
+   base_user:      1.15 -> 1.21
+   static_page:    1.24 -> 1.36
+   system_doc:     1.15 -> 1.19
+   classified:     1.12 -> 1.18
+   full_text:      1.11 -> 1.16
+   news:           1.15 -> 1.26
+
+
 1.06  Sun Feb 25 15:16:43 EST 2001
 
  * OpenInteract/Package*: Split out previous OpenInteract/Package.pm

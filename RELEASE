@@ -1,7 +1,53 @@
 RELEASE NOTES: OpenInteract
 =========================
 
-1.06
+1.07  Sun Jun 10 14:31:36 EDT 2001
+
+  * Requires SPOPS version 0.40.
+
+  * OpenInteract now works with Sybase Adaptive Server Enterprise,
+    Sybase Adaptive Server Anywhere, and PostgreSQL. It also works on
+    Win32 systems using ActivePerl, Apache and the mod_perl binaries
+    built by the excellent Randy Kobes.
+
+  * Added additional optional DBI attributes to database configuration
+    in conf/server.perl.
+
+  * You'll need to make changes to the 'sys_security' table -- alter
+    'oid' to be 'object_id' and 'level' to be 'security_level'.
+
+  * You'll need to make changes to the 'object_track' table -- alter
+    'oid' to be 'object_id'
+
+  * Add the line:
+
+    config_type  perl
+
+    To your $WEBSITE/conf/base_config.conf file. The system will still
+    work for now without this change, but it's a backwards
+    compatibility shunt that won't always be there.
+
+  * Add the following keys to your 'conf/server.perl' configuration
+    file:
+
+     {db_info}->{long_read_len} = 65536
+     {db_info}->{long_trunc_ok} = 0
+
+  * Change the following key:
+
+     {system_alias}->{'OpenInteract::Cookies'}
+
+    to:
+
+     {system_alias}->{'OpenInteract::Cookies::Apache'}
+
+    unless you're running on Win32, in which case change it to:
+
+     {system_alias}->{'OpenInteract::Cookies::CGI'}
+   
+  * Lots of small changes -- see 'Changes' file for more info.
+
+1.06  Sun Feb 25 15:16:43 EST 2001
 
   * Package repository format changed. See 'UPGRADE' for upgrading
     information.
@@ -27,4 +73,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.1 2001/02/25 21:26:21 lachoy Exp $
+$Id: RELEASE,v 1.5 2001/06/10 18:17:01 lachoy Exp $

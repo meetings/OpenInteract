@@ -45,6 +45,54 @@ utility to integrate these changes automatically, check out the
 'Changes' file and see what updates there have been between the
 versions.
 
+===============
+Upgrading from 1.06 (and earlier)
+===============
+
+---------------
+Table schema changes (field renaming):
+
+  sys_security:
+
+     oid     --> object_id
+     level   --> security_level
+
+  object_track:
+
+     oid     --> object_id
+
+
+---------------
+Add the line:
+
+  config_type  perl
+
+to your 'conf/base.conf' file.
+
+---------------
+In 'conf/server.perl'
+
+Add the configuration keys:
+
+  db_info => {
+    sql_install   => '',
+    long_read_len => 65536,
+    long_trunc_ok => 0,
+  }
+
+Change the configuration key:
+
+  system_alias => {
+    'OpenInteract::Cookies' => [ qw/ cookies / ],
+  }
+
+to
+
+  system_alias => {
+    'OpenInteract::Cookies::Apache' => [ qw/ cookies / ],
+  }
+
+ 
 
 ===============
 Upgrading from 1.05 (and earlier)
@@ -97,4 +145,4 @@ process to have the changes take effect.
 
 
 =========================
-$Id: UPGRADE,v 1.1 2001/02/25 20:46:37 lachoy Exp $
+$Id: UPGRADE,v 1.2 2001/06/01 02:16:31 lachoy Exp $

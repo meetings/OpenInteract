@@ -1,18 +1,18 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.1 2001/02/20 04:08:13 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.3 2001/05/30 17:30:42 lachoy Exp $
 
 use strict;
 use vars qw( $PKG_DB_FILE );
 
 use Data::Dumper       qw( Dumper );
+require Exporter;
 use OpenInteract::Package;
 use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
-require Exporter;
 
 @OpenInteract::PackageRepository::ISA       = qw( Exporter  SPOPS::Utility  SPOPS::HashFile );
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -232,7 +232,7 @@ sub find_file {
   my ( $self, $pkg_info, @files ) = @_;
   my $info = $pkg_info;
   unless ( ref $info eq 'HASH' ) {
-    $info = $self->fetch_package_by_name( $pkg_info );
+    $info = $self->fetch_package_by_name({ name => $pkg_info });
   }
   return undef unless ( scalar keys %{ $info } );
   return OpenInteract::Package->find_file( $info, @files );
@@ -287,17 +287,18 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
  # Create a new package, set some properties and save to the repository
 
   my $pkg_info = { 
-      name      => 'MyPackage',
-      version   => 3.13,
-      author    => 'Arthur Dent <arthurd@earth.org>',
-      base_dir  => '/path/to/installed/OpenInteract',
+      name        => 'MyPackage',
+      version     => 3.13,
+      author      => 'Arthur Dent <arthurd@earth.org>',
+      base_dir    => '/path/to/installed/OpenInteract',
       package_dir => 'pkg/mypackage-3.13',
  };
  $repository->save_package_info( $info );
 
  # Retrieve the latest version of a package
 
- my $info = eval { $repository->fetch_package_by_name({ name => 'MyPackage' }) };
+ my $info = eval { $repository->fetch_package_by_name({ 
+                                        name => 'MyPackage' }) };
  unless ( $info ) {
    die "No package found with that name!";
  }
@@ -305,8 +306,8 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
  # Retrieve a specific version
 
  my $info = eval { $repository->fetch_package_by_name({ 
-                                   name => 'MyPackage',
-                                   version => 3.12 }) };
+                                        name    => 'MyPackage',
+                                        version => 3.12 }) };
  unless ( $info ) {
    die "No package found with that name and version!";
  }
@@ -325,8 +326,8 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
  # Install to website (apply package)
 
  my $info = eval { $repository->fetch_package_by_name({ 
-                                   name => 'MyPackage',
-                                   version => 3.12 }) };
+                                        name    => 'MyPackage',
+                                        version => 3.12 }) };
  my $site_repository = OpenInteract::Package->fetch( 
                                       undef,
                                       { directory => "/home/MyWebsiteDir" } );
@@ -345,10 +346,11 @@ OpenInteract::PackageRepository - Operations to represent, install, remove and o
  my $status = OpenInteract::Package->export_package();
  print "Package: $status->{name}-$status->{version} ",
        "saved in $status->{file}";
- 
+
  # Find a file in a package
 
- $repository->find_file({ package => 'MyPackage', file => 'template/mytemplate.tmpl' });
+ $repository->find_file({ package => 'MyPackage', 
+                          file    => 'template/mytemplate.tmpl' });
  open( TMPL, $filename ) || die "Cannot open $filename: $!";
  while ( <TMPL> ) { ... }
 
@@ -370,7 +372,7 @@ necessary to implement a discrete set of functionality.
 A package can exist in two places: in the base installation and in one
 or more websites. (You can tell the difference when you are going
 through a package information hashref because website packages have
-the property 'website_dir' defined.) 
+the property 'website_dir' defined.)
 
 The package in the base installation is the master package and should
 never be changed. Since you never use it directly, you should never
@@ -399,12 +401,22 @@ you do not ask for a version, you will get the latest one available.
 
 Parameters:
 
- name ($)
-   Package name to retrieve
+=over 4
 
- version ($ - optional)
-   Version of package to retrieve; if you specify a version then
-   *only* that version can be returned.
+=item *
+
+name ($)
+
+Package name to retrieve
+
+=item *
+
+version ($) (optional)
+
+Version of package to retrieve; if you specify a version then *only*
+that version can be returned.
+
+=back
 
 Example:
 
@@ -421,7 +433,7 @@ repository.
 B<verify_package( @package_names )>
 
 Verify that each of the packages listed in @package_names exists for
-this repository. 
+this repository.
 
 Returns: For each package verified a hashref of the package
 information. If you pass only one name, you get a single result
@@ -432,14 +444,15 @@ B<verify_package_list( @package_names )>
 The same as C<verify_package()> except we return a list reference of
 package instead of a single 
 
-B<find_file( @file_list )>
+B<find_file( [ $package_name | \%package_info ], @file_list )>
 
 Pass in one or more possible variations on a filename that you wish to
 find within a package. If you pass multiple files, each will be
 checked in order. Note that the name must include any directory prefix
 as well. For instance:
 
-   $pkg->find_file( 'template/mytemplate', 'template/mytemplate.tmpl' );
+   $repos->find_file( 'mypackage', 
+                      'template/mytemplate', 'template/mytemplate.tmpl' );
 
 Returns a full filename of an existing file, undef if no existing file
 found matching any of the filenames passed in.
@@ -452,17 +465,20 @@ directory first and then the base directory. (This enables packages
 found in the app to override the base.) Both directories are first
 tested to ensure they actually exist.
 
-Returns: directories that were C<unshift>ed onto @INC, in the same order.
-
-Parameters: none
+Returns: directories that were C<unshift>ed onto @INC, in the same
+order.
 
 =head1 TO DO
 
+Nothing known.
+
 =head1 BUGS
+
+None known.
 
 =head1 SEE ALSO
 
-OpenInteract documentation: I<Packages in OpenInteract>
+L<OpenInteract::Package>, OpenInteract documentation: I<Packages in OpenInteract>
 
 =head1 COPYRIGHT
 

@@ -1,14 +1,14 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.2 2001/02/20 04:12:32 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.9 2001/06/01 01:31:31 lachoy Exp $
 
 use strict;
-use SPOPS::SQLInterface;
-use OpenInteract::Package;
 use Data::Dumper           qw( Dumper );
+use OpenInteract::Package;
+use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -44,7 +44,7 @@ sub require_package_installer {
 
 sub apply {
   my ( $class, $p ) = @_;
-  my $driver_name = $p->{config}->{db_info}->{driver_name};
+  my $driver_name = $class->find_database_driver( $p->{config} );
   my $action = $p->{action_code};
   unless ( $action ) {
     _w( 1, "Finding coderef for $p->{action}" );
@@ -66,17 +66,19 @@ sub apply {
   if ( ref $action eq 'ARRAY' ) {
     my $routine = shift @{ $action };
     my $extra_args = ( ref $action->[0] eq 'HASH' ) ? $action->[0] : {};
-    my $args = { package => $p->{package}, db => $p->{db}, 
-                 config => $p->{config}, %{ $extra_args } };   
+    my $args = { package => $p->{package},
+                 db      => $p->{db}, 
+                 config  => $p->{config},
+                 %{ $extra_args } };
     $status = $class->$routine( $args );
   }
  
   # Do this when there is actual code to run
 
   elsif ( ref $action eq 'CODE' ) {
-    $status = $action->( $class, { package => $p->{package}, 
-                                   db => $p->{db}, 
-                                   config => $p->{config} } );
+    $status = $action->( $class, { package => $p->{package},
+                                   db      => $p->{db},
+                                   config  => $p->{config} } );
   }
   else {
     my $msg = 'Action is not of expected type, so nothing run.';
@@ -85,8 +87,8 @@ sub apply {
             : $msg;
   }
   return $status if ( $p->{status} eq 'raw' );
-  return $class->format_status( { action => $p->{action}, 
-                                  driver_name => $driver_name }, 
+  return $class->format_status( { action      => $p->{action},
+                                  driver_name => $driver_name },
                                 $status );
 }
 
@@ -98,12 +100,13 @@ sub apply {
 sub create_structure {
   my ( $class, $p ) = @_;
   unless ( ref $p->{table_file_list} eq 'ARRAY' ) {
-    return [ { type => 'structure', ok => 0, 
-               msg => 'No files given from which to read structures!' } ];
+    return [ { type => 'structure',
+               ok   => 0,
+               msg  => 'No files given from which to read structures!' } ];
   }
 
   my $pkg_info = $p->{package};
-  my $driver_name = $p->{config}->{db_info}->{driver_name};
+  my $driver_name = $class->find_database_driver( $p->{config} );
   my $struct_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'struct' );
   my @status = ();
   foreach my $table_file ( @{ $p->{table_file_list} } ) {
@@ -116,6 +119,7 @@ sub create_structure {
     }
     else {
       $table_sql = $class->sql_modify_increment( $driver_name, $table_sql );
+      $table_sql = $class->sql_increment_type( $driver_name, $table_sql );
       eval { $p->{db}->do( $table_sql ) };
       if ( $@ ) {
         $this_status->{ok} = 0;
@@ -321,6 +325,12 @@ sub _transform_class_to_oi {
 }
 
 
+sub find_database_driver {
+  my ( $class, $config ) = @_;
+  return $config->{db_info}->{sql_install} ||
+         $config->{db_info}->{driver_name};
+}
+
 
 # Get the hash of handlers from an installer class
 
@@ -372,13 +382,75 @@ sub sql_modify_increment {
       s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
     }
     elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
-      s/%%INCREMENT%%/NUMERIC( 10, 0 ) NOT NULL IDENTITY/g;
+      s/%%INCREMENT%%/NUMERIC( 10, 0 ) IDENTITY NOT NULL/g;
     }
+    elsif ( $driver_name eq 'Pg' ) { 
+      s/%%INCREMENT%%/SERIAL/g; 
+    } 
   }
   return wantarray ? @sql : $sql[0];
 }
 
 
+# Translate %%INCREMENT_TYPE%% to a db-specific datatype -- note that
+# NULL/NOT NULL are not handled here
+
+sub sql_increment_type {
+  my ( $class, $driver_name, @to_change ) = @_;
+  foreach ( @to_change ) {
+    if ( $driver_name eq 'mysql' ) {
+      s/%%INCREMENT_TYPE%%/INT/g;
+    }
+    elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
+      s/%%INCREMENT_TYPE%%/NUMERIC( 10, 0 )/g;
+    }
+    elsif ( $driver_name eq 'Pg' ) { 
+      s/%%INCREMENT_TYPE%%/INT/g; 
+    } 
+  }
+  return wantarray ? @to_change : $to_change[0];
+}
+
+# This is pretty generic
+
+sub sql_default {
+  my ( $class, @to_change ) = @_;
+  foreach ( @to_change ) {
+    if ( /%%DEFAULT=(.*)%%/ ) {
+      my $default_value = $1;
+      s/%%DEFAULT.*%%/NOT NULL DEFAULT $default_value/;
+    }
+  }
+  return wantarray ? @to_change : $to_change[0];
+}
+
+
+# This is pretty generic
+
+sub sql_primary_key {
+  my ( $class, @to_change ) = @_;
+  foreach ( @to_change ) {
+    if ( /%%PRIMARY_KEY=(.*)%%/ ) {
+      my $key_specify = join( ', ', split /\s*,\s*/, $1 );
+      s/%%PRIMARY KEY=.*%%/PRIMARY KEY( $key_specify )/;
+    }
+  }
+  return wantarray ? @to_change : $to_change[0];
+}
+
+
+# This is pretty generic
+
+sub sql_unique {
+  my ( $class, @to_change ) = @_;
+  foreach ( @to_change ) {
+    if (/%%UNIQUE=(.*)%%/ ) {
+      my $key_specify = join( ', ', split /\s*,\s*/, $1 );
+      s/%%UNIQUE=.*%%/UNIQUE( $key_specify )/;
+    }
+  }
+  return wantarray ? @to_change : $to_change[0];
+}
 
 # Read in a file and evaluate it as perl.
 
@@ -451,6 +523,7 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
 =head1 SYNOPSIS
 
  # Define a SQLInstaller for your package
+
  package OpenInteract::SQLInstall::MyPackage;
 
  use strict;
@@ -499,12 +572,12 @@ This module serves two audiences:
 
 =over 4
 
-=item 1
+=item 1.
 
 The user of OpenInteract who wants to get packages, run a few commands
 and have them simply work.
 
-=item 2
+=item 2.
 
 The developer of OpenInteract packages who wants to develop for as
 many databases as possible without too much of a hassle.
@@ -561,19 +634,35 @@ an error occurred.
 
 Parameters:
 
- action
-   String with name of action to perform.
+=over 4
 
- db
-   DBI database handle
+=item *
 
- config
-   OpenInteract configuration object (or just a hashref), which should
-   have the key 'db_info' with information about the database in it,
-   and the key 'website_name' with the name of the website.
+action ($)
 
- package
-   Package object to perform action on
+String with name of action to perform.
+
+=item *
+
+db (obj)
+
+DBI database handle
+
+=item *
+
+config (obj or \%)
+
+OpenInteract configuration object (or just a hashref), which should
+have the key 'db_info' with information about the database in it, and
+the key 'website_name' with the name of the website.
+
+=item *
+
+package (\%)
+
+Package object to perform action on
+
+=back
 
 B<read_db_handlers( $driver_name )>
 
@@ -641,9 +730,16 @@ indicated tasks necessary.
 
 Currently, the tasks implemented by this parent class are:
 
- transform_class_to_website (\@)
-   Specify a list of fields that should have the value transformed to
-   replace 'OpenInteract' with the website name
+=over 4
+
+=item *
+
+transform_class_to_website (\@)
+
+Specify a list of fields that should have the value transformed to
+replace 'OpenInteract' with the website name
+
+=back
 
 B<read_perl_file( $filename )>
 
@@ -731,7 +827,7 @@ security data:
 
   $security = [ 
                 { spops_class => 'OpenInteract::Security',
-                  field_order => [ qw/ class oid scope scope_id level / ],
+                  field_order => [ qw/ class object_id scope scope_id security_level / ],
                   transform_class_to_website => [ qw/ class / ] },
                 [ 'OpenInteract::Group', 1, 'w', 'world', 1 ],
                 [ 'OpenInteract::Group', 2, 'w', 'world', 4 ],
@@ -748,15 +844,15 @@ So these steps would look like:
  my $website_name = 'MyWebsite';
  my $object_class = 'OpenInteract::Security';
  $object_class =~ s/OpenInteract/$website_name/;
- my %field_num = { class => 0, oid => 1, scope => 2, 
-                   scope_id => 3, level => 4 };
+ my %field_num = { class => 0, object_id => 1, scope => 2, 
+                   scope_id => 3, security_level => 4 };
  foreach my $row ( @{ $data_rows } ) {
    my $object = $object_class->new();
    $object->{class}    = $row->[ $field_num{class} ];
-   $object->{oid}      = $row->[ $field_num{oid} ];
+   $object->{oid}      = $row->[ $field_num{object_id} ];
    $object->{scope}    = $row->[ $field_num{scope} ];
    $object->{scope_id} = $row->[ $field_num{scope_id} ];
-   $object->{level}    = $row->[ $field_num{level} ];
+   $object->{level}    = $row->[ $field_num{security_level} ];
    $object->{class} =~ s/OpenInteract/$website_name/;
    $object->save({ is_add => 1, skip_security => 1, 
                    skip_log => 1, skip_cache => 1 });
@@ -784,6 +880,35 @@ So we specify the action ('insert'), the table to operate on
 ('field_order', just like with processing objects) and then list the
 data.
 
+You are also able to specify the data types. Most of the time this
+should not be necessary: if the database driver (e.g., L<DBD::mysql>)
+supports it, the L<SPOPS::SQLInterface> file has routines to discover
+data types in a table and do the right thing with regards to quoting
+values.
+
+However, if you do find it necessary you can use the following simple
+type -> DBI type mappings:
+
+ 'int'   -> DBI::SQL_INTEGER(),
+ 'num'   -> DBI::SQL_NUMERIC(), 
+ 'float' -> DBI::SQL_FLOAT(),
+ 'char'  -> DBI::SQL_VARCHAR(), 
+ 'date'  -> DBI::SQL_DATE(),
+
+Here is a sample usage:
+
+  $data_link = [ { sql_type => 'insert',
+                   sql_table => 'sys_group_user',
+                   field_order => [ qw/ group_id user_id link_date priority_level / ],
+                   field_type => { group_id       => 'int', 
+                                   user_id        => 'int',
+                                   link_date      => 'date', 
+                                   priority_level => 'char' },
+                  },
+                 [ 1, 1, '2000-02-14', 'high' ]
+  ];
+
+
 More work needs to be done on this so, for instance, you could
 implement cleanup routines like this:
 
@@ -803,6 +928,8 @@ Or:
   ];
 
 =head1 BUGS
+
+None known.
 
 =head1 TO DO
 
@@ -835,6 +962,44 @@ However, structures are a problem with this. Data that are not held in
 objects are a problem. And dealing with dependencies is an even bigger
 problem.
 
+B<Single-action process>
+
+Creating a script that allowed you to do:
+
+ oi_sql_process --database=Sybase \
+                --apply=create_structure < table.sql > sybase_table.sql
+
+would be pretty nifty.
+
+B<Use as object (and other refactoring)>
+
+Every SQL install process should create an object with information like:
+
+ * repository
+ * package
+ * database driver
+
+The object (a factory method) would create an object based on the
+database driver which is a pointer to the C<OpenInteract::SQLInstall>
+database-specific subclass. This subclass which would have the
+specific information necessary to make the actions happen for a
+particular database.
+
+The object would then:
+
+ * initialize the SQLInstall class for the package (do a 'require') as
+   part of the constructor
+
+And then have available a generic 'apply' class which took a specific
+action:
+
+ * run through the structures ( $install->apply( 'create_structure' ) )
+ * run through the security   ( $install->apply( 'install_security' ) )
+ * run through the data       ( $install->apply( 'install_data' ) )
+
+Each of these should probably be in an 'Action' subclass or something,
+since this is getting fairly hefty...
+
 =head1 SEE ALSO
 
 L<OpenInteract::Package>, L<DBI>
@@ -849,5 +1014,8 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
+
+Christian Lemburg <clemburg@aixonix.de> provided the initial idea and
+helped steer the module away from potentially rocky shoals.
 
 =cut
