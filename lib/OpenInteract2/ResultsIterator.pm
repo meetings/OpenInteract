@@ -1,6 +1,6 @@
 package OpenInteract2::ResultsIterator;
 
-# $Id: ResultsIterator.pm,v 1.2 2003/06/11 02:43:31 lachoy Exp $
+# $Id: ResultsIterator.pm,v 1.3 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use base qw( SPOPS::Iterator );
@@ -8,7 +8,7 @@ use SPOPS::Iterator  qw( ITER_IS_DONE );
 
 use constant DEBUG => 0;
 
-$OpenInteract2::ResultsIterator::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ResultsIterator::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 sub initialize {
     my ( $self, $p ) = @_;
@@ -126,7 +126,7 @@ L<OpenInteract2::SearchManage|OpenInteract2::SearchManage>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi2_daemon,v 1.12 2003/08/23 05:13:56 lachoy Exp $
+# $Id: oi2_daemon,v 1.14 2004/05/22 15:08:37 lachoy Exp $
 
 use strict;
 use Getopt::Long;
@@ -60,7 +60,7 @@ oi2_daemon - Standalone version of OpenInteract2
  
  $ oi2_daemon --website_dir=/path/to/mysite --conf=/path/to/oi2_daemon.ini
  
- # Use ENV for site
+ # Use ENV for site and an explicit path for configuration
  
  $ export OPENINTERACT2=/path/to/mysite
  $ oi2_daemon --conf=/path/to/oi2_daemon.ini
@@ -84,12 +84,12 @@ will work fine for a handful of users (even if you have big hands),
 but if you're deploying a serious application you should look strongly
 at Apache and mod_perl.
 
-Please see L<HTTP::OpenInteract2::Daemon|HTTP::OpenInteract2::Daemon>
+Please see L<HTTP::Daemon::OpenInteract2|HTTP::Daemon::OpenInteract2>
 for additional documentation.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package Apache::OpenInteract2::HttpAuth;
 
-# $Id: HttpAuth.pm,v 1.6 2003/06/25 16:47:53 lachoy Exp $
+# $Id: HttpAuth.pm,v 1.9 2004/02/22 04:41:48 lachoy Exp $
 
 use strict;
 use Apache::Constants        qw( FORBIDDEN AUTH_REQUIRED OK );
@@ -8,9 +8,11 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
+my ( $log );
+
 sub handler {
     my ( $r ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     unless ( $r->some_auth_required ) {
         $log->error( "Asked to process authentication request ",
@@ -36,8 +38,7 @@ sub handler {
     }
 
     my $user = CTX->lookup_object( 'user' )
-                  ->fetch_by_login_name( $user_sent, { skip_security => 1,
-                                                       return_single => 1 } );
+                  ->fetch_by_login_name( $user_sent, { skip_security => 1 } );
     unless ( $user ) {
         $log->is_info &&
             $log->info( "User [$user_sent] is not in OI" );
@@ -101,9 +102,8 @@ C<pnotes>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 
 Chris Winters E<lt>chris@cwinters.comE<gt>
-

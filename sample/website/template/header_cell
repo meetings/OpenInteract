@@ -1,6 +1,1 @@
-[%########################################
-  header_cell( label )
-     Simple cell with a header label.
-  ########################################-%]
-
 <td>[% INCLUDE show_label %]</td>

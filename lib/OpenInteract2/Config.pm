@@ -1,6 +1,6 @@
 package OpenInteract2::Config;
 
-# $Id: Config.pm,v 1.10 2003/09/05 02:19:22 lachoy Exp $
+# $Id: Config.pm,v 1.12 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory );
@@ -9,7 +9,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 ##############################
 # CLASS METHODS
@@ -38,7 +40,7 @@ sub is_file_valid {
 
 sub read_file {
     my ( $class, $filename ) = @_;
-    my $log = get_logger( LOG_CONFIG );
+    $log ||= get_logger( LOG_CONFIG );
     $log->is_debug &&
         $log->debug( "Config trying to read file [$filename]" );
     open( CONF, '<', $filename )
@@ -55,7 +57,7 @@ sub read_file {
 sub translate_dirs {
     my ( $self ) = @_;
     return unless ( ref $self->{dir} eq 'HASH' );
-    my $log = get_logger( LOG_CONFIG );
+    $log ||= get_logger( LOG_CONFIG );
     if ( $self->{dir}{_IS_TRANSLATED_} ) {
         $log->is_info &&
             $log->info( "Directories already translated, no action" );
@@ -243,7 +245,7 @@ Returns: true on success; undef on failure.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

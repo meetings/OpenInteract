@@ -1,6 +1,6 @@
 package OpenInteract2::Request::CGI;
 
-# $Id: CGI.pm,v 1.13 2003/08/27 15:03:55 lachoy Exp $
+# $Id: CGI.pm,v 1.18 2004/05/17 14:19:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -11,7 +11,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( cgi );
 OpenInteract2::Request::CGI->mk_accessors( @FIELDS );
@@ -20,7 +22,7 @@ my ( $CURRENT );
 
 sub init {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     $log->is_info &&
         $log->info( "Creating CGI request" );
     if ( $params->{cgi} ) {
@@ -32,14 +34,17 @@ sub init {
     }
     my $cgi = $self->cgi;
 
+    # Assign URL info from CGI...
+
     my $base_url = $cgi->script_name;
+
     $log->is_info &&
-        $log->info( "Deployed under: [$base_url]" );
+        $log->info( "Deployed under '$base_url'" );
     CTX->assign_deploy_url( $base_url );
 
     my $full_url = join( '', $base_url, $cgi->path_info );
     $log->is_debug &&
-        $log->debug( "Full OI URL [$full_url]" );
+        $log->debug( "Full OI URL '$full_url'" );
     $self->assign_request_url( $full_url );
 
     # Then the various headers, properties, etc.
@@ -47,12 +52,28 @@ sub init {
     $self->referer( $cgi->referer );
     $self->user_agent( $cgi->user_agent );
     $self->cookie_header( $cgi->raw_cookie );
-    $self->_parse_cookies;
-
-    $self->create_session;
+    $self->language_header( $cgi->http( 'Accept-Language' ) );
 
     $self->server_name( $cgi->server_name );
     $self->remote_host( $cgi->remote_host );
+
+    # Then the rest of the parameters/uploads (works with other
+    # environments too...)
+
+    $self->_assign_params_from_cgi( $cgi );
+
+    $log->is_info &&
+        $log->info( "Finished creating CGI request" );
+    return $CURRENT = $self;
+}
+
+sub get_current   { return $CURRENT }
+sub clear_current { $CURRENT = undef }
+
+sub _assign_params_from_cgi {
+    my ( $self, $cgi ) = @_;
+
+    $log ||= get_logger( LOG_REQUEST );
 
     # See if there are any uploads among the parameters. (Note: only
     # supporting a single upload per fieldname right now...)
@@ -94,13 +115,7 @@ sub init {
     $log->is_debug &&
         $log->debug( "Set parameters ($num_param) and file ",
                      "uploads ($num_upload)" );
-    $log->is_info &&
-        $log->info( "Finished creating CGI request" );
-    return $CURRENT = $self;
 }
-
-sub get_current   { return $CURRENT }
-sub clear_current { $CURRENT = undef }
 
 1;
 
@@ -131,7 +146,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,8 +1,9 @@
 package Apache::OpenInteract2;
 
-# $Id: OpenInteract2.pm,v 1.11 2003/08/21 03:45:01 lachoy Exp $
+# $Id: OpenInteract2.pm,v 1.14 2004/03/19 05:51:02 lachoy Exp $
 
 use strict;
+use Apache::Constants        qw( OK );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Auth;
 use OpenInteract2::Constants qw( :log );
@@ -10,9 +11,11 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Request;
 use OpenInteract2::Response;
 
+my ( $log );
+
 sub handler($$) {
     my ( $class, $r ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     $log->is_info &&
         $log->info( scalar( localtime ), ": request from ",
@@ -36,7 +39,9 @@ sub handler($$) {
         $controller->execute;
     }
     $response->send;
-    return $response->status;
+
+    # umm.. what if we WANT to send an error response...?
+    return OK;
 }
 
 1;
@@ -70,9 +75,8 @@ the proper error code to make Apache happy.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 
 Chris Winters E<lt>chris@cwinters.comE<gt>
-

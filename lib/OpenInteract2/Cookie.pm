@@ -1,12 +1,12 @@
 package OpenInteract2::Cookie;
 
-# $Id: Cookie.pm,v 1.8 2003/06/24 03:35:38 lachoy Exp $
+# $Id: Cookie.pm,v 1.10 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use CGI::Cookie;
 use OpenInteract2::Context qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Cookie::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Cookie::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 # keys names, values CGI::Cookie objects
 
@@ -23,6 +23,7 @@ sub create {
         next unless ( $params->{ $key } );
         $cgi_params{ "-$key" } = $params->{ $key };
     }
+    $cgi_params{ "-path" } ||= DEPLOY_URL;
     my $cookie = CGI::Cookie->new( %cgi_params );
     if ( $params->{HEADER} ) {
         CTX->response->cookie( $cookie );
@@ -154,7 +155,7 @@ L<CGI::Cookie|CGI::Cookie>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

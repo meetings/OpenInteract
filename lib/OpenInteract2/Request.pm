@@ -1,9 +1,9 @@
 package OpenInteract2::Request;
 
-# $Id: Request.pm,v 1.34 2003/08/30 15:47:15 lachoy Exp $
+# $Id: Request.pm,v 1.42 2004/04/28 01:26:00 lachoy Exp $
 
 use strict;
-use base qw( Class::Factory Class::Accessor );
+use base qw( Class::Factory Class::Accessor::Fast );
 use Log::Log4perl            qw( get_logger );
 use DateTime;
 use DateTime::Format::Strptime;
@@ -11,16 +11,20 @@ use OpenInteract2::Constants qw( :log SESSION_COOKIE );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Cookie;
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::I18N;
 use OpenInteract2::SessionManager;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.42 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 ########################################
 # ACCESSORS
 
 my @FIELDS = qw(
-    server_name remote_host user_agent referer cookie_header
+    server_name remote_host
+    user_agent referer cookie_header language_header
     url_absolute url_relative url_initial action_name task_name
     session auth_user auth_group auth_is_admin auth_is_logged_in
 );
@@ -56,7 +60,7 @@ sub get_current {
 
 sub new {
     my ( $class, @params ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     unless ( $REQUEST_CLASS ) {
         $log->fatal( "No request implementation type set" );
         oi_error 'Before creating an OpenInteract2::Request object you ',
@@ -65,7 +69,16 @@ sub new {
     my $self = bless( { '_upload' => {},
                         '_param'  => {},
                         '_cookie' => {} }, $REQUEST_CLASS );
+
     $self->init( @params );
+
+    # Now that all the cookie/session/language data has been set by
+    # request impl, call the code that uses that to set other
+    # properties...
+
+    $self->_parse_cookies;
+    $self->_create_session;
+
     CTX->request( $self );
     return $self;
 }
@@ -163,14 +176,14 @@ sub auth_user_id {
 
 sub assign_request_url {
     my ( $self, $full_url_path ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     $log->is_info &&
-        $log->info( "Setting absolute URL [$full_url_path]" );
+        $log->info( "Setting absolute URL '$full_url_path'" );
     $self->url_absolute( $full_url_path );
     my $relative_url =
         OpenInteract2::URL->parse_absolute_to_relative( $full_url_path );
     $log->is_debug &&
-        $log->debug( "Setting relative URL [$relative_url]" );
+        $log->debug( "Setting relative URL '$relative_url'" );
     $self->url_relative( $relative_url );
 
     my ( $action_url, $task ) = OpenInteract2::URL->parse( $relative_url );
@@ -192,7 +205,7 @@ sub assign_request_url {
     $self->action_name( $action_name );
     $self->task_name( $task );
     $log->is_info &&
-        $log->info( "Pulled action info [$action_name] [$task] from URL" );
+        $log->info( "Pulled action info '$action_name: $task' from URL" );
     return $relative_url;
 }
 
@@ -209,6 +222,13 @@ sub action_messages {
 sub add_action_message {
     my ( $self, $action_name, $error_name, $error ) = @_;
     return $self->{_action_msg}{ lc $action_name }{ $error_name } = $error;
+}
+
+sub auth_clear {
+    my ( $self ) = @_;
+    for ( qw( auth_user auth_group auth_is_admin auth_is_logged_in ) ) {
+        $self->{ $_ } = undef;
+    }
 }
 
 ########################################
@@ -243,10 +263,10 @@ sub upload {
 
 sub _set_upload {
     my ( $self, $name, $value ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     unless ( $name and $value ) {
         $log->warn( "Called set_upload() without valid params",
-                    "Name [$name] Value [", ref( $value ), "]" );
+                    "Name '$name' Value '", ref( $value ), "'" );
         return undef;
     }
     $log->is_info &&
@@ -266,7 +286,7 @@ sub _set_upload {
 
 sub clean_uploads {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
 
     my @uploads = $self->upload;
     $log->is_info &&
@@ -310,7 +330,7 @@ sub _parse_cookies {
 
 # This should create at least an empty hashref...
 
-sub create_session {
+sub _create_session {
     my ( $self ) = @_;
     my $session_id = $self->cookie( SESSION_COOKIE );
     my $session_info = CTX->lookup_session_config;
@@ -343,7 +363,7 @@ sub theme_values {
 
 sub create_theme {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     my $user = $self->auth_user;
     unless ( $user ) {
         $log->is_info &&
@@ -351,7 +371,7 @@ sub create_theme {
         oi_error "Must authenticate before trying to fetch/create theme";
     }
     my $theme_id = $user->{theme_id}
-                   || CTX->default_object_id( 'theme' );
+                   || CTX->lookup_default_object_id( 'theme' );
     my $theme = eval {
         CTX->lookup_object( 'theme' )->fetch( $theme_id )
     };
@@ -364,6 +384,100 @@ sub create_theme {
         $log->info( "Loaded theme '$theme_id' ok, getting values" );
 }
 
+
+########################################
+# LANGUAGE
+
+sub language {
+    my ( $self ) = @_;
+    return wantarray
+           ? @{ $self->{_user_language} } : $self->{_user_language}[0];
+}
+
+sub find_language {
+    my ( $self ) = @_;
+    my @lang = ();
+    my $lang_config = CTX->lookup_language_config;
+    if ( $self->auth_is_logged_in ) {
+        my $user_lang = $self->auth_user->language;
+        push @lang, $user_lang if ( $user_lang );
+    }
+    elsif ( my $session_lang = $self->session->{language} ) {
+        push @lang, ref( $session_lang ) eq 'ARRAY'
+                         ? @{ $session_lang } : $session_lang;
+    }
+    elsif ( my @param_lang = $self->param( $lang_config->{choice_param_name} ) ) {
+        push @lang, @param_lang;
+    }
+    else {
+        push @lang, $lang_config->{default_language};
+    }
+
+    if ( my @browser_lang = $self->_find_browser_languages ) {
+        push @lang, @browser_lang;
+    }
+
+    if ( my @clubber_lang = $self->_find_custom_languages( @lang ) ) {
+        $self->{_user_language} = \@clubber_lang;
+    }
+    else {
+        $self->{_user_language} = \@lang;
+    }
+}
+
+sub _find_browser_languages {
+    my ( $self ) = @_;
+    return () unless ( $self->language_header );
+    $log ||= get_logger( LOG_REQUEST );
+
+    my @raw_lang_info = split ( /,\s+/, $self->language_header );
+    my @lang_data = ();
+    foreach my $lang_and_weight ( @raw_lang_info ) {
+        my ( $lang, $weight ) = split( ';', $lang_and_weight );
+        $weight ||= 1;
+        push @lang_data, [ $lang, $weight ];
+    }
+    my @langs = map { $_->[0] }
+                    sort { $a->[1] <=> $b->[1] } @lang_data;
+    $log->is_debug &&
+        $log->debug( "Found the following languages from the browser: ",
+                     join( ', ', @langs ) );
+    return @langs;
+}
+
+sub _find_custom_languages {
+    my ( $self, @oi_lang ) = @_;
+    my $lang_info = CTX->lookup_language_config;
+    return unless ( $lang_info->{custom_language_id_class} );
+    $log ||= get_logger( LOG_REQUEST );
+
+    my $lang_class = $lang_info->{custom_language_id_class};
+    $log->is_debug &&
+        $log->debug( "Running custom lang ID class '$lang_class'" );
+    my @new_langs = eval {
+        $lang_class->identify_languages( @oi_lang )
+    };
+    if ( $@ ) {
+        $log->error( "Failed to get custom languages from ",
+                     "'$lang_class': $@" );
+        return ();
+    }
+    else {
+        return @new_langs;
+    }
+}
+
+sub language_handle {
+    my ( $self ) = @_;
+    unless ( $self->{_lang_handle} ) {
+        $log ||= get_logger( LOG_REQUEST );
+        my @langs = $self->language;
+        $log->info( "Retrieved languages for request: ", join( ', ', @langs ) );
+        $self->{_lang_handle} = OpenInteract2::I18N->get_handle( @langs );
+        $log->debug( "Language handle isa: ", ref( $self->{_lang_handle} ) );
+    }
+    return $self->{_lang_handle};
+}
 
 ########################################
 # FACTORY INFO
@@ -381,6 +495,8 @@ sub factory_error {
 
 OpenInteract2::Request->register_factory_type(
                     apache     => 'OpenInteract2::Request::Apache' );
+OpenInteract2::Request->register_factory_type(
+                    apache2    => 'OpenInteract2::Request::Apache2' );
 OpenInteract2::Request->register_factory_type(
                     cgi        => 'OpenInteract2::Request::CGI' );
 OpenInteract2::Request->register_factory_type(
@@ -461,7 +577,7 @@ with it. If C<$name> has not been previously set you get an empty list
 or undef depending on the context. Otherwise, we return the
 context-sensitive value of C<$name>
 
-If you pass in a C<$value> along with C<$name> then it's assigned to
+If you pass in a C<$value> along with C<$name> then it is assigned to
 C<$name>, overwriting whatever may have been there before.
 
 Returns: list of parameters (no argument), the parameter associated
@@ -469,7 +585,7 @@ with the first argument (one argument, two arguments),
 
 B<param_toggled( $name )>
 
-Given the name of a parameter, return 'yes' if it's defined and 'no'
+Given the name of a parameter, return 'yes' if it is defined and 'no'
 if not.
 
 B<param_date( $name, [ $strptime_format ]  )>
@@ -558,9 +674,9 @@ If you want to do any behind-the-scenes redirection before the
 L<OpenInteract2::Controller|OpenInteract2::Controller> is
 instantiated, you can pass a path to this and the correct action will
 be processed. For instance, you can configure your site to force users
-to login, so no matter what URL is requested by a user who isn't
-logged in they'll always get your login page. This is done in the
-L<OpenInteract2::Auth|OpenInteract2::Auth> class -- if the user isn't
+to login, so no matter what URL is requested by a user who is not
+logged in they will always get your login page. This is done in the
+L<OpenInteract2::Auth|OpenInteract2::Auth> class -- if the user is not
 logged in it assigns a new request URL which changes the action
 processed by the controller.
 
@@ -572,10 +688,10 @@ With no arguments it returns a list -- not an arrayref! -- of cookie
 names the client passed in.
 
 If you pass in C<$name> by itself you get the value associated with
-the cookie. This is a simple scalar, not a L<CGI::Cookie|CGI::Cookie>
-object.
+the cookie. This is a simple scalar value associated with the name,
+not a L<CGI::Cookie|CGI::Cookie> object.
 
-If you pass in a C<$value> along with C<$name> then it's assigned to
+If you pass in a C<$value> along with C<$name> then it is assigned to
 C<$name>, overwriting whatever may have been there before.
 
 B<Note>: These are only incoming cookies, those the client sends to
@@ -602,6 +718,24 @@ with the single argument.
 B<clean_uploads()>
 
 Deletes all uploads associated with the request.
+
+=head2 Language/Localization
+
+B<language()> (read-only)
+
+Returns the language(s) chosen for this particular request. This is
+one of the few context-sensitive properties. If called in list context
+it will return a list of all languages supported in this request, even
+if only one is available. If called in scalar context it will return
+the first (and presumably most important) language.
+
+See L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N> for how
+we find the language(s) desired for this request.
+
+B<language_handle()> (read-only)
+
+A L<Locale::Maketext|Locale::Maketext> object from which you can get
+localized messages.
 
 =head2 Properties
 
@@ -631,7 +765,7 @@ automatically when C<theme> property is set.
 
 B<session>
 
-The current user's stateful session.
+The stateful session for the current user.
 
 B<action_name>
 
@@ -646,7 +780,7 @@ as a result of lookups.)
 B<auth_user>
 
 User logged in (or not) for this request. This should B<always> be
-filled with a user object, even if it's the 'not-logged-in' user.
+filled with a user object, even if it is the 'not-logged-in' user.
 
 B<auth_group>
 
@@ -660,13 +794,18 @@ L<OpenInteract2::Auth::AdminCheck|OpenInteract2::Auth::AdminCheck>).
 
 B<auth_is_logged_in>
 
-True if current user is a legitimate user, false if it's the
+True if current user is a legitimate user, false if it is the
 'not-logged-in' user.
 
 B<auth_user_id>
 
 Shortcut so you do not have to test whether the user is logged in to
 get an ID. If the user is not logged in, you get a '0' back.
+
+B<auth_clear>
+
+Clears out all the 'auth_*' properties to undef -- generally only used
+when you want to log a user out for the current request.
 
 B<server_name>
 
@@ -688,19 +827,19 @@ URL (string) where the user came from. (May be empty, forged, etc.)
 
 Actions or other code can leave messages for other actions. These
 messages are typically tagged errors so the action and/or view knows
-how to sort through them, but it's not required. For instance, if a
+how to sort through them, but it is not required. For instance, if a
 login fails we want to be able to indicate this so that the login box
-can display the right type of error message. Normally you'd set the
-messages directly in the action (via C<add_view_message()>), but in
-the (fairly rare) case where the two are disconnected you can deposit
-error messages in the request and the relevant action will know where
-to pick them up when it's later instantiated.
+can display the right type of error message. Normally you would set
+the messages directly in the action (via C<add_view_message()>), but
+in the (fairly rare) case where the two are disconnected you can
+deposit error messages in the request and the relevant action will
+know where to pick them up when it is later instantiated.
 
 B<action_messages( $action_name, [ \%messages ] )>
 
 Retrieve hashref of messages for action C<$action_name>,
 case-insensitive. Overwrite all existing messages with C<\%messages>
-if it's provided.
+if it is provided.
 
 Returns: hashref of action messages for action C<$action_name>; empty
 hashref if C<$action_name> not provided.
@@ -709,14 +848,14 @@ B<add_action_message( $action_name, $msg_name, $msg )>
 
 Adds an individual message C<$msg_name> with message C<$msg> to
 C<$action_name>. The C<$msg_name> may be whatever you like, but
-frequently it's an object field name.
+frequently it is an object field name.
 
 Returns: C<$msg> set
 
 =head1 SUBCLASSING
 
 If you're extending OpenInteract to a new architecture and need to
-create a request adapter it's probably best to look at an existing one
+create a request adapter it is probably best to look at an existing one
 to see what it does. (Working code is always more up-to-date than
 documentation...) That said, here are a few tips:
 
@@ -747,12 +886,30 @@ C<$upload> object with C<$name>.
 
 Returns: the upload object
 
-B<_parse_cookies( [ $cookie_header_string ] )>
+=head2 Parent initialization
 
-Pass in the value from the client for the HTTP 'Cookie' header and the
-string will be parsed and the name/value pairs assigned to the request
-object. If C<$cookie_header_string> not passed in we look in the
-C<cookie_header> property.
+B<_parse_cookies()>
+
+Reads the C<cookie_header> property and parses it into the name/value
+pairs returned from the C<cookie()> method. So your adapter must set
+this header to have the cookies created and/or create the cookies
+yourself using
+C<cookie()>. (L<OpenInteract2::Request::Standalone|OpenInteract2::Request::Standalone>
+is an example of doing both)
+
+B<_create_session()>
+
+Reads in the cookie with the name defined in the constant
+C<SESSION_COOKIE> from
+L<OpenInteract2::Constants|OpenInteract2::Constants> and uses its
+value as the session ID passed to
+L<OpenInteract2::SessionManager|OpenInteract2::SessionManager> to
+create the session, which is stored in the C<session> property.
+
+B<_find_language()>
+
+...
+
 
 =head1 SEE ALSO
 
@@ -768,7 +925,7 @@ L<OpenInteract2::Request::Standalone|OpenInteract2::Request::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

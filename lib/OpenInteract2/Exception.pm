@@ -1,11 +1,11 @@
 package OpenInteract2::Exception;
 
-# $Id: Exception.pm,v 1.9 2003/06/25 16:50:21 lachoy Exp $
+# $Id: Exception.pm,v 1.11 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use Carp qw( carp );
 
-$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 # Declare some of our exceptions
 
@@ -20,11 +20,6 @@ use Exception::Class (
       description => 'Datasource errors',
       fields      => [ 'datasource_name', 'datasource_type', 'connect_params' ],
    },
-   'OpenInteract2::Exception::Parameter' => {
-      isa         => 'OpenInteract2::Exception',
-      description => 'Parameter not found or invalid',
-      fields      => [ 'parameter_fail' ],
-   },
 );
 
 @OpenInteract2::Exception::ISA = qw( Exporter Exception::Class::Base );
@@ -32,6 +27,7 @@ use Exception::Class (
     oi_error oi_app_error oi_datasource_error oi_param_error oi_security_error
 );
 
+require OpenInteract2::Exception::Parameter;
 require OpenInteract2::Exception::Security;
 
 # Exported shortcuts
@@ -227,7 +223,7 @@ L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,25 +1,27 @@
 package OpenInteract2::Repository;
 
-# $Id: Repository.pm,v 1.13 2003/08/22 02:18:22 lachoy Exp $
+# $Id: Repository.pm,v 1.19 2004/05/22 01:56:36 lachoy Exp $
 
 use strict;
-use base qw( Exporter Class::Accessor );
+use base qw( Exporter Class::Accessor::Fast );
 use Log::Log4perl            qw( get_logger );
 use Data::Dumper             qw( Dumper );
-use File::Spec;
+use File::Spec::Functions    qw( catfile );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package;
 #use Scalar::Util             qw( blessed );
 
-$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract2::Repository::EXPORT_OK = qw( REPOSITORY_FILE );
 
 use constant REPOSITORY_FILE => 'repository.ini';
 
 my @FIELDS = qw( config_dir package_dir repository_file );
 __PACKAGE__->mk_accessors( @FIELDS );
+
+my ( $log );
 
 ########################################
 # CONSTRUCTOR
@@ -71,20 +73,20 @@ sub new {
 
 sub full_config_dir {
     my ( $self ) = @_;
-    return File::Spec->catfile( $self->website_dir, $self->config_dir );
+    return catfile( $self->website_dir, $self->config_dir );
 }
 
 
 sub full_package_dir {
     my ( $self ) = @_;
-    return File::Spec->catfile( $self->website_dir, $self->package_dir );
+    return catfile( $self->website_dir, $self->package_dir );
 }
 
 sub website_dir {
     my ( $self, $website_dir ) = @_;
     if ( $website_dir ) {
         $self->{_website_dir} = $website_dir;
-        $self->_create_repository_filename;
+        $self->_create_repository_filename if ( $self->config_dir );
 #        $self->_clear_package_info;
 #        $self->_read_repository;
     }
@@ -94,9 +96,9 @@ sub website_dir {
 sub _create_repository_filename {
     my ( $self, $base_file ) = @_;
     $base_file ||= REPOSITORY_FILE;
-    $self->repository_file( File::Spec->catfile( $self->website_dir,
-                                                 $self->config_dir,
-                                                 $base_file ) );
+    $self->repository_file( catfile( $self->website_dir,
+                                     $self->config_dir,
+                                     $base_file ) );
 }
 
 ########################################
@@ -116,8 +118,10 @@ sub fetch_package {
     }
     foreach my $pkg_info ( @{ $self->_package_info } ) {
         if ( $pkg_info->{name} eq $name ) {
-            my $package_dir = $pkg_info->{directory};
-            my $pkg = OpenInteract2::Package->new({ directory => $package_dir });
+            my $pkg = OpenInteract2::Package->new({
+                directory  => $pkg_info->{directory},
+                repository => $self,
+            });
             $pkg->installed_date( $pkg_info->{installed} );;
             $self->_add_package_cache( $pkg );
             return $pkg;
@@ -175,7 +179,7 @@ sub add_package {
 sub remove_package {
     my ( $self, $package, $options ) = @_;
     $self->_remove_package_info( $package->name );
-    unless ( $options->{transient} eq 'yes' ) {
+    unless ( $options->{transient} && 'yes' eq $options->{transient} ) {
         eval { $self->_save_repository };
         if ( $@ ) {
             $self->_add_package_info( $package );
@@ -266,7 +270,7 @@ sub _read_repository {
 
 sub _save_repository {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $ini_file = $self->repository_file;
     my $tmp_ini_file = "$ini_file.tmp";
@@ -525,7 +529,7 @@ L<OpenInteract2::Package|OpenInteract2::Package>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

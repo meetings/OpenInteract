@@ -1,9 +1,9 @@
 package OpenInteract2::ResultsManage;
 
-# $Id: ResultsManage.pm,v 1.5 2003/09/03 13:41:57 lachoy Exp $
+# $Id: ResultsManage.pm,v 1.7 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use Data::Dumper  qw( Dumper );
 use IO::File;
 use Log::Log4perl            qw( get_logger );
@@ -13,7 +13,9 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::ResultsIterator;
 use SPOPS::Utility;
 
-$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant FILENAME_WIDTH => 20;
 
@@ -87,7 +89,7 @@ sub clear {
 
 sub save {
     my ( $self, $to_save, $p ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     my ( $is_empty );
 
@@ -278,7 +280,7 @@ sub persist_meta {
 
 sub get_meta {
     my ( $self, $search_id ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     my $meta_filename = $self->build_meta_filename( $search_id );
     return {} unless ( -f $meta_filename );
@@ -305,7 +307,7 @@ sub get_meta {
 
 sub retrieve {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     unless ( $self->search_id ) {
         die "Cannot retrieve results without a search_id! Please ",
@@ -344,7 +346,7 @@ sub retrieve {
 
 sub retrieve_iterator {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     # 'min' and 'max' can be properties or passed in
 
@@ -395,7 +397,7 @@ sub get_id_list {
 
 sub retrieve_raw_results {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     unless ( $self->search_id ) {
         oi_error "No search_id defined in object!";
@@ -534,7 +536,7 @@ sub results_clear {
 
 sub generate_search_id {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_APP );
+    $log ||= get_logger( LOG_APP );
 
     unless ( $self->results_dir ) {
         $self->results_dir( $self->get_results_dir );
@@ -954,7 +956,7 @@ we could do something like:
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

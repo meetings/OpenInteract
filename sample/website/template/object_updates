@@ -1,5 +1,5 @@
 [%- IF update_list.size == 0 -%]
-brand new!
+[% MSG( 'object_updates.new' ) %]
 [%- ELSE -%]
 <table border="0" cellpadding="3" cellspacing="0">
   [% FOREACH item = update_list -%]

@@ -18,7 +18,7 @@ to keep in mind as you're developing.
 
 MVC was developed in Smalltalk and targeted at desktop
 applications. It's meant to decouple the various graphical widgets
-from the actions resulting from them. While some (see link Andy
+from the actions resulting from them. While some (see link to Andy
 Wardley's discussion in L<SEE ALSO>) have argued that MVC isn't
 appropriate for web applications, it's still useful to categorize how
 the different pieces of the application are separated.
@@ -26,12 +26,12 @@ the different pieces of the application are separated.
 =head2 Model
 
 This is the smarts of your application and, unless you're a graphic
-designing, probably the area on which you'll spend the most time. The
+designer, probably the area on which you'll spend the most time. The
 model consists of your application's core objects and processes. The
 objects are normally persistent. So the model for a shopping cart
 application may consist of the products in the cart (persistent), the
 cart itself (semi-persistent), the customer (persistent), different
-payment types (persistent) and the order process.
+payment types (persistent) and the order process (transient).
 
 Generally we use relational databases for persistence, but this also
 encompasses other storage technologies (LDAP, GDBM, CSV, etc.).
@@ -40,7 +40,7 @@ In OpenInteract you most often use SPOPS to represent your
 application's state as persistable objects. There are many hooks for
 initializing SPOPS classes and adding useful behaviors to the
 objects. But OI doesn't require that you use SPOPS for everything --
-you can easilyuse another CPAN module (like L<Class::DBI|Class::DBI>)
+you can easily use another CPAN module (like L<Class::DBI|Class::DBI>)
 for your model.
 
 The processes are normally represented as Action objects, although
@@ -64,10 +64,10 @@ structure and extracts the necessary information to display it to the
 user.
 
 OI is fairly flexible about views. The model (Action) always returns
-content but can decide to return the content itself. (This is unusual
-but has its place.) Generally the Action will collect data, do some
-sort of validation on it and then pass it on to the Content Generator
-along with the name of a view.
+content. Generally the Action will collect data, do some sort of
+validation on it and then pass it on to the Content Generator along
+with the name of a view. But the Action can also decide to return the
+content itself. (This is unusual but has its place.)
 
 The view name corresponds to a template file somewhere in a
 package. So the view 'mypkg::foo' would refer to a file with a name
@@ -112,7 +112,7 @@ the user.
 
 =back
 
-=head1 CONTEXT
+=head1 OI METADATA: CONTEXT
 
 =head2 Overview
 
@@ -121,17 +121,18 @@ used everywhere. It holds all application configuration information
 and provides a central lookup mechanism for actions, content
 generators, controllers and SPOPS object classes. 
 
-It is a singleton (there's only one in the system at any time) and can
-be imported from the L<OpenInteract2::Context|OpenInteract2::Context>
-class since it's used fairly often.
+It is a singleton (there's only one in the system at any time) and
+this singleton can be imported from the
+L<OpenInteract2::Context|OpenInteract2::Context> class since it's used
+fairly often.
 
 =head2 Creating the Context
 
 Creating the context is one of the first actions you take when
 starting an OI2 server. While it can be created without referencing a
-website it's not much use. (You should only need do this when
-bootstrapping a new website into existence, and this is already done
-for you in
+website it's not much use if you don't. (You should only need do this
+when bootstrapping a new website into existence, and this is already
+done for you in
 L<OpenInteract2::Manage::Website::Create|OpenInteract2::Manage::Website::Create>.
 
 So normally it looks something like this:
@@ -140,7 +141,16 @@ So normally it looks something like this:
                         { website_dir => $website_dir });
 
 
-Once it's created the C<CTX> symbol can be imported and used anywhere.
+Once it's created the C<CTX> symbol can be imported and used anywhere,
+like this:
+
+    use OpenInteract2::Context qw( CTX );
+    
+    sub foo {
+        my ( $self ) = @_;
+        my $login_info = CTX->lookup_login_config;
+        ...
+    }
 
 =head1 ADAPTER
 
@@ -221,6 +231,71 @@ Some gotchas to note:
 
 =item *
 
+B<Tell OI2 what adapter you are>
+
+Either at server startup or the first time your adapter processes a
+request you must tell OI2 what type of adapter you are. This is very
+simple, just two method calls on the L<OpenInteract2::Context>
+object. Here's an example where we do it outside the adapter itself in
+the Apache 1.x C<startup.pl> file:
+
+ # Create the context...
+ my $ctx = OpenInteract2::Context->create(
+                 $base_config, { temp_lib_create => 'create' } );
+ 
+ # ...let the context know what type of adapter we are
+ $ctx->assign_request_type( 'apache' );
+ $ctx->assign_response_type( 'apache' );
+
+Here's one where we do it inside the adapter for a CGI process:
+
+ my $ctx = OpenInteract2::Context->create(
+                                { website_dir => $website_dir });
+ $ctx->assign_request_type( 'cgi' );
+ $ctx->assign_response_type( 'cgi' );
+
+The currently available adapter types are:
+
+=over 4
+
+=item *
+
+B<apache>: For Apache/mod_perl 1.x
+
+=item *
+
+B<apache2>: For Apache/mod_perl 2.x
+
+=item *
+
+B<cgi>: For CGI processes.
+
+=item *
+
+B<lwp>: For running inside a LWP server
+
+=item *
+
+B<standalone>: For setting everything up yourself, which means that it
+could in theory run inside an SMTP daemon, FTP server, etc.
+
+=back
+
+You can add a new request/response type through the
+C<register_factory_type> for both L<OpenInteract2::Request> and
+L<OpenInteract2::Response>:
+
+ # Register a 'fastcgi' request/response type
+ OpenInteract2::Request->register_factory_type(
+         fastcgi => 'OpenInteract2::Request::FastCGI' );
+ OpenInteract2::Response->register_factory_type(
+         fastcgi => 'OpenInteract2::Response::FastCGI' );
+
+Now all calls to 'assign_request_type' and 'assign_response_type' will
+have 'fastcgi' available.
+
+=item *
+
 B<Create response before request> - It may seem backwards but you need
 to create the response object before the request object. (This is due
 to a dependency.) 
@@ -294,8 +369,8 @@ information.
 As mentioned above tasks in an Action return content. They normally
 generate that content by assembling a set of data and passing that
 data off to a content generator. A content generator is a wrapper
-around some sort of templating system, such as the L<Template
-Toolkit|Template>, L<HTML::Template|HTML::Template> or
+around some sort of templating system, such as the L<Template|Template
+Toolkit>, L<HTML::Template|HTML::Template> or
 L<Text::Template|Text::Template> or even your own homegrown
 system. (Admit it, you've written your own.)
 
@@ -332,7 +407,7 @@ If threaded/forking: disconnect all database handles.
 
 =back
 
-=head2 Step 1: Request Meets Adapter
+=head2 Step 1: User Request Meets Adapter
 
 This step is a little fuzzy by necessity: we purposefully don't know
 in what form the request is coming in or how the adapter handles it.
@@ -342,9 +417,10 @@ in what form the request is coming in or how the adapter handles it.
 The adapter creates the
 L<OpenInteract2::Response|OpenInteract2::Response> and
 L<OpenInteract2::Request|OpenInteract2::Request> objects, in that
-order. Each one has necessary initialization steps. In particular the
-request object will read the necessary headers, parameters, uploaded
-files, cookies and create the session from the cookie.
+order. Each one has necessary initialization steps done behind the
+scenes when you create it. In particular the request object will read
+the necessary headers, parameters, uploaded files, cookies and create
+the session from the cookie.
 
 It also finds the 'relevant' part of the URL and determines the action
 and task from it. The 'relevant' part is what's leftover after the
@@ -484,7 +560,7 @@ L<http://lists.ourshack.com/pipermail/templates/2002-November/003974.html>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,17 +1,19 @@
 package OpenInteract2::Controller;
 
-# $Id: Controller.pm,v 1.15 2003/08/21 11:37:22 lachoy Exp $
+# $Id: Controller.pm,v 1.21 2004/05/22 14:47:53 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor Class::Factory );
+use base qw( Class::Accessor::Fast Class::Factory );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
-my @FIELDS = qw( type generator_type return_url initial_action request response );
+my ( $log );
+
+my @FIELDS = qw( type generator_type initial_action );
 __PACKAGE__->mk_accessors( @FIELDS );
 
 my ( $NONE_ACTION, $NOTFOUND_ACTION );
@@ -25,14 +27,15 @@ sub initialize_default_actions {
 
 sub new {
     my ( $class, $request, $response ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $action = $class->_find_action( $request );
     my $impl_type = $action->controller;
     my $impl_class = $class->_get_controller_implementation_class( $impl_type );
     $log->is_debug &&
         $log->debug( "Controller for [Action: ", $action->name, "] ",
-                     "to use [Controller: $impl_type/$impl_class]" );
+                     "to use [Controller Type: $impl_type] ",
+                     "[Controller class: $impl_class]" );
 
     my $self = bless( {}, $impl_class );
     $self->type( $impl_type );
@@ -64,12 +67,9 @@ sub new {
 
     # TODO: Why not do this with the class? hmm...
 
-    my $controller_info = CTX->lookup_controller( $impl_type );
+    my $controller_info = CTX->lookup_controller_config( $impl_type );
     $self->generator_type( $controller_info->{content_generator} );
 
-    # TODO: Is this needed anymore?
-    $self->request( $request );
-    $self->response( $response );
     $self->init;
 
     CTX->controller( $self );
@@ -91,14 +91,14 @@ sub execute {
 
 sub _find_action {
     my ( $class, $request ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my ( $action_name, $task_name ) =
                ( $request->action_name, $request->task_name );
     my ( $action );
     if ( $action_name ) {
         $log->is_debug &&
-            $log->debug( "Trying action [$action_name -> $task_name] ",
+            $log->debug( "Trying [Action: $action_name] [Task: $task_name] ",
                          "in controller" );
         $action = eval {
             CTX->lookup_action( $action_name,
@@ -108,46 +108,47 @@ sub _find_action {
             $log->warn( "Caught exception from Context trying to lookup ",
                         "action [$action_name]: $@\nUsing action ",
                         "specified for 'notfound'" );
-            $action = OpenInteract2::Action->new( $NOTFOUND_ACTION );
+            $action = $NOTFOUND_ACTION->clone();
         }
         else {
-            $action->task( $task_name );
+            $action->task( $task_name ) if ( $task_name );
         }
     }
     else {
         $log->is_debug &&
             $log->debug( "Using action specified for 'none': ",
-                         [$NONE_ACTION->name] );
-        $action = OpenInteract2::Action->new( $NONE_ACTION );
+                         "[", $NONE_ACTION->name, "]" );
+        $action = $NONE_ACTION->clone();
     }
     $log->is_debug &&
-        $log->debug( 'Found action in controller [Name: ',
-                     $action->name, '] [Task: ', $action->task, ']' );
+        $log->debug( 'Found action in controller ',
+                     '[Action: ', $action->name, '] ',
+                     '[Task: ', $action->task, ']' );
     return $action;
 }
 
 sub _get_controller_implementation_class {
     my ( $class, $controller_type ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     $log->is_debug &&
-        $log->debug( "Lookup controller for [$controller_type]" );
+        $log->debug( "Lookup controller for '$controller_type'" );
     my $impl_class = eval {
         $class->get_factory_class( $controller_type )
     };
     my ( $error );
     if ( $@ ) {
-        $error = "Failure to get factory class for [$controller_type]: $@";
+        $error = "Failure to get factory class for '$controller_type': $@";
     }
     elsif ( ! $impl_class ) {
-        $error = "No implementation class defined for [$controller_type]";
+        $error = "No implementation class defined for '$controller_type'";
     }
     if ( $error ) {
-        $log->error( "Cannot create controller [$controller_type] -- $error" );
+        $log->error( "Cannot create controller '$controller_type': $error" );
 
         # TODO: Have this output a static (no template vars) file
         oi_error "Hey chuckie, you don't have a controller ",
-                 "defined for type [$controller_type]";
+                 "defined for type '$controller_type'";
     }
     return $impl_class;
 }
@@ -195,7 +196,7 @@ when a user logs in she is returned to the same page.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

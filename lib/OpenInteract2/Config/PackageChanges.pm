@@ -1,13 +1,13 @@
 package OpenInteract2::Config::PackageChanges;
 
-# $Id: PackageChanges.pm,v 1.5 2003/04/11 04:05:54 lachoy Exp $
+# $Id: PackageChanges.pm,v 1.8 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor Exporter );
+use base qw( Class::Accessor::Fast Exporter );
 use File::Spec;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::PackageChanges::VERSION  =  sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::PackageChanges::VERSION  =  sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use constant CHANGES_FILE => 'Changes';
 @OpenInteract2::Config::PackageChanges::EXPORT_OK = qw( CHANGES_FILE );
@@ -75,7 +75,7 @@ LINE:
         s/^\s+//;
         $last_entry{message} .= $_;
     }
-    chomp $last_entry{message};
+    chomp $last_entry{message} if ( $last_entry{message} );
     push @entries, { %last_entry };
     $self->{_entries} = \@entries;
     return $self;
@@ -351,7 +351,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

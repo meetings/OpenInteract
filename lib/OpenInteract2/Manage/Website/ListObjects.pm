@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::ListObjects;
 
-# $Id: ListObjects.pm,v 1.6 2003/07/14 13:08:38 lachoy Exp $
+# $Id: ListObjects.pm,v 1.8 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::ListObjects::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ListObjects::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'list_objects';
@@ -36,7 +36,7 @@ OBJECT:
               message => "SPOPS object $alias is a $object_info->{class}",
               name    => $alias,
               alias   => \@alias_list,
-              class   => $object_info->{class},
+              class   => CTX->lookup_object( $alias ),
               isa     => $object_info->{isa},
               rule    => $object_info->{rules_from} } );
     }
@@ -105,7 +105,7 @@ Contents of the configuration 'rule_from'
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

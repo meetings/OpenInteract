@@ -1,6 +1,6 @@
 package OpenInteract2::SessionManager::File;
 
-# $Id: File.pm,v 1.1 2003/08/29 02:58:50 lachoy Exp $
+# $Id: File.pm,v 1.4 2004/02/21 20:38:54 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::SessionManager );
@@ -9,11 +9,14 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::SessionManager::File::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SessionManager::File::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub _create_session {
     my ( $class, $session_config, $session_id ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $session_id = '' unless ( defined $session_id );
+    $log ||= get_logger( LOG_SESSION );
 
     my $impl_class = $session_config->{impl_class};
     my $session_params = $session_config->{params};
@@ -32,6 +35,7 @@ sub _validate_config {
     my ( $class, $session_config ) = @_;
     my @error_msg = ();
     unless ( $session_config->{impl_class} ) {
+        push @error_msg,
             join( '', "Cannot use file-based session storage without the ",
                       "parameter 'session_info.impl_class' set to the",
                       "correct session implementation. (Normally: ",
@@ -118,7 +122,7 @@ L<OpenInteract2::SessionManager|OpenInteract2::SessionManager>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

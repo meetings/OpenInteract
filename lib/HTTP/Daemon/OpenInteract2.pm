@@ -1,4 +1,4 @@
-# $Id: OpenInteract2.pm,v 1.4 2003/08/23 05:14:17 lachoy Exp $
+# $Id: OpenInteract2.pm,v 1.10 2004/05/22 15:58:43 lachoy Exp $
 
 # This is just the daemon with a product token...
 
@@ -8,6 +8,8 @@ use strict;
 
 use base qw( HTTP::Daemon );
 use OpenInteract2::Context qw( CTX );
+
+my ( $log );
 
 sub product_tokens {
     my ( $self ) = @_;
@@ -20,9 +22,9 @@ sub product_tokens {
 package HTTP::Daemon::OpenInteract2;
 
 use strict;
-use base qw( Class::Accessor Class::Observable );
+use base qw( Class::Accessor::Fast Class::Observable );
 use File::Basename           qw( dirname );
-use File::Spec;
+use File::Spec::Functions    qw( catfile );
 use HTTP::Response;
 use HTTP::Status;
 use IO::File;
@@ -46,7 +48,7 @@ $SIG{TERM} = $SIG{INT} = sub { exit(0); };
 
 my @FIELDS = qw(
     website_dir daemon daemon_config daemon_config_file
-    deploy_url pid pid_file static_path_regex url
+    deploy_url pid pid_file server_name static_path url
 );
 __PACKAGE__->mk_accessors( @FIELDS );
 
@@ -81,7 +83,7 @@ sub close {
 
 sub interact {
     my ( $self, $client ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $deploy_url = $self->deploy_url;
 
@@ -91,7 +93,7 @@ sub interact {
 REQUEST:
     while ( my $lwp_request = $client->get_request ) {
         my $path = $lwp_request->uri->path;
-        $log->info( "Client request: $path" );
+        $log->info( "Client request: '$path'" );
 
         # HEAD requests (who cares?)
         if ( $lwp_request->method eq 'HEAD' ) {
@@ -104,7 +106,7 @@ REQUEST:
         elsif ( $self->_is_static_path( $path ) ) {
             my $lwp_response = $self->_get_static_response( $path );
             $client->send_response( $lwp_response );
-            $log->info( "Sent static file [$path] ok" );
+            $log->info( "Sent static file corresponding to '$path' ok" );
         }
 
         # OI2 requests
@@ -112,8 +114,9 @@ REQUEST:
             my $response = OpenInteract2::Response->new(
                                    { client => $client });
             my $request  = OpenInteract2::Request->new(
-                                   { client  => $client,
-                                     request => $lwp_request } );
+                                   { client      => $client,
+                                     request     => $lwp_request,
+                                     server_name => $self->server_name } );
             OpenInteract2::Auth->new()->login();
             my $controller = eval {
                 OpenInteract2::Controller->new( $request, $response )
@@ -131,7 +134,7 @@ REQUEST:
                 $log->logcroak( "Caught error from response: $@" );
             }
             else {
-                $log->info( "Sent OI request for [$path] ok" );
+                $log->info( "Sent OI request for '$path' ok" );
             }
         }
 
@@ -139,8 +142,8 @@ REQUEST:
         else {
             my $lwp_response = $self->_get_non_context_response( $path );
             $client->send_response( $lwp_response );
-            warn "daemon: Sent non context response to [$path] ",
-                 "[Deploy: $deploy_url] ok\n";
+            warn "daemon: Sent non context response to '$path' ",
+                 "'Deploy: $deploy_url' ok\n";
         }
     }
     $log->info( "Client finished." );
@@ -161,12 +164,15 @@ sub _init_oi2_base {
 
 sub _init_read_daemon_options {
     my ( $self ) = @_;
+
+    # Already done?
     my $config = $self->daemon_config;
     return if ( ref $config eq 'HASH' and scalar keys %{ $config } );
+
     my $daemon_config_file = $self->daemon_config_file;
     unless ( $daemon_config_file ) {
-        $daemon_config_file = File::Spec->catfile(
-                               $self->website_dir, 'conf', 'oi2_daemon.ini' );
+        $daemon_config_file = catfile( $self->website_dir,
+                                       'conf', 'oi2_daemon.ini' );
         $self->notify_observers(
                 'log', "Using daemon configuration from website directory" );
         $self->daemon_config_file( $daemon_config_file );
@@ -211,35 +217,41 @@ sub _init_environment {
         my @paths = ( ref $config->{content}{static_path} eq 'ARRAY' )
                       ? @{ $config->{content}{static_path} }
                       : ( $config->{content}{static_path} );
-        $self->static_path_regex( '(' . join( '|', @paths ) . ')' );
+        $self->static_path( \@paths );
     }
+
+    # The 'server.name' entry is used by OI as a replacement for the
+    # server name reported by Apache/mod_perl in the 'ServerName'
+    # directive
+
+    $self->server_name( $config->{server}{name} );
 }
 
 sub _open_pid_file {
     my ( $self ) = @_;
     my $dir = dirname( $self->daemon_config_file );
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
-    my $full_pid_file = File::Spec->catfile( $dir, $PID_FILE );
+    my $full_pid_file = catfile( $dir, $PID_FILE );
     if ( -e $full_pid_file ) {
         my $fh = IO::File->new( $full_pid_file ) || return;
         my $pid = <$fh>;
         if ( $pid ) {
             if ( kill 0 => $pid ) {
-                die "Server already running with PID [$pid]";
+                die "Server already running with PID '$pid'";
             }
-            $log->info( "daemon: Removing PID file for defunct server process [$pid]" );
+            $log->info( "daemon: Removing PID file for defunct server process '$pid'" );
         }
         else {
             $log->info( "daemon: Removing empty stale PID file" );
         }
         unless ( -w $full_pid_file && unlink $full_pid_file ) {
-            die "Cannot remove PID file [$full_pid_file]\n";
+            die "Cannot remove PID file '$full_pid_file'\n";
         }
     }
     $self->pid_file( $full_pid_file );
     return IO::File->new( $full_pid_file, O_WRONLY|O_CREAT|O_EXCL, 0644 )
-                    || die "Cannot create PID file [$full_pid_file]: $!";
+                    || die "Cannot create PID file '$full_pid_file': $!";
 }
 
 sub _start_daemon {
@@ -268,63 +280,60 @@ sub _become_daemon {
 }
 
 sub _reaper {
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
     while ( my $kid = waitpid( -1, WNOHANG ) > 0 ) {
-        $log->info( "Reaped child with PID [$kid]" );
+        $log->info( "Reaped child with PID '$kid'" );
     }
 }
 
 sub _is_static_path {
     my ( $self, $path ) = @_;
-    return 0 unless ( $self->static_path_regex );
-    my $is_static = 0;
-    if ( $self->deploy_url ) {
-        my $re = join( '', $self->deploy_url, $self->static_path_regex );
-        $is_static = ( $path =~ /^$re/ );
+    my $static_paths = $self->static_path || [];
+    foreach my $check_path ( @{ $static_paths } ) {
+        if ( $path =~ /$check_path/ ) {
+            return 1;
+        }
     }
-    unless ( $is_static ) {
-        my $re = $self->static_path_regex;
-        $is_static = ( $path =~ /^$re/ );
-    }
-    return $is_static;
+    return 0;
 }
 
 sub _get_static_response {
     my ( $self, $path ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my @parts = split /\/+/, $path;
-    my $file_path = File::Spec->catfile( CTX->server_config->{dir}{html},
-                                         @parts );
-    $log->debug( "Trying to map [$path] -> [$file_path]" );
+    my $file_path = catfile( CTX->lookup_directory( 'html' ), @parts );
+    $log->debug( "Trying to map '$path' -> '$file_path'" );
     my ( $lwp_response );
     if ( -f $file_path ) {
         eval { open( STATIC, '<', $file_path ) || die $! };
         if ( $@ ) {
-            $log->debug( "Cannot open file [$file_path]: $@" );
+            $log->error( "Cannot open file '$file_path': $@" );
             $lwp_response = HTTP::Response->new( RC_INTERNAL_SERVER_ERROR );
-            $lwp_response->content( "Failed to open file for request [$path]" );
+            $lwp_response->content( "Failed to open file for request '$path'" );
         }
         else {
+            $log->info( "Opened file '$file_path' ok" );
             $lwp_response = HTTP::Response->new( RC_OK );
             my $mime_type = OpenInteract2::File->get_mime_type(
                                    { filename => $file_path } );
+            $log->debug( "Got MIME type '$mime_type' for file" );
             $lwp_response->content_type( $mime_type );
             my $file_length = (stat $file_path)[7];
-            $log->debug( "File for [$path] found: [Type: $mime_type] ",
-                         "[Length: $file_length]" );
+            $log->debug( "Got file length '$file_length' for file" );
             $lwp_response->content_length( $file_length );
 
             # TODO: It would be nice to stream this instead...
             local $/ = undef;
             my $data = <STATIC>;
-            close( STATIC );
+            CORE::close( STATIC );
             $lwp_response->content( $data );
         }
     }
     else {
+        $log->error( "Cannot map static file to request '$path'" );
         $lwp_response = HTTP::Response->new( RC_NOT_FOUND );
-        $lwp_response->content( "File not found for request [$path]" );
+        $lwp_response->content( "File not found for request '$path'" );
     }
     return $lwp_response;
 }
@@ -356,7 +365,7 @@ HTTP::Daemon::OpenInteract2 - Standalone HTTP daemon for OpenInteract 2
 
  my $daemon = HTTP::Daemon::OpenInteract2->new(
                   { website_dir => $website_dir });
- print "OpenInteract now running at URL '", $daemon->url, "'\n";
+ print "OpenInteract2 now running at URL '", $daemon->url, "'\n";
  
  while (1) {
      my $client = $daemon->accept;
@@ -378,34 +387,54 @@ HTTP::Daemon::OpenInteract2 - Standalone HTTP daemon for OpenInteract 2
 
 This module uses L<HTTP::Daemon|HTTP::Daemon> to implement a
 standalone web server running OpenInteract 2. Once it's started you
-shouldn't be able to tell the difference between its OpenInteract the
-same application running on Apache, Apache2, or CGI -- it will have
-the same users, hit the same database, manipulate the same packages,
-etc.
+shouldn't be able to tell the difference between its OpenInteract or
+the same application running on Apache, Apache2, or CGI -- it will
+have the same users, hit the same database, manipulate the same
+packages, etc.
+
+The daemon will respect the application deployment context if
+specified in the server configuration. Any request outside the context
+will generate a simple error page explaining that it cannot be served.
 
 B<Performance note>: this daemon will not win any speed contests. It
-will work fine for a handful of users, but if you're seriously
+will work fine for a handful of users, but if you are seriously
 deploying an application you should look strongly at Apache and
 mod_perl.
 
-Subclass of L<HTTP::Daemon|HTTP::Daemon> that just overrides the
-C<product_tokens()> method to add the current OpenInteract version to
-the server header.
+=head1 CONFIGURATION
 
-L<OpenInteract2::File|OpenInteract2::File>.
+The configuration file is a simple INI file. Here's an example:
 
-Entries under 'static_path' should B<not> have any deployment
-context. For static files the server will respond to the same request
-off the root context and the deployment context. So if we deployed
-this application under '/intranet' you'd keep the static path as
-'/images' and the following would happen (assuming the server was
-running on 'localhost' port 8080):
+  [socket]
+  LocalAddr = localhost	
+  LocalPort = 8080	
+  Proto     = tcp	
+ 
+  [content]	
+  static_path = ^/images
+  static_path = \.(css|pdf|gz|zip|jpg|gif|png)$
 
- Request                                 Result
- ====================                    ====================
- http://localhost:8080/images            Static file sent
- http://localhost:8080/intranet/images   Static file sent
- http://localhost:8080/bar/images        Non-context request error page
+The entries under 'socket' are passed without modification to the
+constructor for L<HTTP::Daemon|HTTP::Daemon>, so if you have
+specialized needs related to the network consult that documentation.
+
+Currently only one item is supported in 'content': 'static_path'. Each
+declaration tells the daemon that if the request URL matches the
+regular expression to serve the file under the website HTML directory
+directly rather than hitting OpenInteract2. For instance, in the given
+configuration the requested path: C</images/oi_logo.gif> will cause
+the daemon to look for the file:
+
+  /path/to/mysite/html/images/oi_logo.gif	
+
+and serve it as-is to the client. If the file is not found the client
+gets a standard 404 message. If the file is found its content type is
+determined by the routines in L<OpenInteract2::File|OpenInteract2::File>.
+
+If you define a deployment context (e.g., '/intranet') you may need to
+modify entries under 'static_path' to match. So if we deployed this
+application under '/intranet' you would need to change the static path
+'^/images' to '^/intranet/images'. keep the static path as '/images'.
 
 You can have as many static path declarations as needed.
 
@@ -423,7 +452,7 @@ L<HTTP::Daemon|HTTP::Daemon>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

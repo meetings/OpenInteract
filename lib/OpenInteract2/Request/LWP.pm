@@ -1,6 +1,6 @@
 package OpenInteract2::Request::LWP;
 
-# $Id: LWP.pm,v 1.15 2003/08/27 15:03:55 lachoy Exp $
+# $Id: LWP.pm,v 1.19 2004/05/22 15:57:25 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -13,7 +13,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 
-$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( lwp );
 OpenInteract2::Request::LWP->mk_accessors( @FIELDS );
@@ -22,7 +24,7 @@ my ( $CURRENT );
 
 sub init {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     $log->is_info &&
         $log->info( "Creating LWP request" );
 
@@ -32,17 +34,16 @@ sub init {
 
     $self->assign_request_url( $lwp_request->uri );
 
+    $self->server_name( $params->{server_name} );
+
     # Then the various headers, properties, etc.
 
     $self->referer( $lwp_request->referer );
     $self->user_agent( $lwp_request->user_agent );
     my $cookie = $lwp_request->header( 'Cookie' );
     $self->cookie_header( $cookie );
-    $self->_parse_cookies;
+    $self->language_header( $lwp_request->header( 'Accept-Language' ) );
 
-    $self->create_session;
-
-    $self->server_name( $lwp_request->server );
     if ( $client ) {
         $self->remote_host( $client->peerhost );
     }
@@ -87,7 +88,7 @@ sub _parse_request {
 
 sub _assign_args {
     my ( $self, $cgi ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     my $num_param = 0;
     foreach my $name ( $cgi->param() ) {
         my @values = $cgi->param( $name );
@@ -105,7 +106,7 @@ sub _assign_args {
 
 sub _parse_multipart_data {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     my $request = $self->lwp;
 
     my $num_param = 0;
@@ -199,7 +200,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

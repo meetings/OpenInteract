@@ -1,6 +1,6 @@
 package OpenInteract2::Cache;
 
-# $Id: Cache.pm,v 1.7 2003/06/27 17:11:04 lachoy Exp $
+# $Id: Cache.pm,v 1.10 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,6 +8,8 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
 # Returns: caching object (implementation-neutral)
+
+my ( $log );
 
 sub new {
     my ( $pkg, $conf ) = @_;
@@ -22,7 +24,7 @@ sub new {
 
 sub get {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_CACHE );
+    $log ||= get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
 
@@ -66,7 +68,7 @@ sub get {
 
 sub set {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_CACHE );
+    $log ||= get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
 
@@ -99,7 +101,7 @@ sub set {
 
 sub clear {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_CACHE );
+    $log ||= get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
     return undef unless ( $self->{_cache_object} );
@@ -119,7 +121,7 @@ sub clear {
 
 sub purge {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_CACHE );
+    $log ||= get_logger( LOG_CACHE );
 
     # if the cache hasn't been initialized, bail
 
@@ -168,7 +170,7 @@ OpenInteract2::Cache -- Caches objects to avoid database hits and content to avo
 
  # In $WEBSITE_DIR/conf/server.ini
  
- [cache_info data]
+ [cache]
  default_expire = 600
  use            = 0
  use_spops      = 0
@@ -317,7 +319,7 @@ None known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -2,7 +2,7 @@
   [%- DEFAULT theme = OI.theme_properties -%]
 <table width="100%" bgcolor="#000000">
 <tr><td align="center">
-  <font size="+1" color="#ffffff"><b>INACTIVE OBJECT</b></font>
+  <font size="+1" color="#ffffff"><b>[% MSG( 'inactive_object.title' ) %]</b></font>
 </td></tr>
 </table>
 [% END -%]

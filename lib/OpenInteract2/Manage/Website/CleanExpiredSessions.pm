@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::CleanExpiredSessions;
 
-# $Id: CleanExpiredSessions.pm,v 1.1 2003/07/14 13:27:51 lachoy Exp $
+# $Id: CleanExpiredSessions.pm,v 1.2 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -12,7 +12,7 @@ use Storable                 qw( thaw );
 my $TEMP_TRACK_FILE = 'tmp_session_id';
 my $DECODE          = 'base64';
 
-$OpenInteract2::Manage::Website::CleanExpiredSessions::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::CleanExpiredSessions::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -265,7 +265,7 @@ Be able to use different types of deserializing methods.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003 Chris Winters. All rights reserved.
+Copyright (C) 2003-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

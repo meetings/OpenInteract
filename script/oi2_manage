@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi2_manage,v 1.18 2003/09/03 13:51:50 lachoy Exp $
+# $Id: oi2_manage,v 1.24 2004/05/22 15:08:50 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -13,7 +13,7 @@ use Text::Wrap;
 
 $Text::Wrap::columns = 70;
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 # Legitimate commands; anything not listed here will be kicked out and
 # the 'usage' stuff displayed
@@ -52,7 +52,7 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_use_status, $OPT_task );
 {
     my @opt_defs = OpenInteract2::Manage->all_parameters_long_options;
     push @opt_defs, 'help|?', 'debug+', 'man', 'status', 'task=s';
-    my %OPT = ( help => \$OPT_help, debug => \$OPT_debug,
+    my %OPT = ( help => \$OPT_help, debug  => \$OPT_debug,
                 man  => \$OPT_man,  status => \$OPT_use_status,
                 task => \$OPT_task );
     GetOptions( \%OPT, @opt_defs );
@@ -62,12 +62,19 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_use_status, $OPT_task );
         exit(0);
     }
 
-    my $log = ( -d $OPT{website_dir} and ! $OPT_task eq 'create_website' )
+    # Do this before initializing the log so we can use the existing
+    # category levels
+
+    if ( ! $OPT{website_dir} and $ENV{OPENINTERACT2} ) {
+        $OPT{website_dir} = $ENV{OPENINTERACT2};
+    }
+
+    my $log = ( -d $OPT{website_dir} and $OPT_task ne 'create_website' )
                 ? OpenInteract2::Log->init_from_website( $OPT{website_dir} )
                 : OpenInteract2::Log->init_file( 'oi2_manage.log' );
 
     if ( $OPT_debug ) {
-        my $log_level = ( $OPT_debug == 1 ) ? $INFO : $DEBUG;
+        my $log_level = ( $OPT_debug == 1 ) ? $DEBUG : $INFO;
         $log->level( $log_level );
     }
 
@@ -98,17 +105,12 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_use_status, $OPT_task );
         exit(1);
     }
 
-    # Set any defaults and do initializations
-
-    if ( ! $OPT{website_dir} and $ENV{OPENINTERACT2} ) {
-        $log->info( "Using '$ENV{OPENINTERACT2}' for '--website_dir'" );
-        $OPT{website_dir} = $ENV{OPENINTERACT2};
-    }
-
-    # Lop off any trailing '/' characters in directories passed in
+    # Lop off any trailing '/' characters in directories passed in,
+    # replace any initial '~' with $ENV{HOME}
 
     for ( $OPT{website_dir}, $OPT{package_dir}, $OPT{source_dir} ) {
         s/[\\|\/]+$//;
+        s/^~/$ENV{HOME}/
     }
 
     # Do any help/non-Manage tasks here
@@ -149,11 +151,11 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_use_status, $OPT_task );
 
     if ( $OPT_use_status ) {
         $task->add_observer( \&status_observer );
-        $log->debug( "Adding status observer" );
+        $log->debug( "Added status observer" );
     }
     else {
         $task->add_observer( \&progress_observer );
-        $log->debug( "Adding normal progress observer" );
+        $log->debug( "Added normal progress observer" );
     }
     eval { $task->execute };
     if ( $@ ) {
@@ -201,17 +203,35 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_use_status, $OPT_task );
 }
 
 sub show_help {
-    out( "oi2_manage: Create and manage an OpenInteract2 website" );
-    out();
-    out( "Usage: oi2_manage task-name [options]" );
-    out();
-    out( "Supported environment variables: " );
-    out( "   OPENINTERACT2: Website directory (use in place of '--website_dir')" );
-    out();
-    out( "Use: 'oi2_manage task_info --task=task-name' for more " );
-    out( "information about a particular task; valid tasks are: " );
-    out();
-    show_tasks();
+    my $task_desc = OpenInteract2::Manage->valid_tasks_description;
+
+    # '+2' for the 'list_tasks' and 'task_info' pseudo tasks...
+    my $num_tasks = scalar( keys %{ $task_desc } ) + 2;
+
+    print <<SUMMARY;
+oi2_manage: Create and manage OpenInteract2 websites and packages
+
+Usage: oi2_manage taskname [options]
+
+Supported environment variables: 
+   OPENINTERACT2: Website directory (use in place of '--website_dir')
+
+Quick pointers:
+
+ \$ oi2_manage list_tasks
+       -- list all tasks you can run ($num_tasks available)
+ \$ oi2_manage task_info --task=taskname
+       -- information about a particular task, including parameters
+ \$ oi2_manage create_website --website_dir=/path --source_dir=/path
+       -- create a new website
+ \$ oi2_manage list_actions --website_dir=/path
+       -- list the actions in an existing website
+
+Learn more:
+
+ \$ perldoc oi2_manage
+ \$ perldoc OpenInteract2::Manual
+SUMMARY
 }
 
 sub show_tasks {
@@ -244,7 +264,7 @@ sub show_task_info {
     if ( $@ ) {
         die "Failed to create management task. Error: $@\n";
     }
-    my $params = $task->get_parameters;
+    my $params = $task->task_parameters;
     my @required = grep { $_->{is_required} eq 'yes' } values %{ $params };
     my @optional = grep { $_->{is_required} ne 'yes' } values %{ $params };
 
@@ -404,7 +424,7 @@ L<OpenInteract2::Manage|OpenInteract2::Manage>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

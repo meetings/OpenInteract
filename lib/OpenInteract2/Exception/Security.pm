@@ -1,12 +1,12 @@
 package OpenInteract2::Exception::Security;
 
-# $Id: Security.pm,v 1.4 2003/06/25 14:39:01 lachoy Exp $
+# $Id: Security.pm,v 1.6 2004/02/18 05:25:28 lachoy Exp $
 
 use strict;
-use base qw( OpenInteract2::Exception Class::Accessor );
+use base qw( OpenInteract2::Exception Class::Accessor::Fast );
 use SPOPS::Secure qw( :verbose :level );
 
-$OpenInteract2::Exception::Security::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Exception::Security::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( security_required security_found );
 OpenInteract2::Exception::Security->mk_accessors( @FIELDS );
@@ -71,7 +71,7 @@ L<Exception::Class|Exception::Class>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

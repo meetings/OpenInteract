@@ -1,6 +1,1 @@
-[%########################################
-  form_hidden( name, value )
-     Create a hidden input field.
-  ########################################-%]
-
 <input type="hidden" name="[% name %]" value="[% value %]">

@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ListActions;
 
-# $Id: ListActions.pm,v 1.8 2003/07/14 13:08:38 lachoy Exp $
+# $Id: ListActions.pm,v 1.10 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Action;
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'list_actions';
@@ -24,9 +24,13 @@ sub run_task {
     my ( $self ) = @_;
     my $action_table = CTX->action_table;
     foreach my $name ( sort keys %{ $action_table } ) {
+        next unless ( $name );
         my $action_info = $action_table->{ $name };
         my $action = OpenInteract2::Action->new( $action_info );
         my $urls = $action->get_dispatch_urls;
+        unless ( ref( $urls ) && $urls->[0] ) { 
+            $urls = [ 'n/a' ];
+        }
         $self->_add_status(
             { is_ok   => 'yes',
               action  => 'OpenInteract2 Action',
@@ -107,7 +111,7 @@ Template used for action
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

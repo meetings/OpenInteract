@@ -1,8 +1,8 @@
 \bCVS\b
 ~$
+^oi2_manage\.log$
 \.old$
 \.bak$
 \.backup$
 ^tmp
 ^_
-^oi2_manage\.log$

@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Readonly;
 
-# $Id: Readonly.pm,v 1.5 2003/06/24 03:35:38 lachoy Exp $
+# $Id: Readonly.pm,v 1.9 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use File::Basename           qw( basename );
@@ -10,7 +10,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Wrap               qw( wrap );
 
-$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 # Name of the file that specifies which files we shouldn't overwrite
 # when copying
@@ -19,8 +21,9 @@ my $READONLY_FILE = '.no_overwrite';
 
 sub is_writeable_file {
     my ( $class, $readonly, $filename ) = @_;
+    return undef unless ( $filename );
     my $writeable = $class->get_writeable_files( $readonly, [ $filename ] );
-    return ( $filename eq $writeable->[0] );
+    return ( defined $writeable->[0] && $filename eq $writeable->[0] );
 }
 
 sub get_writeable_files {
@@ -46,7 +49,7 @@ sub get_writeable_files {
 
 sub read_config {
     my ( $class, $dir ) = @_;
-    my $log = get_logger( LOG_CONFIG );
+    $log ||= get_logger( LOG_CONFIG );
     my $overwrite_check_file = $class->_create_readonly_file( $dir );
     return [] unless ( -f $overwrite_check_file );
     my ( @no_write );
@@ -249,7 +252,7 @@ L<File::Basename|File::Basename>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

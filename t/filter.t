@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: filter.t,v 1.1 2003/08/26 11:30:40 lachoy Exp $
+# $Id: filter.t,v 1.2 2004/02/16 20:47:21 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -9,6 +9,3 @@ use Test::More  tests => 1;
 
 require_ok( 'OpenInteract2::Filter' );
 #initialize_context();
-
-{
-}

@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::InstallPackageSql;
 
-# $Id: InstallPackageSql.pm,v 1.9 2003/07/16 12:22:02 lachoy Exp $
+# $Id: InstallPackageSql.pm,v 1.10 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'install_sql';
@@ -121,7 +121,7 @@ Name of package this action spawmed from.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003 Chris Winters. All rights reserved.
+Copyright (C) 2003-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

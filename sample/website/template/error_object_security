@@ -1,14 +1,12 @@
-[% OI.page_title( "Error: No Rights to Object " ) %]
+[% OI.page_title( MSG( 'error_security.page_title' ) ) %]
 
 <div align="center">
 
-<h1>Security Violation</h1>
+<h1>[% MSG( 'error_security.title' ) %]</h1>
 
 <table width="50%" border="0" cellpadding="5" cellspacing="0">
 <tr><td align="left">
-
-You have insufficient rights to display the requested object.
-
+[% MSG( 'error_security.summary' ) %]
 </td></tr>
 </table>
 

@@ -1,9 +1,9 @@
 package OpenInteract2::Package;
 
-# $Id: Package.pm,v 1.26 2003/08/22 02:18:21 lachoy Exp $
+# $Id: Package.pm,v 1.36 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
-use base qw( Exporter Class::Accessor );
+use base qw( Exporter Class::Accessor::Fast );
 use Archive::Zip             qw( :ERROR_CODES );
 use Cwd                      qw( cwd );
 use Data::Dumper             qw( Dumper );
@@ -12,7 +12,7 @@ use ExtUtils::Manifest       ();
 use File::Basename           qw( basename dirname );
 use File::Copy               qw( cp );
 use File::Path               ();
-use File::Spec;
+use File::Spec::Functions    qw( :ALL );
 use File::Temp               qw( tempdir );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
@@ -25,7 +25,9 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 
-$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 @OpenInteract2::Package::EXPORT_OK = qw( DISTRIBUTION_EXTENSION );
 
 use constant DISTRIBUTION_EXTENSION => 'zip';
@@ -33,7 +35,7 @@ use constant DISTRIBUTION_EXTENSION => 'zip';
 # Define the subdirectories present in a default package
 
 my @PKG_SUBDIR = qw(
-    conf data doc struct template script html html/images
+    conf data doc msg struct template script html html/images
     OpenInteract2 OpenInteract2/Action OpenInteract2/SQLInstall
 );
 
@@ -46,7 +48,7 @@ OpenInteract2::Package->mk_accessors( @FIELDS );
 
 sub new {
     my ( $class, $params ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $self = bless( {}, $class );
     my ( $to_read );
@@ -58,7 +60,7 @@ sub new {
             oi_error "Cannot initialize package with non-existent package ",
                      "file. (Given [$params->{package_file}])";
         }
-        my $full_path = File::Spec->rel2abs( $params->{package_file} );
+        my $full_path = rel2abs( $params->{package_file} );
         $log->is_debug &&
             $log->debug( "Setting full path for package file [$full_path]" );
         $self->package_file( $full_path );
@@ -69,7 +71,7 @@ sub new {
             oi_error "Cannot initialize package with non-existent package ",
                      "directory. (Given [$params->{directory}])";
         }
-        $self->directory( File::Spec->rel2abs( $params->{directory} ) );
+        $self->directory( rel2abs( $params->{directory} ) );
         $to_read++;
     }
     $self->_read_package_data if ( $to_read );
@@ -98,7 +100,7 @@ sub _read_package_data {
 
 sub _read_info_from_file {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $tmp_dir = tempdir( 'OIPKGXXXX', TMPDIR => 1, CLEANUP => 1 );
     unless ( -d $tmp_dir and -w $tmp_dir ) {
@@ -115,7 +117,7 @@ sub _read_info_from_file {
         my $ext = '.' . DISTRIBUTION_EXTENSION;
         my ( $subdir ) = $filename =~ /^(.*)$ext$/;
         $self->_extract_archive( $self->package_file );
-        my $extracted_dir = File::Spec->catdir( $tmp_dir, $subdir );
+        my $extracted_dir = catdir( $tmp_dir, $subdir );
         $self->_read_info_from_dir( $extracted_dir );
         $self->_read_manifest( $extracted_dir );
         $self->{_tmp_package_extract_dir} = $tmp_dir;
@@ -137,7 +139,7 @@ sub _read_info_from_file {
 
 sub _read_info_from_dir {
     my ( $self, $dir ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     $dir ||= $self->directory;
     unless ( -d $dir ) {
@@ -218,8 +220,8 @@ sub get_module_files {
     my @module_files = grep /\.pm/, @{ $files };
     my @module_specs = ();
     foreach my $module_file ( @module_files ) {
-        my ( $vol, $dirs, $file ) = File::Spec->splitpath( $module_file );
-        my @spec = File::Spec->splitdir( $dirs );
+        my ( $vol, $dirs, $file ) = splitpath( $module_file );
+        my @spec = splitdir( $dirs );
         pop @spec;
         push @spec, $file;
         push @module_specs, \@spec;
@@ -237,7 +239,7 @@ sub get_spops_files {
         $base_files = [ grep { m|^conf/spops.*\.ini$| } @{ $files } ];
     }
     my $dir = $self->directory;
-    my @spops_files = map { File::Spec->catfile( $dir, $_ ) } @{ $base_files };
+    my @spops_files = map { catfile( $dir, $_ ) } @{ $base_files };
     $self->_check_file_validity( \@spops_files );
     return $base_files
 }
@@ -249,10 +251,13 @@ sub get_action_files {
     # If none returned, try to find our own
     unless ( scalar @{ $base_files } ) {
         my $files = $self->get_files;
-        $base_files = [ grep { m|^conf/action.*\.ini$| } @{ $files } ];
+        $base_files = [
+            grep { m|^conf/action.*\.ini$| } @{ $files }
+        ];
     }
     my $dir = $self->directory;
-    my @action_files = map { File::Spec->catfile( $dir, $_ ) } @{ $base_files };
+    my @action_files = map { catfile( $dir, $_ ) }
+                           @{ $base_files };
     $self->_check_file_validity( \@action_files );
     return $base_files
 }
@@ -262,11 +267,26 @@ sub get_doc_files {
     my $files = $self->get_files;
     my @base_doc_files = grep { m|^doc| } @{ $files };
     my $dir = $self->directory;
-    my @check_files = map { File::Spec->catfile( $dir, $_ ) } @base_doc_files;
+    my @check_files = map { catfile( $dir, $_ ) }
+                          @base_doc_files;
     $self->_check_file_validity( \@check_files );
     return \@base_doc_files;
 }
 
+sub get_message_files {
+    my ( $self ) = @_;
+    my $base_files = $self->config->get_message_files;
+
+    # If none returned, try to find our own
+    unless ( scalar @{ $base_files } ) {
+        my $files = $self->get_files;
+        $base_files = [ grep { m|^msg/.*\.msg$| } @{ $files } ];
+    }
+    my $dir = $self->directory;
+    my @full_message_files = map { catfile( $dir, $_ ) } @{ $base_files };
+    $self->_check_file_validity( \@full_message_files );
+    return $base_files;
+}
 
 sub _check_file_validity {
     my ( $self, $files ) = @_;
@@ -282,10 +302,10 @@ sub _check_file_validity {
 
 sub install {
     my ( $class, $params ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $repository = $class->_install_get_repository( $params );
-    my $package_file = File::Spec->rel2abs( $params->{package_file} );
+    my $package_file = rel2abs( $params->{package_file} );
     unless ( -f $package_file ) {
         oi_error "Valid package file must be specified in 'package_file'";
     }
@@ -360,16 +380,15 @@ sub create_skeleton {
     unless ( $name ) {
         oi_error "Must pass in package name to create in 'name'";
     }
+
+    # Both of these will throw an error on failure
+
     my $sample_dir = $class->_skel_get_sample_dir( $params );
-
-    # Cleanup the package name (this will throw its own error if it
-    # fails)
-
     $name = $class->_skel_clean_package_name( $name );
 
     # Ensure the package dir doesn't already exist
 
-    my $full_skeleton_dir = File::Spec->rel2abs( $name );
+    my $full_skeleton_dir = rel2abs( $name );
     if ( -d $full_skeleton_dir ) {
         oi_error "Cannot create package destination directory ",
                  "'$full_skeleton_dir' already exists";
@@ -408,7 +427,7 @@ sub create_skeleton {
 
 sub export {
     my ( $self ) = @_;
-    unless ( -d $self->directory ) {
+    unless ( $self->directory and -d $self->directory ) {
         oi_error "Package must have valid directory set for 'export'";
     }
     $self->config->check_required_fields;
@@ -427,7 +446,7 @@ sub export {
 
 sub check {
     my ( $self ) = @_;
-    unless ( -d $self->directory ) {
+    unless ( $self->directory and -d $self->directory ) {
         oi_error "Package must have valid directory set for 'check'";
     }
     my $pwd = cwd();
@@ -520,7 +539,7 @@ sub find_file {
     my ( $self, @file_list ) = @_;
     return undef unless ( scalar @file_list );
     foreach my $base_file ( @file_list ) {
-        my $filename = File::Spec->catfile( $self->directory, $base_file );
+        my $filename = catfile( $self->directory, $base_file );
         return $filename if ( -f $filename );
     }
     return undef;
@@ -623,7 +642,7 @@ sub _install_check_modules {
 sub _install_check_dest_dir {
     my ( $class, $config, $repository ) = @_;
     my $full_package_name = join( '-', $config->name, $config->version );
-    my $full_package_dir = File::Spec->catfile(
+    my $full_package_dir = catfile(
                                $repository->full_package_dir,
                                $full_package_name );
     if ( -d $full_package_dir ) {
@@ -636,7 +655,7 @@ sub _install_check_dest_dir {
 sub _install_copy_files {
     my ( $self ) = @_;
     unless ( $self->repository ) {
-        my $pkg_dir = File::Spec->rel2abs( $self->directory );
+        my $pkg_dir = rel2abs( $self->directory );
         warn "Cannot copy files from package [", $self->name, "] to ",
              "website because there is no repository set in package. ",
              "You will need to copy the files from [$pkg_dir/html] and ",
@@ -661,11 +680,11 @@ sub _install_copy_files {
 
 sub _install_package_files_to_website {
     my ( $self, $base_files, $dest_files ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     $dest_files ||= [];
     my $website_dir = $self->repository->website_dir;
-    my $package_dir = File::Spec->rel2abs( $self->directory );
+    my $package_dir = rel2abs( $self->directory );
     my $BACKUP_EXT = 'pkg_install_backup';
     my ( @copy_files );
     eval {
@@ -678,7 +697,7 @@ sub _install_package_files_to_website {
 
             my $to_base = $dest_files->[ $count ] || $from_base;
 
-            my $full_dest_path = File::Spec->catfile( $website_dir, $to_base );
+            my $full_dest_path = catfile( $website_dir, $to_base );
             $self->_create_full_path( $full_dest_path );
 
             # Yeah, this is slightly inefficient, but (a) it's much
@@ -690,7 +709,7 @@ sub _install_package_files_to_website {
                               ->is_writeable_file( dirname( $full_dest_path ),
                                                    $full_dest_path );
             next unless ( $can_copy );
-            my $full_source_path = File::Spec->catfile(
+            my $full_source_path = catfile(
                                         $package_dir, $from_base );
 
             # Backup the file if it already exists
@@ -710,12 +729,12 @@ sub _install_package_files_to_website {
         $log->error( "Caught error copying files to website: $@" );
         foreach my $filename ( @copy_files ) {
             unlink( $filename )
-                    || warn "Cannot cleanup [$filename]: $!";
+                    || warn "Cannot cleanup '$filename': $!";
             if ( -f "$filename.$BACKUP_EXT" ) {
                 rename( "$filename.$BACKUP_EXT", $filename )
-                    || warn "Cannot activate backup for [$filename]: $!";
+                    || warn "Cannot activate backup for '$filename': $!";
                 unlink( "$filename.$BACKUP_EXT" )
-                    || warn "Cannot remove stale backup for [$filename]: $!";
+                    || warn "Cannot remove stale backup for '$filename': $!";
             }
         }
         @copy_files = ();
@@ -727,17 +746,27 @@ sub _install_package_files_to_website {
 ########################################
 # PACKAGE SKELETON HELPERS
 
+# Must specify one of:
+#   source_dir = /usr/local/src/OpenInteract-2.01
+#   sample_dir = /usr/local/src/OpenInteract-2.01/sample/package
+
 sub _skel_get_sample_dir {
     my ( $class, $params ) = @_;
     my $sample_dir = $params->{sample_dir};
     my $source_dir = $params->{source_dir};
-    if ( -d $source_dir and ! -d $sample_dir ) {
-        $sample_dir = File::Spec->catdir(
-                          $source_dir, 'sample', 'package' );
+
+    # If the source_dir is specified and the sample_dir isn't, build
+    # the sample dir from the source dir
+
+    if ( $source_dir && -d $source_dir &&
+         ( ! $sample_dir || ! -d $sample_dir ) ) {
+        $sample_dir = catdir( $source_dir, 'sample', 'package' );
     }
-    $sample_dir = File::Spec->rel2abs( $sample_dir );
-    unless ( -d $sample_dir ) {
-        oi_error "Specified sample directory [$sample_dir] is ",
+    if ( $sample_dir ) {
+        $sample_dir = rel2abs( $sample_dir );
+    }
+    unless ( $sample_dir && -d $sample_dir ) {
+        oi_error "Specified sample directory '$sample_dir' is ",
                  "not a valid directory";
     }
     return $sample_dir;
@@ -745,6 +774,7 @@ sub _skel_get_sample_dir {
 
 # Ensure a package name is ok and that it can be used as a namespace
 # when necessary.
+#   - Package name cannot be blank (empty and/or all spaces)
 #   - Package name cannot have spaces (s/ /_/)
 #   - Package name cannot have dashes (s/-/_/)
 #   - Package name cannot start with a number (die)
@@ -754,6 +784,8 @@ sub _skel_clean_package_name {
     my ( $class, $name ) = @_;
     my ( @failures );
 
+    $name =~ /^\s*$/
+        && push @failures, "Name must not be blank";
     $name =~ s/ /_/g 
         && push @failures, "Name must not have spaces";
     $name =~ s/\-/_/g
@@ -774,7 +806,7 @@ sub _skel_clean_package_name {
 
 sub _skel_create_subdirectories {
     my ( $class, $base_dir ) = @_;
-    my @to_create = map { File::Spec->catdir( $base_dir, $_ ) } @PKG_SUBDIR;
+    my @to_create = map { catdir( $base_dir, $_ ) } @PKG_SUBDIR;
     for ( my $i = 0; $i < scalar @to_create; $i++ ) {
         eval { mkdir( "$to_create[ $i ]", 0777 ) || die $! };
 
@@ -817,7 +849,7 @@ sub _skel_copy_sample_files {
 
 sub _skel_create_changelog {
     my ( $class, $package_name, $package_dir, $filename ) = @_;
-    my $full_filename = File::Spec->catfile( $package_dir, $filename );
+    my $full_filename = catfile( $package_dir, $filename );
     eval { open( CHANGES, '>', $full_filename ) || die $! };
     if ( $@ ) {
         oi_error "Cannot create changelog [$filename]: $@";
@@ -874,7 +906,7 @@ sub _export_check_manifest {
 sub _export_archive_package {
     my ( $self ) = @_;
     my $package_id = $self->full_name;
-    my $export_dir = File::Spec->rel2abs( $package_id );
+    my $export_dir = rel2abs( $package_id );
     if ( -d $export_dir ) {
         oi_error "Directory [$export_dir] already exists. Please ",
                  "remove it before exporting package.";
@@ -924,8 +956,7 @@ sub _create_archive {
                  "[Dir: $dir] [File: $base_filename] [@files]";
     }
 
-    my $zip_filename = File::Spec->catfile(
-                           $dir, join( '.', $base_filename, 'zip' ) );
+    my $zip_filename = catfile( $dir, join( '.', $base_filename, 'zip' ) );
     if ( -f $zip_filename ) {
         oi_error "Cannot create ZIP archive: [$zip_filename] already exists";
     }
@@ -1086,7 +1117,7 @@ sub _check_templates {
             if ( $@ ) {
                 if ( $@ =~ /$template_errors_re/ ) {
                     $s->{is_ok}   = 'yes';
-                    $s->{message} = 'Template syntax seems to be ok';
+                    $s->{message} = "Template '$template_file' syntax seems to be ok";
                 }
                 else {
                     $s->{is_ok}   = 'no';
@@ -1095,12 +1126,12 @@ sub _check_templates {
             }
             else {
                 $s->{is_ok}   = 'yes';
-                $s->{message} = 'Template syntax ok';
+                $s->{message} = "Template '$template_file' syntax ok";
             }
         }
         else {
             $s->{is_ok}       = 'no';
-            $s->{message}     = 'File does not exist';
+            $s->{message}     = "Template file '$template_file' does not exist";
         }
         push @status, $s;
     }
@@ -1528,7 +1559,7 @@ specify the files yourself in the package configuration (see
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
 this routine will pick up all files that match C<^conf/spops.*\.ini$>.
 
-Returns: arrayref of fully-qualified SPOPS configuration files.
+Returns: arrayref of relative SPOPS configuration files.
 
 B<get_action_files()>
 
@@ -1537,7 +1568,7 @@ specify the files yourself in the package configuration (see
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
 this routine will pick up all files that match C<^conf/action.*\.ini$>.
 
-Returns: arrayref of fully-qualified action configuration files.
+Returns: arrayref of relative action configuration files.
 
 B<get_doc_files()>
 
@@ -1545,6 +1576,17 @@ Retrieves all documentation from the package. This includes all files
 in C<doc/>.
 
 Returns: arrayref of relative documentation files.
+
+B<get_message_files()>
+
+Retrieves message files from the package -- each one specifies i18n
+keys and values for use in templates and elsewhere. You can either
+specify the files yourself in the package configuration (see
+L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
+this routine will pick up all files that match
+C<^msg/*\.msg$>.
+
+Returns: arrayref of relative message files.
 
 B<get_changes()>
 
@@ -1577,7 +1619,8 @@ B<version>: Version of this package.
 B<package_file>: The distribution (zip) file this package was read
 from.
 
-B<directory>: The directory this package was read from.
+B<directory>: The directory this package was read from. Hopefully
+fully-qualified... (TODO: shouldn't it always be?)
 
 B<repository>: The
 L<OpenInteract2::Repository|OpenInteract2::Repository> associated with
@@ -1637,11 +1680,9 @@ Until then, here is what this might look like :-)
        };
    }
 
-=head1 BUGS
-
-None known.
-
 =head1 SEE ALSO
+
+L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages>
 
 L<OpenInteract2::Repository|OpenInteract2::Repository>
 
@@ -1649,7 +1690,7 @@ L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

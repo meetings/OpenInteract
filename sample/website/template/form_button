@@ -1,8 +1,8 @@
-[%########################################
-  form_button( name, value, field_label, onclick )
-     Form button, generally used for JavaScript clicks
-  ########################################-%]
-[%- DEFAULT value = 'Click Me' -%]
+[%- IF value_key;
+        value = MSG( value_key );
+    END;
+    DEFAULT value = MSG( 'global.button.default' );
+-%]
 <input type="button" value="[% value %]"
     [%- IF onclick %] onClick="[% onclick %]"[% END -%]
     [%- IF name %] name="[% name %]"[% END %]> [% field_label %]

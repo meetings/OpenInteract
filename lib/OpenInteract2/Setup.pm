@@ -1,11 +1,12 @@
 package OpenInteract2::Setup;
 
-# $Id: Setup.pm,v 1.33 2003/09/05 02:21:06 lachoy Exp $
+# $Id: Setup.pm,v 1.42 2004/03/19 03:09:37 lachoy Exp $
 
 use strict;
 use File::Copy               qw( cp );
 use File::Basename           qw();
 use File::Path               qw();
+use File::Spec::Functions    qw( :ALL );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Config;
 use OpenInteract2::Config::Initializer;
@@ -15,13 +16,16 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Filter;
+use OpenInteract2::I18N::Initializer;
 use OpenInteract2::Manage;
 use OpenInteract2::Package;
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 use SPOPS::Initialize;
 
-$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.42 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub new {
     my ( $class ) = @_;
@@ -89,7 +93,7 @@ sub read_packages {
 
 sub create_temp_lib {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     my $full_temp_lib_dir = CTX->lookup_temp_lib_directory;
     unshift @INC, $full_temp_lib_dir;
@@ -98,8 +102,8 @@ sub create_temp_lib {
     my $do_create = ( $create_option and $create_option eq 'create' );
     if ( -d $full_temp_lib_dir and ! $do_create ) {
         my $refresh_file =
-            File::Spec->catfile( $full_temp_lib_dir,
-                                 CTX->lookup_temp_lib_refresh_filename );
+            catfile( $full_temp_lib_dir,
+                     CTX->lookup_temp_lib_refresh_filename );
         unless ( -f $refresh_file ) {
             $log->is_info &&
                 $log->info( "Temp lib dir '$full_temp_lib_dir' exists; ",
@@ -115,13 +119,13 @@ sub create_temp_lib {
     if ( -d $full_temp_lib_dir ) {
         my $num_removed = File::Path::rmtree( $full_temp_lib_dir );
         unless ( $num_removed ) {
-            oi_error "Tried to remove directory [$full_temp_lib_dir] but ",
+            oi_error "Tried to remove directory '$full_temp_lib_dir' but ",
                      "no directories removed. Please check permissions.";
         }
     }
     eval { mkdir( $full_temp_lib_dir, 0777 ) || die $! };
     if ( $@ ) {
-        oi_error "Failed to create directory [$full_temp_lib_dir]: $@";
+        oi_error "Failed to create directory '$full_temp_lib_dir': $@";
     }
 
     my $packages = CTX->packages;
@@ -137,17 +141,17 @@ sub create_temp_lib {
         my $package_dir = $package->directory;
         my $module_files = $package->get_module_files;
         foreach my $module_file_spec ( @{ $module_files } ) {
-            my $source_file = File::Spec->catfile( $package_dir,
-                                                   @{ $module_file_spec } );
-            my $dest_file   = File::Spec->catfile( $full_temp_lib_dir,
-                                                   @{ $module_file_spec } );
+            my $source_file = catfile( $package_dir,
+                                       @{ $module_file_spec } );
+            my $dest_file   = catfile( $full_temp_lib_dir,
+                                       @{ $module_file_spec } );
             my $dest_path = File::Basename::dirname( $dest_file );
             File::Path::mkpath( $dest_path, undef, 0777 );
 
             eval { cp( $source_file, $dest_file ) || die $! };
             if ( $@ ) {
                 oi_error "When creating temporary library, failed to ",
-                         "copy [$source_file] to [$dest_file]: $@";
+                         "copy '$source_file' to '$dest_file': $@";
             }
             push @all_files, $dest_file;
         }
@@ -167,7 +171,7 @@ sub create_temp_lib {
 
     $log->is_debug &&
         $log->debug( "Copied ", scalar @all_files, " modules ",
-                     "to [$full_temp_lib_dir]" );
+                     "to '$full_temp_lib_dir'" );
     return \@all_files;
 }
 
@@ -176,7 +180,7 @@ sub create_temp_lib {
 
 sub require_session_classes {
     my ( $self, $session_config ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     my @session_classes = ( $session_config->{class},
                             $session_config->{impl_class} );
     $log->info( "Requiring session classes: ",
@@ -194,7 +198,7 @@ sub require_session_classes {
 
 sub read_action_table {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     # This will become the action table
 
@@ -211,15 +215,15 @@ sub read_action_table {
 
 ACTIONFILE:
         foreach my $action_file ( @{ $filenames } ) {
-            $log->is_debug &&
-                $log->debug( "Action file: $action_file" );
             my $full_action_path = $package->find_file( $action_file );
+            $log->is_debug &&
+                $log->debug( "Action file: $full_action_path" );
             my $action_ini = eval {
                 OpenInteract2::Config::Ini->new(
                                    { filename => $full_action_path });
             };
             if ( $@ ) {
-                $log->error( "Failed to read [$full_action_path]: $@" );
+                $log->error( "Failed to read '$full_action_path': $@" );
                 next ACTIONFILE;
             }
             foreach my $action_name ( $action_ini->main_sections ) {
@@ -227,8 +231,8 @@ ACTIONFILE:
 
                     # TODO: Throw an exception if this happens?
                     $log->error( "WARNING - Multiple actions defined for ",
-                                 "the same name [$action_name]. Overwriting ",
-                                 "data from [$ACTION{ $action_name }->{package_name}]" );
+                                 "the same name '$action_name'. Overwriting ",
+                                 "data from '$ACTION{ $action_name }->{package_name}'" );
                     delete $ACTION{ $action_name };
                 }
 
@@ -248,8 +252,8 @@ ACTIONFILE:
         }
     }
 
-    my $override_file = File::Spec->catfile( CTX->lookup_directory( 'conf' ),
-                                             CTX->lookup_override_action_filename );
+    my $override_file = catfile( CTX->lookup_directory( 'config' ),
+                                 CTX->lookup_override_action_filename );
     if ( -f $override_file ) {
         my $overrider = OpenInteract2::Config::GlobalOverride->new(
                                         { filename => $override_file } );
@@ -289,7 +293,7 @@ sub require_action_classes {
 
 sub initialize_action_classes {
     my ( $self, $action_classes ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     return [] unless ( ref $action_classes eq 'ARRAY' );
 
     my @success = ();
@@ -343,7 +347,7 @@ sub initialize_observers {
 
 sub read_spops_config {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     my $server_config = CTX->server_config;
 
     # This will become the full SPOPS config
@@ -352,7 +356,7 @@ sub read_spops_config {
     my $initializer = OpenInteract2::Config::Initializer->new;
 
     my $default_datasource = CTX->lookup_default_datasource_name;
-    $log->info( "Using default datasource [$default_datasource]" );
+    $log->info( "Using default datasource '$default_datasource'" );
 
     my $packages = CTX->packages;
     foreach my $package ( @{ $packages } ) {
@@ -370,7 +374,7 @@ SPOPSFILE:
                 OpenInteract2::Config::Ini->new({ filename => $full_spops_path });
             };
             if ( $@ ) {
-                $log->error( "Failed to read [$full_spops_path]: $@" );
+                $log->error( "Failed to read '$full_spops_path': $@" );
                 next SPOPSFILE;
             }
 
@@ -379,8 +383,8 @@ SPOPSFILE:
 
                     # TODO: Throw an exception if this happens?
                     $log->error( "WARNING - Multiple SPOPS objects defined ",
-                                 "with the same key [$spops_key]. Overwriting data ",
-                                 "from [$SPOPS{ $spops_key }->{package_name}]" );
+                                 "with the same key '$spops_key'. Overwriting data ",
+                                 "from '$SPOPS{ $spops_key }->{package_name}'" );
                     delete $SPOPS{ $spops_key };
                 }
 
@@ -408,13 +412,13 @@ SPOPSFILE:
                 $SPOPS{ $spops_key } = \%spops_assign;
                 $log->is_info &&
                     $log->info( "Read in SPOPS config for object ",
-                                "$spops_key: $spops_ini->{ $spops_key }{class}" );
+                                "[$spops_key: $spops_ini->{ $spops_key }{class}]" );
             }
         }
     }
 
-    my $override_file = File::Spec->catfile( CTX->lookup_directory( 'conf' ),
-                                             CTX->lookup_override_spops_filename );
+    my $override_file = catfile( CTX->lookup_directory( 'config' ),
+                                 CTX->lookup_override_spops_filename );
     if ( -f $override_file ) {
         my $overrider = OpenInteract2::Config::GlobalOverride->new(
                                         { filename => $override_file } );
@@ -423,8 +427,9 @@ SPOPSFILE:
 
     foreach my $spops_config ( values %SPOPS ) {
         $initializer->notify_observers( 'spops', $spops_config );
-        $log->info( "Notified observers of config for SPOPS ",
-                    "[$spops_config->{key}: $spops_config->{class}]" );
+        $log->is_info &&
+            $log->info( "Notified observers of config for SPOPS ",
+                        "[$spops_config->{key}: $spops_config->{class}]" );
     }
 
     return \%SPOPS;
@@ -432,7 +437,7 @@ SPOPSFILE:
 
 sub activate_spops_classes {
     my ( $self, $spops_config ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     $spops_config ||= CTX->spops_config;
     my $classes = SPOPS::Initialize->process({ config => $spops_config });
@@ -440,9 +445,52 @@ sub activate_spops_classes {
         $log->is_info &&
             $log->info( "Initialized the following SPOPS classes: \n  ",
                         join( "\n  ", @{ $classes } ) );
+        my @alias_classes = ();
+        for ( keys %{ $spops_config } ) {
+            my $alias_class = $spops_config->{$_}{alias_class};
+            push @alias_classes, $alias_class if ( $alias_class );
+        }
+        $self->require_module({ class => \@alias_classes });
     }
     else {
         $log->error( "No SPOPS classes initialized!" );
+    }
+    return $classes;
+}
+
+########################################
+# LOCALIZED MESSAGES
+
+sub read_localized_messages {
+    my ( $self ) = @_;
+    $log ||= get_logger( LOG_INIT );
+
+    my $initializer = OpenInteract2::Config::Initializer->new;
+
+    my $i18n_init = OpenInteract2::I18N::Initializer->new;
+    $i18n_init->locate_global_message_files();
+
+    my $packages = CTX->packages;
+    foreach my $package ( @{ $packages } ) {
+        my $package_id = join( '-', $package->name, $package->version );
+        my $package_dir = $package->directory;
+        my $filenames = $package->get_message_files;
+        $log->is_debug &&
+            $log->debug( "Got message files from $package_id: ",
+                         join( ', ', @{ $filenames } ) );
+        my @full_filenames = map { catfile( $package_dir, $_ ) }
+                                 @{ $filenames };
+        $i18n_init->add_message_files( @full_filenames );
+    }
+    my $classes = $i18n_init->run;
+    $log->is_info &&
+        $log->info( "Created the following message classes: ",
+                    join( ', ', @{ $classes } ) );
+    foreach my $msg_class ( @{ $classes } ) {
+        $initializer->notify_observers( 'localization', $msg_class );
+        $log->is_info &&
+            $log->info( "Notified observers of config for localization ",
+                        "class '$msg_class' " );
     }
     return $classes;
 }
@@ -457,20 +505,20 @@ sub check_datasources {
     while ( my ( $ds_name, $ds_info ) =
                         each %{ $server_config->{datasource} } ) {
         unless ( ref $ds_info eq 'HASH' ) {
-            oi_error "Datasource [$ds_name] does have its configuration ",
+            oi_error "Datasource '$ds_name' does have its configuration ",
                      "defined in the server configuration.";
         }
         my $ds_type_info = $server_config->{datasource_type}{ $ds_info->{type} };
         unless ( ref $ds_type_info eq 'HASH' ) {
-            oi_error "Datasource type [$ds_info->{type}] defined in ",
-                     "datasource [$ds_name] but no type information ",
+            oi_error "Datasource type '$ds_info->{type}' defined in ",
+                     "datasource '$ds_name' but no type information ",
                      "defined in the server config under ",
                      "'datasource_type.$ds_info->{type}'";
         }
         my $ds_config_handler = $ds_type_info->{spops_config};
         eval "require $ds_config_handler";
         if ( $@ ) {
-            oi_error "Could not include module [$ds_config_handler] ",
+            oi_error "Could not include module '$ds_config_handler' ",
                      "to handle SPOPS configuration information: $@";
         }
     }
@@ -482,7 +530,7 @@ sub check_datasources {
 
 sub initialize_controller {
     my ( $self ) = @_;
-    my $controllers = CTX->lookup_controller;
+    my $controllers = CTX->lookup_controller_config;
     while ( my ( $name, $info ) = each %{ $controllers } ) {
         OpenInteract2::Controller->register_factory_type( $name => $info->{class} );
     }
@@ -494,7 +542,7 @@ sub initialize_controller {
 
 sub initialize_content_generator {
     my ( $self ) = @_;
-    OpenInteract2::ContentGenerator->initialize;
+    OpenInteract2::ContentGenerator->initialize_all_generators;
 }
 
 
@@ -503,30 +551,29 @@ sub initialize_content_generator {
 
 sub create_cache {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
-    my $server_config = CTX->server_config;
-    my $cache_info = $server_config->{cache_info};
-    unless ( lc $cache_info->{use} eq 'yes' ) {
+    my $cache_config = CTX->lookup_cache_config;
+    unless ( lc $cache_config->{use} eq 'yes' ) {
         $log->is_debug &&
             $log->debug( "Cache not configured for usage" );
         return undef;
     }
 
-    my $cache_class = $cache_info->{class};
+    my $cache_class = $cache_config->{class};
     $log->is_debug &&
-        $log->debug( "Creating cache with class [$cache_class]" );
+        $log->debug( "Creating cache with class '$cache_class'" );
     eval "require $cache_class";
     if ( $@ ) {
         $log->error( "Cannot create cache -- error including cache ",
-                     "class [$cache_class]: $@" );
+                     "class '$cache_class': $@" );
         return undef;
     }
-    my $cache = $cache_class->new( $cache_info->{data} );
+    my $cache = $cache_class->new( $cache_config );
     $log->is_debug &&
         $log->debug( "Cache setup ok" );
 
-    if ( $cache_info->{data}{cleanup} eq 'yes' ) {
+    if ( $cache_config->{cleanup} eq 'yes' ) {
         $cache->purge;
     }
 
@@ -548,7 +595,7 @@ sub read_system_classes {
 
 sub require_module {
     my ( $class, $params ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     my @success = ();
     my $classes = [];
@@ -569,7 +616,8 @@ sub require_module {
         next unless ( $in_class );
         eval "require $in_class";
         if ( $@ ) {
-            $log->error( sprintf( "require error: %-40s: %s", $in_class, $@ ) );
+            $log->error( sprintf( "require error from '%s': %-40s: %s",
+                                  join( ' @ ', (caller)[0,2] ), $in_class, $@ ) );
         }
         else {
             push @success, $in_class;
@@ -867,7 +915,7 @@ L<OpenInteract2::ContentGenerator::OpenInteract2::ContentGenerator>-E<gt>initial
 B<create_cache()>
 
 Create a cache object based on the server configuration. The cache
-information is held in C<cache_info.data>, and if the C<use> property
+information is held in C<cache>, and if the C<use> property
 of that is not a true value, we do not do anything. Otherwise we
 C<require> the C<class> property of the cache information and then
 call C<new()> on it, returning the cache object.
@@ -879,14 +927,6 @@ B<require_module( \%params )>
 Does a C<require> on one or more modules. The modules to be read in
 can be specified in the parameter 'class' or they can be in a
 filename named in 'filename', one per line.
-
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
 
 =head1 SEE ALSO
 
@@ -900,7 +940,7 @@ L<SPOPS::Initialize|SPOPS::Initialize>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

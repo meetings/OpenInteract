@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonAdd;
 
-# $Id: CommonAdd.pm,v 1.13 2003/09/05 02:21:53 lachoy Exp $
+# $Id: CommonAdd.pm,v 1.16 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -8,6 +8,8 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
+
+my ( $log );
 
 sub display_add {
     my ( $self ) = @_;
@@ -36,7 +38,7 @@ sub add {
     $self->_add_init_param;
     CTX->response->return_url( $self->param( 'c_add_return_url' ) );
 
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $object_class = $self->param( 'c_object_class' );
     my $object = $self->param( 'c_object' ) || $object_class->new;
@@ -121,6 +123,24 @@ OpenInteract2::Action::CommonAdd - Tasks to display empty form and create an obj
  package OpenInteract2::Action::MyAction;
  
  use base qw( OpenInteract2::Action::CommonAdd );
+ 
+ # Relevant configuration entries in your action.ini
+ 
+ [myaction]
+ ...
+ c_object_type                = myobject
+ c_display_add_template       = mypkg::new_form
+ c_add_task                   = display
+ c_add_fail_task              = display_add
+ c_add_return_url             = /index.html
+ c_add_fields                 = title
+ c_add_fields                 = author
+ c_add_fields                 = publisher
+ c_add_fields_toggled         = has_nyt_review
+ c_add_fields_date            = publish_date
+ c_add_fields_date_format     = %Y-%m-%d
+ c_add_fields_datetime        = last_edit_time
+ c_add_fields_datetime_format = %Y-%m-%d %H:%M
 
 =head1 SUPPORTED TASKS
 
@@ -323,7 +343,7 @@ been validated.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

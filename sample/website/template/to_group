@@ -71,8 +71,8 @@
        </select>
     </td>
     <td align="left" valign="middle">
-      <input type="button" value="Up"   onclick="raise_item()"><br>
-      <input type="button" value="Down" onclick="lower_item()"><br>
+      <input type="button" value="^"   onclick="raise_item()"><br>
+      <input type="button" value="\/" onclick="lower_item()"><br>
     </td>                     
   </tr>
 </table>
@@ -99,10 +99,10 @@ var to_element     = '[% to_element %]';
 
 var mem_list_hold  = '[% mem_list_hold %]';
 
-[%####################
-  NOTE: There are no other TT-modified variables below this point;
-  just Javascript.
-  ####################-%]
+[%#
+NOTE: There are no other TT-modified variables below this point;
+just Javascript.
+-%]
 
 // Raise an item in the listings. Remove the option
 // above the one selected.

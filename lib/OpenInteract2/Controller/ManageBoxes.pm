@@ -6,7 +6,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::MangeBoxes::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::MangeBoxes::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 # Box might be an action object or just a hashref, but it must have
 # 'name' defined
@@ -19,7 +21,7 @@ sub init_boxes {
 sub add_box {
     my ( $self, $box ) = @_;
     return undef unless ( ref $box );
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     my $name = ( ref $box eq 'HASH' ) ? $box->{name} : $box->name;
     $log->is_debug &&
         $log->debug( "Adding box [$name] to response" );
@@ -41,7 +43,7 @@ sub get_boxes {
 
 sub remove_box {
     my ( $self, $name ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     # TODO: Should this be an error or just a log?
     unless ( $name ) {
         oi_error "Must specify box name when removing box";
@@ -101,21 +103,13 @@ Removes the box associated with C<$name>.
 If no C<$name> specified, throws an exception. Otherwise returns the
 information previously in C<$name>.
 
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
-
 =head1 SEE ALSO
 
 L<OpenInteract2::Controller|OpenInteract2::Controller>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

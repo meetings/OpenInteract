@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::Upgrade;
 
-# $Id: Upgrade.pm,v 1.11 2003/08/29 11:40:05 lachoy Exp $
+# $Id: Upgrade.pm,v 1.12 2004/02/17 04:30:21 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use File::Spec;
 use OpenInteract2::Manage  qw( SYSTEM_PACKAGES );
 use OpenInteract2::Config::TransferSample;
 
-$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'upgrade_website';
@@ -111,7 +111,7 @@ No additional entries in the status messages.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002-2003 Chris Winters. All rights reserved.
+Copyright (C) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

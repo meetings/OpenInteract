@@ -5,7 +5,9 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Controller::MangeTemplates::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::MangeTemplates::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub init_templates {
     my ( $self ) = @_;
@@ -17,7 +19,7 @@ sub init_templates {
 
 sub add_template_used {
     my ( $self, $name ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     $log->is_debug &&
         $log->debug( "Adding template [$name] list of those used" );
     return push @{ $self->{_template_used} }, $name;
@@ -74,7 +76,7 @@ L<OpenInteract2::Controller|OpenInteract2::Controller>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

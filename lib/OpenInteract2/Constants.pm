@@ -1,11 +1,11 @@
 package OpenInteract2::Constants;
 
-# $Id: Constants.pm,v 1.7 2003/06/24 03:35:38 lachoy Exp $
+# $Id: Constants.pm,v 1.9 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
 
-$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 # TODO: Are these used?
 
@@ -41,10 +41,11 @@ use constant LOG_SECURITY  => 'OI2.SECURITY';
 use constant LOG_SESSION   => 'OI2.SESSION';
 use constant LOG_SPOPS     => 'OI2.SPOPS';
 use constant LOG_TEMPLATE  => 'OI2.TEMPLATE';
+use constant LOG_TRANSLATE => 'OI2.TRANSLATE';
 my @LOG_CATEGORY = qw(
     LOG_OI LOG_ACTION LOG_APP LOG_AUTH LOG_CACHE LOG_CONFIG
     LOG_DS LOG_INIT LOG_REQUEST LOG_RESPONSE LOG_SESSION
-    LOG_SECURITY LOG_SPOPS LOG_TEMPLATE
+    LOG_SECURITY LOG_SPOPS LOG_TEMPLATE LOG_TRANSLATE
 );
 
 use constant BASE_CONF_DIR  => 'conf';
@@ -182,7 +183,7 @@ None, just exported constants.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

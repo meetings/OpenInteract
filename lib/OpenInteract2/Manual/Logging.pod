@@ -175,7 +175,7 @@ L<OpenInteract2::Log::OIAppender|OpenInteract2::Log::OIAppender>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

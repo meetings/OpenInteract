@@ -1,6 +1,6 @@
 package OpenInteract2::Filter;
 
-# $Id: Filter.pm,v 1.1 2003/07/02 15:05:24 lachoy Exp $
+# $Id: Filter.pm,v 1.3 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::Ini;
 
-$OpenInteract2::Filter::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Filter::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub create_filter_filename {
     my ( $class ) = @_;
@@ -37,7 +39,7 @@ sub add_filter_to_action {
 
 sub register_filter {
     my ( $class, $filter_name, $filter_info, $registry ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my ( $observer, $filter_type );
     if ( my $filter_class = $filter_info->{class} ) {
@@ -85,14 +87,14 @@ sub register_filter {
 
 sub initialize {
     my ( $class ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
 
     my $filter_file = $class->create_filter_filename;
     return unless ( -f $filter_file );
     my $filter_ini = OpenInteract2::Config::Ini->new(
                                    { filename => $filter_file });
     if ( $@ ) {
-        $log->error( "Failed to read [$filter_file]: $@" );
+        $log_init->error( "Failed to read [$filter_file]: $@" );
         return;
     }
 
@@ -111,7 +113,7 @@ sub initialize {
 
 sub _register_initial_filters {
     my ( $class, $ini_filters, $packages ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
 
     my %filter_map = ();
 
@@ -123,9 +125,9 @@ sub _register_initial_filters {
         my $pkg_filters = $pkg->config->filter;
         next unless ( ref $pkg_filters eq 'HASH' );
         while ( my ( $filter_name, $filter_class ) = each %{ $pkg_filters } ) {
-            $log->is_info &&
-                $log->info( "Registering filter '$filter_name' as ",
-                            "'$filter_class' from package ", $pkg->full_name );
+            $log_init->is_info &&
+                $log_init->info( "Registering filter '$filter_name' as ",
+                                 "'$filter_class' from package ", $pkg->full_name );
             $filter_map{ $filter_name } = { class => $filter_class };
         }
     }
@@ -133,12 +135,12 @@ sub _register_initial_filters {
     # Now cycle through the INI
 
     while ( my ( $filter_name, $filter_info ) = each %{ $ini_filters } ) {
-        $log->is_info &&
-            $log->info( "Registering filter '$filter_name' from ",
-                        "server config" );
+        $log_init->is_info &&
+            $log_init->info( "Registering filter '$filter_name' from ",
+                             "server config" );
         if ( $filter_map{ $filter_name } ) {
-            $log->warn( "WARNING: Overwriting previously registered ",
-                        "filter '$filter_name'" );
+            $log_init->warn( "WARNING: Overwriting previously registered ",
+                             "filter '$filter_name'" );
         }
         $filter_map{ $filter_name } = $filter_info;
     }
@@ -158,7 +160,7 @@ sub _register_initial_filters {
 
 sub _require_module {
     my ( $class, $to_require ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     eval "require $to_require";
     my $error = $@;
@@ -264,7 +266,7 @@ Returns: nothing
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

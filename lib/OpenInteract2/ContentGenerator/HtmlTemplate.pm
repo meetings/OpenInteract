@@ -1,37 +1,44 @@
 package OpenInteract2::ContentGenerator::HtmlTemplate;
 
-# $Id: HtmlTemplate.pm,v 1.4 2003/07/02 05:10:13 lachoy Exp $
+# $Id: HtmlTemplate.pm,v 1.7 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
+use base qw( OpenInteract2::ContentGenerator );
+
+use HTML::Template;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::ContentGenerator::TemplateSource;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
-use HTML::Template;
 
-$OpenInteract2::ContentGenerator::HtmlTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::HtmlTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
-use constant SOURCE_CLASS => 'OpenInteract2::ContentGenerator::TemplateSource';
+my ( $log );
+
+# HTML::Template doesn't seem to use the same architecture as TT, so
+# it doesn't make sense to create a template object in initialize()
+# and reuse it.
 
 sub initialize {
-    my $log = get_logger( LOG_INIT );
-    $log->is_info &&
-        $log->info( "Called initialize() for HTML::Template CG (no-op)" );
+    my $log_init = get_logger( LOG_INIT );
+    $log_init->is_info &&
+        $log_init->info( "Called initialize() for HTML::Template CG (no-op)" );
 }
 
-sub process {
-    my ( $class, $template_config, $template_vars, $template_source ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+sub generate {
+    my ( $self, $template_config, $template_vars, $template_source ) = @_;
+    $log ||= get_logger( LOG_TEMPLATE );
 
     # TODO: Check for cached content...
 
     my %init_params = ( die_on_bad_params => 0 );
 
-    my ( $source_type, $source ) = SOURCE_CLASS->identify( $template_source );
+    my ( $source_type, $source ) =
+        OpenInteract2::ContentGenerator::TemplateSource->identify( $template_source );
     if ( $source_type eq 'NAME' ) {
         my ( $template, $filename, $modified ) =
-                        SOURCE_CLASS->load_source( $source );
+            OpenInteract2::ContentGenerator::TemplateSource->load_source( $source );
         $log->is_debug &&
             $log->debug( "Loading from name $source" );
         $init_params{scalarref} = ( ref $template eq 'SCALAR' )
@@ -71,11 +78,16 @@ OpenInteract2::ContentGenerator::HtmlTemplate - Content generator using HTML::Te
 
 =head1 SYNOPSIS
 
+ my $generator = CTX->content_generator( 'HTMLTemplate' );
+ $generator->generate( \%template_config, \%params, { name => 'mypkg::mytemplate' } );
+
 =head1 DESCRIPTION
+
+Content generator for L<HTML::Template>. May be horribly inefficient.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
-package OpenInteract2::ContentGenerator::TT2Plugin;
+package OpenInteract2::TT2::Plugin;
 
-# $Id: TT2Plugin.pm,v 1.10 2003/08/30 15:46:20 lachoy Exp $
+# $Id: Plugin.pm,v 1.10 2004/05/22 02:03:39 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -11,10 +11,13 @@ use HTML::Entities             qw();
 use Log::Log4perl              qw( get_logger );
 use OpenInteract2::Constants   qw( :log :template );
 use OpenInteract2::Context     qw( CTX );
+use OpenInteract2::URL;
 use SPOPS::Secure              qw( :level :scope );
 use SPOPS::Utility;
 
-$OpenInteract2::ContentGenerator::TT2Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -66,77 +69,93 @@ SYMBOL:
     return [ sort @methods ];
 }
 
+sub show_all_plugins {
+    my ( $self ) = @_;
+    my $generator = CTX->content_generator( 'tt' );
+
+    # Yes, this is relying on a private data structure...
+    my %plugin_info = %{ $generator->{_plugin_class} };
+    return \%plugin_info;
+}
+
 
 ########################################
 # PLUGIN ACTIONS
 ########################################
 
-# Stub to call the component processor
-
-# Deprecated: use action_execute
-
-sub comp {
-    my ( $self, $name, @params ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
-    $log->warn( "Deprecated plugin method comp() called: use ",
-                "action_execute() instead" );
-    return $self->action_execute( $name, @params );
-}
-
-# XXX: Add docs for this; make note that OI.comp is no longer
-# supported
-
 sub action_execute {
     my ( $self, $name, $params ) = @_;
     my $action = eval { CTX->lookup_action( $name ) };
     if ( $@ ) {
-        return "No action defined for $name";
+        return "No action defined for '$name'";
     }
+    $log ||= get_logger( LOG_TEMPLATE );
+    $params ||= {};
+    $log->is_debug &&
+        $log->debug( "Trying to assign properties/params to execute ",
+                     "action '$name': ", join( ', ', keys %{ $params } ) );
     $action->property_assign( $params );
     $action->param_assign( $params );
-    $action->request( CTX->request );
-    $action->response( CTX->response );
     return $action->execute;
 }
 
-# Add the box named $box with $params
-# XXX: This is probably wrong...
+# L10N stuff
+
+sub msg {
+    my ( $self, $key, @params ) = @_;
+    my $lh = CTX->request->language_handle;
+    unless ( $lh ) {
+        $log ||= get_logger( LOG_TEMPLATE );
+        $log->error( "No language handle available from the request object!" );
+        return "msg $key n/a";
+    }
+    return $lh->maketext( $key, @params );
+}
+
+sub msg_handle {
+    my ( $self ) = @_;
+    return CTX->request->language_handle;
+}
+
+# BOXES
 
 sub box_add {
     my ( $self, $box, $params ) = @_;
     $params ||= {};
-    my $log = get_logger( LOG_TEMPLATE );
-    $log->is_debug &&
-        $log->debug( "Box add [$box] " );
+    $log ||= get_logger( LOG_TEMPLATE );
+    $log->is_debug && $log->debug( "Template box add '$box' " );
     my %box_info = ( name => $box );
     if ( $params->{remove} ) {
         return $self->box_remove( $box );
     }
-    for ( qw( weight title template ) ) {
+
+    # First assign all the known stuff...
+
+    for ( qw( weight title template is_template ) ) {
         next unless ( $params->{ $_ } );
         $log->is_debug &&
-            $log->debug( "Box [$box] param [$_] [$params->{$_}]" );
+            $log->debug( "Box '$box' param '$_' '$params->{$_}'" );
         $box_info{ $_ } = $params->{ $_ };
         delete $params->{ $_ };
     }
+
+    # Everything else is passed to the box as params...
+
     $box_info{params} = $params;
     eval { CTX->controller->add_box( \%box_info ) };
     if ( $@ ) {
-        $log->error( "Failed to add box [$box_info{name}]: $@" );
+        $log->error( "Failed to add box '$box_info{name}': $@" );
     }
     return undef;
 }
 
-
-# XXX: Implement this
-
 sub box_remove {
     my ( $self, $box_name ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     $box_name =~ s/^\-//;
     eval { CTX->controller->remove_box( $box_name ) };
     if ( $@ ) {
-        $log->error( "Failed to remove box [$box_name]: $@" );
+        $log->error( "Failed to remove box '$box_name': $@" );
     }
     return undef;
 }
@@ -144,8 +163,6 @@ sub box_remove {
 
 ########################################
 # SPOPS/OBJECT INFORMATION
-########################################
-
 
 # Return a hashref of information about $obj
 
@@ -187,11 +204,11 @@ sub can_write {
 
 ########################################
 # DATES
-########################################
 
 sub _create_date_object {
     my ( $date_string, $date_format ) = @_;
     return $date_string if ( ref $date_string );
+    $date_format ||= '%Y-%m-%d %H:%M';
     return ( $date_string =~ /^(today|now)$/ )
              ? DateTime->now()
              : strptime( $date_format, $date_string );
@@ -203,10 +220,10 @@ sub _create_date_object {
 sub date_format {
     my ( $self, $date_string, $format, $params ) = @_;
     return undef unless ( $date_string );
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     my $date = _create_date_object( $date_string );
     unless ( $date ) {
-        $log->error( "Cannot parse [$date_string] into valid date" );
+        $log->error( "Cannot parse '$date_string' into valid date" );
         return undef;
     }
     $format ||= '%Y-%m-%d %l:%M %p';
@@ -230,15 +247,14 @@ sub date_into_object {
 
 ########################################
 # STRING FORMATTING
-########################################
 
 # Limit $str to $len characters
 
 sub limit_string {
     my ( $self, $str, $len ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     $log->is_debug &&
-        $log->debug( "limiting [$str] to [$len] characters" );
+        $log->debug( "limiting '$str' to '$len' characters" );
     return $str if ( length $str <= $len );
     return substr( $str, 0, $len ) . '...';
 }
@@ -257,6 +273,7 @@ sub javascript_quote {
 sub limit_sentences {
     my ( $self, $text, $num_sentences ) = @_;
     return undef if ( ! $text );
+    require Text::Sentence;
     $num_sentences ||= 3;
     my @sentences = Text::Sentence::split_sentences( $text );
     my $orig_num_sentences = scalar @sentences;
@@ -302,6 +319,8 @@ sub byte_format {
 
 sub uc_first { return ucfirst $_[1] }
 
+sub uc { return uc $_[1] }
+
 
 # Return an HTML-encoded first argument
 
@@ -320,29 +339,35 @@ sub html_decode {
 # Create a URL, smartly. (The smart part was taken from
 # Template::Plugin::URL, and then moved to OI::URL)
 
+my $U = OpenInteract2::URL->new();
+
 sub make_url {
     my ( $self, $p ) = @_;
+    $log ||= get_logger( LOG_TEMPLATE );
+    $log->is_debug &&
+        $log->debug( "Plugin trying to create URL with: ",
+                     join( '; ', map { "$_ = $p->{$_}" } keys %{ $p } ) );
     my ( $url_base );
     if ( $p->{BASE} ) {
         $url_base = $p->{BASE};
         delete $p->{ $_ } for ( qw( ACTION TASK BASE IMAGE STATIC ) );
-        return OpenInteract2::URL->create( $url_base, $p );
+        return $U->create( $url_base, $p );
     }
     elsif ( $p->{ACTION} ) {
         my ( $action, $task ) = ( $p->{ACTION}, $p->{TASK} );
         delete $p->{ $_ } for ( qw( ACTION TASK BASE IMAGE STATIC ) );
-        return OpenInteract2::URL->create_from_action(
+        return $U->create_from_action(
                          $action, $task, $p );
     }
     elsif ( $p->{IMAGE} ) {
         my $image_url = $p->{IMAGE};
         delete $p->{ $_ } for ( qw( ACTION TASK BASE IMAGE STATIC ) );
-        return OpenInteract2::URL->create_image( $image_url, $p );
+        return $U->create_image( $image_url, $p );
     }
     elsif ( $p->{STATIC} ) {
         my $static_url = $p->{STATIC};
         delete $p->{ $_ } for ( qw( ACTION TASK BASE IMAGE STATIC ) );
-        return OpenInteract2::URL->create_static( $static_url, $p );
+        return $U->create_static( $static_url, $p );
     }
     else {
         return q{javascript:alert('Incorrect parameters passed to make_url()')};
@@ -352,7 +377,6 @@ sub make_url {
 
 ########################################
 # DATA RETRIEVAL
-########################################
 
 # TODO: Figure out how configure this to use a nice API to select only
 # certain users (e.g., pass in a group name, group API, beginning of a
@@ -367,13 +391,12 @@ sub get_users {
 
 ########################################
 # OI DISPLAY
-########################################
 
 # Tell OI (from a page) about the page title
 
 sub page_title {
     my ( $self, $title ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     eval { CTX->controller->add_content_param( title => $title ) };
     if ( $@ ) {
         $log->error( "Failed to set page title: $@" );
@@ -385,15 +408,15 @@ sub page_title {
 
 sub use_main_template {
     my ( $self, $template_name ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     eval { CTX->controller->main_template( $template_name ) };
     if ( $@ ) {
-        $log->error( "Cannot set main template [$template_name] in ",
+        $log->error( "Cannot set main template '$template_name' in ",
                      "controller: $@" );
     }
     else {
         $log->is_info &&
-            $log->info( "Set main template to [$template_name]" );
+            $log->info( "Set main template to '$template_name'" );
     }
     return undef;
 }
@@ -405,7 +428,7 @@ sub use_main_template {
 
 sub content_template {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     my $template = eval { CTX->controller->main_template };
     if ( $@ ) {
         $log->error( "Cannot get main_template from controller: $@" );
@@ -416,7 +439,6 @@ sub content_template {
 
 ########################################
 # PLUGIN PROPERTIES
-########################################
 
 sub security_level {
     return $SECURITY_CONSTANTS{level};
@@ -445,6 +467,11 @@ sub action_param {
         return $params[0];
     }
     return [ @params ];
+}
+
+sub param {
+    my ( $self, $param_name ) = @_;
+    return CTX->request->param( $param_name );
 }
 
 sub request {
@@ -506,7 +533,7 @@ sub theme_properties {
 
 sub theme_fetch {
     my ( $self, $theme_spec, $params ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
     unless ( $theme_spec ) {
         $log->warn( "No theme spec given to fetch" );
         return $self->theme_properties;
@@ -516,7 +543,7 @@ sub theme_fetch {
         $theme_id = $theme_spec;
     }
     else {
-        $theme_id = CTX->default_object_id( $theme_spec );
+        $theme_id = CTX->lookup_default_object_id( $theme_spec );
     }
     unless ( $theme_id ) {
         $log->error( "Could not fetch theme given spec of '$theme_spec': ",
@@ -559,9 +586,26 @@ sub session {
     CTX->request->session();
 }
 
+# TODO: Should we make this available?
+
 sub server_config {
     return CTX->server_config;
 }
+
+
+########################################
+# DEPRECATED
+
+# use action_execute instead
+
+sub comp {
+    my ( $self, $name, @params ) = @_;
+    $log ||= get_logger( LOG_TEMPLATE );
+    $log->warn( "Deprecated plugin method comp() called: use ",
+                "action_execute() instead" );
+    return $self->action_execute( $name, @params );
+}
+
 
 1;
 
@@ -569,22 +613,40 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::ContentGenerator::TT2Plugin - Custom OpenInteract functionality in templates
+OpenInteract2::TT2::Plugin - Custom OpenInteract functionality in templates
 
 =head1 SYNOPSIS
 
  # Create the TT object with the OI plugin
  
  my $template = Template->new(
-                       PLUGINS => { OI => 'OpenInteract2::ContentGenerator::TT2Plugin' }, ... );
+                       PLUGINS => { OI => 'OpenInteract2::TT2::Plugin' }, ... );
  my ( $output );
  $template->process( 'package::template', \%params, \$output );
 
  # In the template (brief examples, see below for more)
  
- [% OI.show_all_actions.join( "\n" ) -%]
+ Here is what the plugin can do:
+   <ul><li>[% OI.show_all_actions.join( "\n   <li>" ) -%]</ul>
+ 
+ Here are plugins available to you:
+   [% OI.show_all_plugins.keys.sort.join( ', ' ) %]
+ 
+ Here are all the parameters passed to the request:
+   [% OI.request_param.sort.join( ', ' ) %]
+ 
+ And the value of a particular parameter:
+   last name: [% OI.request_param( 'last_name' ) %]
  
  [% OI.action_execute( 'error_display', error_msg = error_msg ) -%]
+ 
+ # Note that you can also use the 'MSG' function
+ [% OI.msg( 'mypage.intro', OI.login.full_name ) %]
+ 
+ # Note that you can also use the 'LH' variable
+ [% mh = OI.msg_handle %]
+ [% mh.maketext( 'mypage.intro', OI.login.full_name ) %]
+ [% mh.maketext( 'mypage.learnmore' ) %]
  
  [% OI.box_add( 'contact_tools_box', title  = 'Contact Tools',
                                      weight = 2 ) -%]
@@ -637,6 +699,8 @@ OpenInteract2::ContentGenerator::TT2Plugin - Custom OpenInteract functionality i
  You have [% OI.money_format( account.balance ) %] left to spend.
  
  Hello [% OI.uc_first( person.first_name ) %]
+ 
+ You are important so I must speak to you loudly [% OI.uc( person.last_name ) %]
  
  <textarea name="news_item">[% OI.html_encode( news.news_item ) %]</textarea>
  
@@ -700,7 +764,7 @@ It can be used outside of the normal OpenInteract processing by doing
 something like:
 
     my $template = Template->new(
-                      PLUGINS => { OI => 'OpenInteract2::ContentGenerator::TT2Plugin' }
+                      PLUGINS => { OI => 'OpenInteract2::TT2::Plugin' }
                    );
     $template->process( $text, { OI => $template->context->plugin( 'OI' ) } )
          || die "Cannot process template! ", $template->error();
@@ -709,11 +773,11 @@ This is done for you in
 L<OpenInteract2::ContentGenerator::TT2Process|OpenInteract2::ContentGenerator::TT2Process> so
 you can simply do:
 
-    OpenInteract2::Setup->setup_static_environment_options();
-    OpenInteract2::ContentGenerator::TT2Process->initialize( CTX->server_config );
-    print OpenInteract2::ContentGenerator::TT2Process->handler( {},
-                                                     { foo => 'bar' },
-                                                     { name => 'mypkg::mytemplate' });
+    my $website_dir = $ENV{OPENINTERACT2};
+    my $ctx = OpenInteract2::Context->create({ website_dir => $website_dir });
+    my $generator = CTX->content_generator( 'TT' );
+    print $generator->generate( {}, { foo => 'bar' },
+                                { name => 'mypkg::mytemplate' });
 
 And everything works. (See
 L<OpenInteract2::ContentGenerator::TT2Process|OpenInteract2::ContentGenerator::TT2Process> for
@@ -727,17 +791,19 @@ The following OpenInteract properties and methods are available
 through this plugin, so this describes how you can interface with
 OpenInteract from a template.
 
-=head2 REFLECTION
-
-B<show_all_actions()>
-
-You can get a listing of all actions available via the plugin by
-doing:
-
- [% actions = OI.show_all_actions -%]
- [% actions.join( "\n" ) %]
-
 =head2 METHODS
+
+B<request_param( [ $name ] )>
+
+TODO
+
+B<msg( $key, [ $param1, $param2, ... ] )>
+
+TODO
+
+B<msg_handle>
+
+TODO
 
 B<action_param( $name )>
 
@@ -1364,37 +1430,36 @@ returned by calling in normal code:
  The ID of the site admin group is:
   [% OI.server_config.default_objects.site_admin_group %]
 
-=head1 BUGS
+=head2 REFLECTION
 
-None known.
+B<show_all_actions()>
 
-=head1 TO DO
+You can get a listing of all methods available from the plugin by
+doing:
 
-B<Custom plugins>
+ [% actions = OI.show_all_actions -%]
+ [% actions.join( "\n" ) %]
 
-Make it easy for websites to create their own plugins that can be
-accessed through the 'OI.' plugin. For instance, a package owner could
-define a set of additional behaviors to go along with a package. In a
-file distributed with the package, the plugins could be listed:
+B<show_all_plugins()>
 
- conf/template_plugins.dat:
- ------------------------------
- OpenInteract2::Plugin::MyPackage1
- OpenInteract2::Plugin::MyPackage2
- ------------------------------
+Returns a hashref of plugins initialized by OpenInteract and available
+in the template environment. Keys are the plugin names, values the
+plugin classes:
 
-And stored within the server-wide configuration object. Then when we
-call C<load()> in this plugin, we could do something similar to the
-C<_populate> method in C<Slash::Display::Plugin::Plugin> where we peek
-into the C<@EXPORT_OK> array and copy the code refs into a hash which
-we can then check via C<AUTOLOAD>.
+ Plugins available:
+ <ul>
+   [% plugins = OI.show_all_plugins %] 
+   [% FOREACH plugin_name = plugins.keys.sort %]
+   <li>[% plugin_name %]: [% plugins.$plugin_name %]
+   [% END %]
+ </ul>
 
-One problem with that is name collision -- two packages might both
-define a 'do_stuff' action, and in this case the last one would
-win. No good.
+=head1 CUSTOM PLUGINS
 
-Maybe we prepend the package name to the action? Also no good -- the
-whole idea is to make the template environment transparent....
+Package authors can create their own plugins that are available to
+template authors just like the 'OI' plugin. Read
+L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
+for more information.
 
 =head1 SEE ALSO
 
@@ -1404,9 +1469,11 @@ L<Template::Plugin::URL|Template::Plugin::URL> for borrowed code
 
 Slashcode (http://www.slashcode.com) for inspiration
 
+L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
+
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

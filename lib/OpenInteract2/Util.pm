@@ -1,6 +1,6 @@
 package OpenInteract2::Util;
 
-# $Id: Util.pm,v 1.9 2003/08/20 13:31:22 lachoy Exp $
+# $Id: Util.pm,v 1.12 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use DateTime;
@@ -12,7 +12,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Secure            qw( :level :verbose );
 
-$OpenInteract2::Util::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Util::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant DEFAULT_SUBJECT        => 'Mail sent from OpenInteract';
 use constant DEFAULT_ATTACH_MESSAGE => 'Emailing attachments';
@@ -103,7 +105,7 @@ sub read_file_perl {
 sub send_email {
     my ( $class, $p ) = @_;
     return $class->_send_email_attachment( $p ) if ( $p->{attach} );
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
     my %header_info = $class->_build_header_info( $p );
     my $smtp_host   = $class->_get_smtp_host( $p );
     my %mail = (
@@ -165,18 +167,18 @@ sub _send_email_attachment {
 
 sub _build_header_info {
     my ( $class, $p ) = @_;
-    my $server_config = OpenInteract2::Context->instance->server_config;
+    my $mail_config = CTX->lookup_mail_config;
     return ( To      => $p->{to}      || $p->{email},
-             From    => $p->{from}    || $server_config->{mail}{admin_email},
+             From    => $p->{from}    || $mail_config->{admin_email},
              Subject => $p->{subject} || DEFAULT_SUBJECT );
 }
 
 
 sub _get_smtp_host {
     my ( $class, $p ) = @_;
-    my $server_config = OpenInteract2::Context->instance->server_config;
+    my $mail_config = CTX->lookup_mail_config;
     return $p->{smtp} ||
-           $server_config->{mail}{smtp_host};
+           $mail_config->{smtp_host};
 }
 
 
@@ -185,7 +187,7 @@ sub _get_smtp_host {
 
 sub _clean_attachment_filename {
     my ( $class, $filename ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
     $log->is_debug &&
         $log->debug( "Attachment filename begin [$filename]" );
 
@@ -202,7 +204,7 @@ sub _clean_attachment_filename {
             $log->debug( "File started '/'; now [$filename]" );
     }
 
-    my $website_dir = CTX->server_config->{dir}{website};
+    my $website_dir = CTX->lookup_directory( 'website' );
     my $cleaned_filename = File::Spec->catfile( $website_dir, $filename );
     if ( -f $cleaned_filename ) {
         $log->is_debug &&
@@ -431,7 +433,7 @@ L<MIME::Lite|MIME::Lite>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

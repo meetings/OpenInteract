@@ -1,34 +1,26 @@
 package OpenInteract2::Manage;
 
-# $Id: Manage.pm,v 1.30 2003/08/30 15:46:59 lachoy Exp $
+# $Id: Manage.pm,v 1.38 2004/05/22 01:56:03 lachoy Exp $
 
 use strict;
 use base qw( Exporter Class::Factory Class::Observable );
 use Carp                     qw( carp );
 use Cwd                      qw( cwd );
-use File::Spec;
+use File::Spec::Functions    qw( :ALL );
 use Log::Log4perl            qw( get_logger :levels );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_param_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.38 $ =~ /(\d+)\.(\d+)/);
 
-my $SYSTEM_PACKAGES = [ qw/ base
-                            base_box
-                            base_error
-                            base_group
-                            base_page
-                            base_security
-                            base_template
-                            base_theme
-                            base_user
-                            full_text
-                            news
-                            lookup
-                            object_activity
-                            system_doc / ];
+my $SYSTEM_PACKAGES = [
+    qw/ base       base_box        base_error    base_group
+        base_page  base_security   base_template base_theme
+        base_user  comments        full_text     news
+        lookup     object_activity system_doc    whats_new /
+];
 
 sub SYSTEM_PACKAGES { return $SYSTEM_PACKAGES }
 
@@ -78,14 +70,15 @@ sub execute {
     # Track our current directory so the task can feel free to do what
     # it wants
 
-    my $pwd = File::Spec->rel2abs( File::Spec->curdir );
+    my $pwd = rel2abs( curdir );
 
     $self->notify_observers( progress => 'Starting task' );
 
     eval { $self->run_task };
     my $error = $@;
     if ( $@ ) {
-        carp "Caught error: $@";
+        #carp "Caught error: $@";
+        $self->notify_observers( progress => 'Failed task' );
         $self->param( 'task_failed', 'yes' );
     }
     $self->tear_down_task;
@@ -208,7 +201,7 @@ sub _check_source_dir {
         return "Value for 'source_dir' ($source_dir) is not a valid directory";
     }
     foreach my $distrib_dir ( qw( pkg sample ) ) {
-        my $full_distrib_dir = File::Spec->catdir( $source_dir, $distrib_dir );
+        my $full_distrib_dir = catdir( $source_dir, $distrib_dir );
         unless ( -d $full_distrib_dir ) {
             return "The 'source_dir' must contain valid subdirectory " .
                    "[$distrib_dir]";
@@ -335,19 +328,27 @@ sub valid_tasks_description {
     return \%tasks;
 }
 
-# Retrieves the parameter hashref for a particular task
+# Retrieves the parameter hashref for a particular task -- this can be
+# a class method (needs $task_name filled in) or an object method
 
 sub task_parameters {
-    my ( $class, $task_name ) = @_;
-    my $manage = $class->new( $task_name );
+    my ( $item, $task_name ) = @_;
+    my ( $manage );
+    if ( ref $item ) {
+        $manage = $item;
+    }
+    else {
+        unless ( $task_name ) {
+            oi_error "If you call 'task_parameters' as a class method ",
+                     "you must pass the task name as the only argument.";
+        }
+        $manage = $item->new( $task_name );
+    }
     my $params = $manage->get_parameters;
     my %basic_params = ();
     while ( my ( $name, $info ) = each %{ $params } ) {
-        $basic_params{ $name } = { name           => $name,
-                                   is_required    => $info->{is_required},
-                                   is_boolean     => $info->{is_boolean},
-                                   is_multivalued => $info->{is_multivalued},
-                                   default        => $info->{default}, };
+        $info->{name} = $name;
+        $basic_params{ $name } = $info;
     }
     return \%basic_params;
 }
@@ -512,8 +513,8 @@ sub find_management_tasks {
     my ( $class, @dirs ) = @_;
 
     foreach my $lib_dir ( @dirs ) {
-        my $manage_dir =
-            File::Spec->catdir( $lib_dir, 'OpenInteract2', 'Manage' );
+        next unless ( $lib_dir );
+        my $manage_dir = catdir( $lib_dir, 'OpenInteract2', 'Manage' );
         next unless ( -d $manage_dir );
         eval { _find_descend( $manage_dir ) };
         if ( $@ ) {
@@ -521,19 +522,30 @@ sub find_management_tasks {
         }
     }
 
+    # Now grab the class names from the files stored in %MANAGE_FILES
+    # so we don't try to include the same class from different files
+    # -- this normally only happens for developers who have the OI2
+    # lib directory in their PERL5LIB and who are running tests
+
+    my %MANAGE_CLASSES = ();
+    foreach my $file ( sort keys %MANAGE_FILES ) {
+        my $file_class = $file;
+        $file_class =~ s/^.*OpenInteract2/OpenInteract2/;
+        $file_class =~ s/\.pm$//;
+        $file_class =~ s/\W/::/g;
+        $MANAGE_CLASSES{ $file_class } ||= $file;
+    }
+
     # Why 'sort'? It ensures that classes further up the hierarchy
     # (e.g., 'OI2::Manage::Website') get required before their
     # children; otherwise we get lots of 'subroutine foo redefined'
     # messages under '-w', irritating.
 
-    foreach my $file ( sort keys %MANAGE_FILES ) {
-        next if ( $MANAGE_FILES{ $file } > 1 || $INC{ $file } ); # already done...
-        eval { require $file };
+    foreach my $manage_class ( sort keys %MANAGE_CLASSES ) {
+        #warn "Requiring file '$manage_class'\n";
+        eval "require $manage_class";
         if ( $@ ) {
-            carp "Failed to bring in library '$file': $@";
-        }
-        else {
-            $MANAGE_FILES{ $file }++;
+            carp "Failed to bring in library '$manage_class': $@";
         }
     }
 }
@@ -704,9 +716,11 @@ brief description of each.
 Returns: hashref of registered tasks (keys) and their descriptions
 (values).
 
-B<task_parameters( $task_name )>
+B<task_parameters( [ $task_name ] )>
 
-Ask the task for C<$task_name> what its parameters are.
+Ask the task for C<$task_name> what its parameters are. Note that you
+can use this as an object method as well, skipping the C<$task_name>
+parameter.
 
 Returns: hashref with keys as parameter names and values as hashrefs
 with the following data:
@@ -852,6 +866,8 @@ ensure that your task gets valid parameters.
 First, you can ensure that all the parameters required are defined by
 the task caller. Just tag Simply create a method C<list_param_required()> which
 returns an arrayref of parameters that require a value to be defined:
+
+TODO: Get rid of me
 
  sub list_param_required { return [ 'website_dir', 'package_dir' ] }
 
@@ -1010,7 +1026,7 @@ L<OpenInteract2::Setup|OpenInteract2::Setup>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

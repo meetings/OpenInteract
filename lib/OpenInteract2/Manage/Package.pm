@@ -1,12 +1,12 @@
 package OpenInteract2::Manage::Package;
 
-# $Id: Package.pm,v 1.13 2003/07/16 12:22:02 lachoy Exp $
+# $Id: Package.pm,v 1.14 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # INTERFACE
@@ -80,7 +80,7 @@ Returns: arrayref of package names.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

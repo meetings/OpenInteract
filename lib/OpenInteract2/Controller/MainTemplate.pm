@@ -1,6 +1,6 @@
 package OpenInteract2::Controller::MainTemplate;
 
-# $Id: MainTemplate.pm,v 1.1 2003/07/02 05:17:28 lachoy Exp $
+# $Id: MainTemplate.pm,v 1.6 2004/05/22 14:47:13 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Controller
@@ -11,7 +11,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( no_template main_template_key page_title );
 __PACKAGE__->mk_accessors( @FIELDS );
@@ -32,16 +34,12 @@ sub main_template {
 
 sub execute {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $action = $self->initial_action;
     $log->is_debug &&
         $log->debug( "Executing top-level action [", $action->name, "] ",
                      "with task [", $action->task, "]" );
-
-    # TODO: needed anymore?
-    $action->request( $self->request );
-    $action->response( $self->response );
 
     my $content = eval { $action->execute };
     if ( $@ ) {
@@ -54,7 +52,7 @@ sub execute {
 
     # If an action set a file to send back, we're done
 
-    if ( my $send_file = $self->response->send_file ) {
+    if ( my $send_file = CTX->response->send_file ) {
         $log->is_info &&
             $log->info( "Action specified return file [$send_file]" );
         return;
@@ -67,7 +65,7 @@ sub execute {
         $log->is_info &&
             $log->info( "Someone told us not to use a wrapper template; ",
                         "returning raw content" );
-        $self->response->content( \$content );
+        CTX->response->content( \$content );
         return;
     }
 
@@ -85,9 +83,9 @@ sub execute {
 
     my $generator = CTX->content_generator( $self->generator_type );
     my $full_content = eval {
-        $generator->execute( $self->template_params,
-                             $self->content_params,
-                             { name => $template_name } )
+        $generator->generate( $self->template_params,
+                              $self->content_params,
+                              { name => $template_name } )
     };
     if ( $@ ) {
         my $msg = "Content generator failed to execute: $@";
@@ -96,7 +94,7 @@ sub execute {
     }
     $log->is_debug &&
         $log->debug( "Generated content ok, setting to response" );
-    $self->response->content( \$full_content );
+    CTX->response->content( \$full_content );
     return;
 }
 
@@ -247,21 +245,13 @@ in the theme. It's only used if the B<main_template> property is
 undefined. If this key isn't defined use use the key 'main_template'
 by default. (TODO: Sort out template key foo from server config.)
 
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
-
 =head1 SEE ALSO
 
 L<OpenInteract2::Controller|OpenInteract2::Controller>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

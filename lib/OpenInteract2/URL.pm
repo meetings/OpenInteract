@@ -1,6 +1,6 @@
 package OpenInteract2::URL;
 
-# $Id: URL.pm,v 1.14 2003/06/24 03:35:38 lachoy Exp $
+# $Id: URL.pm,v 1.20 2004/03/16 21:00:44 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,9 +8,18 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw(
     CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL
 );
+use OpenInteract2::Log       qw( uchk );
 use URI;
 
 use constant QUERY_ARG_SEPARATOR => '&amp;';
+
+# shorten some typing...
+my ( $log );
+
+sub new {
+    my ( $pkg ) = @_;
+    return bless( {}, $pkg );
+}
 
 ########################################
 # URL PARSING
@@ -69,14 +78,28 @@ sub create_relative_to_absolute {
 
 sub create {
     my ( $class, $url_base, $params ) = @_;
+    $log ||= get_logger( LOG_OI );
+    my $param_info = ( $log->is_debug )
+                       ? join( '; ', map { "$_ = $params->{$_}" }
+                                         keys %{ $params } )
+                       : undef;
     if ( $params->{IMAGE} ) {
         delete $params->{IMAGE};
+        $log->is_debug &&
+            $log->debug( "Creating image URL from '$url_base' ",
+                         "and params [$param_info]" );
         return $class->create_image( $url_base, $params );
     }
     elsif ( $params->{STATIC} ) {
         delete $params->{STATIC};
+        $log->is_debug &&
+            $log->debug( "Creating static URL from '$url_base' ",
+                         "and params [$param_info]" );
         return $class->create_image( $url_base, $params );
     }
+    $log->is_debug &&
+    $log->debug( "Creating deployment URL from '$url_base' ",
+                 "and params [$param_info]" );
     return $class->_create_deployment( DEPLOY_URL, $url_base, $params );
 }
 
@@ -119,13 +142,14 @@ sub _create_deployment {
 
 sub create_from_action {
     my ( $class, $action, $task, $params ) = @_;
-    my $log = get_logger( LOG_OI );
+    $log ||= get_logger( LOG_OI );
 
     my $info = eval { CTX->lookup_action_info( $action ) };
 
     # ...if the action isn't found
     if ( $@ ) {
-        $log->warn( "Request URL for action [$action]; not found" );
+        $log->warn( "Request URL for action '$action' not found; called ",
+                    "from: ", join( ' | ', caller ) );
         return undef;
     }
 
@@ -139,6 +163,9 @@ sub create_from_action {
 
     my $url_base = ( $task ) ? "/$info->{url_primary}/$task/"
                              : "/$info->{url_primary}/";
+    $log->is_debug &&
+        $log->debug( uchk( "Creating URL from action '%s' and task " .
+                           "'%s' -- '%s'", $action, $task, $url_base ) );
     return $class->create( $url_base, $params );
 }
 
@@ -353,7 +380,7 @@ C<\%params>.
 
 Examples:
 
- CTX->server_config->{context_info}{deployed_under_image} = undef;
+ CTX->assign_deploy_image_url( undef );
  $url = OpenInteract2::URL->create_image( '/images/foo.png' );
  # $url = '/images/foo.png'
  
@@ -361,7 +388,7 @@ Examples:
                                           { id => 154393 } );
  # $url = '/gallery/photo.php?id=154393'
  
- CTX->server_config->{context_info}{deployed_under_image} = '/IMG';
+ CTX->assign_deploy_image_url( '/IMG' );
  $url = OpenInteract2::URL->create_image( '/images/foo.png' );
  # $url = '/IMG/images/foo.png'
  
@@ -387,14 +414,14 @@ C<\%params>.
 
 Examples:
 
- CTX->server_config->{context_info}{deployed_under_static} = undef;
+ CTX->assign_static_deploy_url( undef );
  $url = OpenInteract2::URL->create_static( '/static/site.rdf' );
  # $url = '/static/site.rdf'
  
  $url = OpenInteract2::URL->create_static( '/reports/q1-2003-01.pdf' );
  # $url = '/reports/q1-2003-01.pdf'
  
- CTX->server_config->{context_info}{deployed_under_static} = '/STAT';
+ CTX->assign_static_deploy_url( '/STAT' );
  $url = OpenInteract2::URL->create_static( '/static/site.rdf' );
  # $url = '/STAT/static/site.rdf'
  
@@ -469,7 +496,7 @@ L<OpenInteract2::Context|OpenInteract2::Context>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 intes.net. All rights reserved.
+Copyright (c) 2002-2004 intes.net. All rights reserved.
 
 =head1 AUTHORS
 

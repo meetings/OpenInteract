@@ -1,17 +1,19 @@
 package OpenInteract2::Config::Base;
 
-# $Id: Base.pm,v 1.8 2003/09/05 02:22:34 lachoy Exp $
+# $Id: Base.pm,v 1.10 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
-use base qw( Exporter Class::Accessor );
+use base qw( Exporter Class::Accessor::Fast );
 use File::Basename           qw( dirname );
-use File::Spec               qw();
+use File::Spec::Functions    qw( :ALL );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log BASE_CONF_DIR BASE_CONF_FILE );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Base::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Base::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @CONFIG_FIELDS = qw( website_dir temp_lib_dir package_dir
                         config_type config_class config_dir config_file );
@@ -24,6 +26,7 @@ OpenInteract2::Config::Base->mk_accessors( @FIELDS );
 sub new {
     my ( $class, $params ) = @_;
     my $self = bless( {}, $class );
+
     my $filename = $params->{filename};
     my $website_dir = $params->{website_dir};
     if ( ! $filename and $website_dir ) {
@@ -35,16 +38,20 @@ sub new {
     # that everything else is the website dir
 
     elsif ( $filename and ! $website_dir ) {
-        $filename = File::Spec->rel2abs( $filename );
-        my @dirs = File::Spec->splitdir( dirname( $filename ) );
-        if ( $dirs[-1] eq 'conf' ) {
+        $filename = rel2abs( $filename );
+        my @dirs = splitdir( dirname( $filename ) );
+        if ( $dirs[-1] eq BASE_CONF_DIR ) {
             pop @dirs;
-            $self->website_dir( File::Spec->catdir( @dirs ) );
+            $self->website_dir( catdir( @dirs ) );
         }
     }
+
     if ( $filename and -f $filename ) {
         $params = $self->read_config( $filename );
         $self->filename( $filename );
+    }
+    unless ( $self->config_dir ) {
+        $self->config_dir( BASE_CONF_DIR );
     }
     return $self->initialize( $params );
 }
@@ -52,7 +59,7 @@ sub new {
 
 sub read_config {
     my ( $class, $filename ) = @_;
-    my $log = get_logger( LOG_CONFIG );
+    $log ||= get_logger( LOG_CONFIG );
     unless ( -f $filename ) {
         $log->error( "Config file [$filename] does not exist" );
         oi_error "Cannot open [$filename] for base configuration: ",
@@ -85,8 +92,7 @@ sub create_website_filename {
         oi_error "Must pass in website directory to create base ",
                  "config filename";
     }
-    return $class->create_filename(
-                   File::Spec->catdir( $dir, BASE_CONF_DIR ) );
+    return $class->create_filename( catdir( $dir, BASE_CONF_DIR ) );
 }
 
 sub create_filename {
@@ -94,7 +100,7 @@ sub create_filename {
     unless ( $dir ) {
         oi_error "Must pass in directory to create base config filename";
     }
-    return File::Spec->catfile( $dir, BASE_CONF_FILE );
+    return catfile( $dir, BASE_CONF_FILE );
 }
 
 
@@ -135,9 +141,9 @@ sub get_server_config_file {
     }
     $self->clean_dir( 'website_dir' );
     $self->clean_dir( 'config_dir' );
-    return File::Spec->catfile( $self->website_dir,
-                                $self->config_dir,
-                                $self->config_file );
+    return catfile( $self->website_dir,
+                    $self->config_dir,
+                    $self->config_file );
 }
 
 
@@ -352,7 +358,7 @@ L<Class::Accessor|Class::Accessor>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

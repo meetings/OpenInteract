@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: exception.t,v 1.6 2003/06/26 02:21:21 lachoy Exp $
+# $Id: exception.t,v 1.7 2004/02/10 06:08:27 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -266,7 +266,7 @@ BEGIN {
 
     is( ref( $p->trace() ), 'Devel::StackTrace',
         'Trace set' );
-    is( "$p", $p_message,
+    is( "$p", "One or more parameters were not valid: username: $p_user_fail",
         '$@ stringified' );
 }
 
@@ -293,6 +293,6 @@ BEGIN {
     is( $failures->{username}, $p_user_fail,
         'Failure for parameter username set' );
 
-    is( "$p", $p_message,
+    is( "$p", "One or more parameters were not valid: username: $p_user_fail",
         '$@ stringified' );
 }

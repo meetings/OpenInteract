@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: url.t,v 1.9 2003/04/30 03:58:05 lachoy Exp $
+# $Id: url.t,v 1.10 2003/11/17 05:05:42 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -54,7 +54,9 @@ my $UCL = 'OpenInteract2::URL';
         'Action name from relative URL path (relative)' );
     is( $task, 'bar',
         'Task from relative URL path (relative)' );
+}
 
+{
     my ( $action_name, $task );
     ( $action_name, $task ) = $UCL->parse_absolute( '/foo/bar/baz/' );
     is( $action_name, 'foo',

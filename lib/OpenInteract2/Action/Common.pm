@@ -1,6 +1,6 @@
 package OpenInteract2::Action::Common;
 
-# $Id: Common.pm,v 1.13 2003/09/05 02:21:36 lachoy Exp $
+# $Id: Common.pm,v 1.15 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action );
@@ -9,7 +9,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_security_error );
 
-$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 $OpenInteract2::Action::Common::AUTOLOAD  = '';
 
 my %COMMON_TASKS = (
@@ -30,7 +32,7 @@ sub AUTOLOAD {
     my ( $self ) = @_;
     my $request = $OpenInteract2::Action::Common::AUTOLOAD;
     $request =~ s/.*://;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     if ( my $msg = $COMMON_TASKS{ $request } ) {
         return sprintf( $msg, $self->name );
@@ -69,7 +71,7 @@ sub _common_error_template {
 sub _common_set_defaults {
     my ( $self, $defaults ) = @_;
     return unless ( ref $defaults eq 'HASH' );
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     my $tag = join( ' -> ', $self->name, $self->task );
     while ( my ( $key, $value ) = each %{ $defaults } ) {
         if ( $self->param( $key ) ) {
@@ -92,7 +94,7 @@ sub _common_set_defaults {
 sub _common_check_object_class {
     my ( $self ) = @_;
     my $object_type = $self->param( 'c_object_type' );
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     unless ( $object_type ) {
         $log->warn( "No object type specified" );
         my $msg = join( '', "Object type is undefined. How can we know ",
@@ -117,7 +119,7 @@ sub _common_check_object_class {
 
 sub _common_check_id_field {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $object_class = $self->param( 'c_object_class' );
     my $id_field = eval { $object_class->id_field };
@@ -136,7 +138,7 @@ sub _common_check_id_field {
 
 sub _common_check_id {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     # First see if the object itself has been defined; if so we don't
     # care if the ID has been set
@@ -173,7 +175,7 @@ sub _common_check_id {
 
 sub _common_check_template_specified {
     my ( $self, @template_params ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $num_errors = 0;
     for ( @template_params ) {
@@ -192,7 +194,7 @@ sub _common_check_template_specified {
 
 sub _common_check_param {
     my ( $self, @params ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $num_errors = 0;
     for ( @params ) {
@@ -214,7 +216,7 @@ sub _common_assign_properties {
     my ( $self, $object, $fields ) = @_;
     my $request = CTX->request;
 
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     my @standard = ( ref $fields->{standard} eq 'ARRAY' )
                      ? @{ $fields->{standard} } : ( $fields->{standard} );
     foreach my $field ( @standard ) {
@@ -277,7 +279,7 @@ sub _common_assign_properties {
 
 sub _common_fetch_object {
     my ( $self, $id ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $object_class = $self->param( 'c_object_class' );
     $id ||= $self->param( 'c_id' );
@@ -587,7 +589,7 @@ L<OpenInteract2::Action::CommonUpdate|OpenInteract2::Action::CommonUpdate>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

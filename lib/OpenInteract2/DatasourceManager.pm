@@ -1,6 +1,6 @@
 package OpenInteract2::DatasourceManager;
 
-# $Id: DatasourceManager.pm,v 1.10 2003/08/22 03:02:46 lachoy Exp $
+# $Id: DatasourceManager.pm,v 1.14 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::DatasourceManager::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::DatasourceManager::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 # TODO: Right now these are all class methods, but we may change them
 # to object methods in the future...
@@ -25,14 +27,14 @@ my %DS_MANAGER = ();
 
 sub datasource {
     my ( $class, $ds_name ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     unless ( $ds_name ) {
         oi_error "Cannot get a datasource without a name";
     }
 
     if ( $log->is_debug ) {
         my @call_info = caller(2);
-        $log->debug( "Trying to find datasource [$ds_name] from ",
+        $log->debug( "Trying to find datasource '$ds_name' from ",
                       join( ' - ', $call_info[0], $call_info[3], $call_info[2] ) );
     }
 
@@ -42,15 +44,18 @@ sub datasource {
     if ( $connection ) {
         my $rv = eval { $connection->ping };
         if ( $@ or ! $rv ) {
-            $log->error( "Cannot ping connection [$ds_name]: $@/$rv" );
-            oi_error "Datasource connection [$ds_name] not pingable";
+            $log->warn( "Cannot ping connection '$ds_name': [Error: $@] ",
+                        "[Return: $rv]; will try to reopen..." );
         }
-        $log->debug( "Returning existing connection [$ds_name]" );
-        return $connection;
+        else {
+            $log->debug( "Returning existing connection '$ds_name'" );
+            return $connection;
+        }
     }
-
-    $log->is_info &&
-        $log->info( "Datasource [$ds_name] not connected yet" );
+    else {
+        $log->is_info &&
+            $log->info( "Datasource '$ds_name' not connected yet" );
+    }
 
     # Find out what type of datasource this is from the configuration
 
@@ -58,28 +63,14 @@ sub datasource {
 
     my $ds_type = $ds_info->{type};
     unless ( $ds_type ) {
-        $log->error( "No type defined in config for [$ds_name]" );
-        oi_error "Datasource [$ds_name] must have 'type' defined";
+        $log->error( "No type defined in config for '$ds_name'" );
+        oi_error "Datasource '$ds_name' must have 'type' defined";
     }
 
-    # Once the type is found, map it to a driver and see if the driver
-    # has been loaded
+    # Once the type is found, map it to a manager class and connect,
+    # saving the connection for later use
 
     my $mgr_class = $class->get_manager_class({ type => $ds_type });
-    unless ( $mgr_class ) {
-        my $map_class = CTX->server_config->{datasource_type}{ $ds_type };
-        unless ( $map_class ) {
-            $log->error( "Unknown datasource type [$ds_type]" );
-            oi_error "Datasource type [$ds_type] does not exist in ",
-                     "the server config";
-        }
-
-        # Exceptions in instantiating the datasource manager will
-        # bubble up from here -- that's ok
-
-        $mgr_class = $class->set_manager_class( $ds_type, $map_class );
-    }
-
     my $handle = $mgr_class->connect( $ds_name, $ds_info );
     $class->set_connection_info( $handle, $mgr_class, $ds_info );
     return $class->get_connection( $ds_name );
@@ -88,15 +79,15 @@ sub datasource {
 
 sub get_datasource_info {
     my ( $class, $ds_name ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     unless ( $ds_name ) {
         $log->error( "Cannot return datasource information without a name" );
         oi_error "No datasource name specified for lookup";
     }
-    my $ds_info = CTX->server_config->{datasource}{ $ds_name };
+    my $ds_info = CTX->lookup_datasource_config( $ds_name );
     unless ( ref $ds_info eq 'HASH' ) {
-        $log->error( "Config for [$ds_name] does not exist" );
-        oi_error "No information defined for datasource [$ds_name]";
+        $log->error( "Config for '$ds_name' does not exist" );
+        oi_error "No information defined for datasource '$ds_name'";
     }
     $ds_info->{name} ||= $ds_name;
     return $ds_info;
@@ -105,7 +96,7 @@ sub get_datasource_info {
 sub disconnect {
     my ( $class, $ds_name ) = @_;
     unless ( $DS{ lc $ds_name } ) {
-        oi_error "No datasource by name [$ds_name] available";
+        oi_error "No datasource by name '$ds_name' available";
     }
     my $mgr_class = $class->get_manager_class({ name => $ds_name });
     my $rv = $mgr_class->disconnect( $DS{ lc $ds_name }->{connection} );
@@ -116,7 +107,7 @@ sub disconnect {
 
 sub shutdown {
     my ( $class ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     for ( keys %DS ) {
         $log->is_info &&
             $log->info( "Disconnecting datasource $_ from manager shutdown" );
@@ -158,7 +149,7 @@ sub get_manager_class {
     my ( $class, $params ) = @_;
     if ( $params->{name} ) {
         unless ( $DS{ lc $params->{name} } ) {
-            oi_error "No datasource available by [$params->{name}]";
+            oi_error "No datasource available by name '$params->{name}'";
         }
         my $ds_info = $class->get_datasource_info( $params->{name} );
         $params->{type} = $ds_info->{type};
@@ -168,11 +159,10 @@ sub get_manager_class {
             return $DS_MANAGER{ $params->{type} };
         }
 
-        my $server_config = CTX->server_config;
-        my $type_info     = $server_config->{datasource_type}{ $params->{type} };
-        my $mgr_class     = $type_info->{connection_manager};
+        my $type_info = CTX->lookup_datasource_type_config( $params->{type} );
+        my $mgr_class = $type_info->{connection_manager};
         unless ( $mgr_class ) {
-            oi_error "No datasource available by [$params->{type}]";
+            oi_error "Cannot create connection manager of type '$params->{type}'";
         }
         return $class->set_manager_class( $params->{type}, $mgr_class );
     }
@@ -184,7 +174,7 @@ sub get_manager_class {
 
 sub set_manager_class {
     my ( $class, $ds_type, $mgr_class ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     unless ( $ds_type ) {
         my $msg = "Cannot set manager class: no type specified";
         $log->error( $msg );
@@ -292,7 +282,7 @@ L<OpenInteract2::Datasource::LDAP|OpenInteract2::Datasource::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

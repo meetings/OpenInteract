@@ -76,22 +76,6 @@ Open up C</PATH/TO/WEBSITE/conf/server.ini> in your favorite text
 editor and make the following changes, replacing your actual website
 directory for C</PATH/TO/WEBSITE> throughout:
 
-B<Set request/response interfaces to LWP>
-
-Change:
-
-  [context_info]
-  request               = cgi
-  response              = cgi
-
-
-to:
-
-  [context_info]
-  request               = lwp
-  response              = lwp
-
-
 B<Set email information>
 
 Change:
@@ -292,7 +276,7 @@ L<http://theoryx5.uwinnipeg.ca/ppms/DBD-SQLite.ppd>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

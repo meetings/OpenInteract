@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: context.t,v 1.26 2003/09/03 19:11:00 lachoy Exp $
+# $Id: context.t,v 1.36 2004/05/22 04:22:47 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -15,7 +15,7 @@ if ( $@ ) {
     exit;
 }
 
-plan tests => 142;
+plan tests => 153;
 
 require_ok( 'OpenInteract2::Context' );
 
@@ -29,9 +29,8 @@ ok( ! $@, "Created bare context" );
 # ALIASES
 
 my %class_lookups = (
-    repository => 'OpenInteract2::Repository',
-    package    => 'OpenInteract2::Package',
-    security_object => 'OpenInteract2::Security',
+    repository      => 'OpenInteract2::Repository',
+    package         => 'OpenInteract2::Package',
     template        => 'OpenInteract2::SiteTemplate',
 );
 
@@ -65,7 +64,7 @@ is( ref $repository, 'OpenInteract2::Repository',
 is( $repository->website_dir, $website_dir,
     'Website directory set in repository' );
 my $packages = $repository->fetch_all_packages;
-is( scalar @{ $packages }, 14,
+is( scalar @{ $packages }, 16,
     'Number of packages fetched by repository' );
 
 my %package_versions = get_package_versions();
@@ -80,7 +79,7 @@ while ( my ( $pkg_name, $pkg_ver ) = each %package_versions ) {
 my $action_table = $ctx->action_table;
 is( ref $action_table, 'HASH',
     'Action table is correct data structure' );
-is( scalar keys %{ $action_table }, 34,
+is( scalar keys %{ $action_table }, 43,
     'Correct number of actions in table' );
 
 my $news_info = $ctx->lookup_action_info( 'news' );
@@ -156,7 +155,7 @@ is( $action_nf->name, 'page',
 my $spops_config = $ctx->spops_config;
 is( ref $spops_config, 'HASH',
     'SPOPS config is correct data structure' );
-is( scalar keys %{ $spops_config }, 13,
+is( scalar keys %{ $spops_config }, 18,
     'Correct number of SPOPS configs in structure' );
 
 is( $ctx->lookup_object( 'error_object' ), 'OpenInteract2::ErrorObject',
@@ -200,51 +199,51 @@ is( $ctx->lookup_default_ldap_datasource_name, 'ldap',
 
 # Default objects
 
-my $all_defaults = $ctx->default_object_id;
+my $all_defaults = $ctx->lookup_default_object_id;
 is( ref $all_defaults, 'HASH',
     'All defaults in right format' );
 is( scalar keys %{ $all_defaults }, 5,
     'Right number of defaults in all' );
-is( $ctx->default_object_id( 'superuser' ), 1,
+is( $ctx->lookup_default_object_id( 'superuser' ), 1,
     '...correct default object ID for superuser' );
-is( $ctx->default_object_id( 'supergroup' ), 1,
+is( $ctx->lookup_default_object_id( 'supergroup' ), 1,
     '...correct default object ID for supergroup' );
-is( $ctx->default_object_id( 'theme' ), 1,
+is( $ctx->lookup_default_object_id( 'theme' ), 1,
     '...correct default object ID for theme' );
-is( $ctx->default_object_id( 'public_group' ), 2,
+is( $ctx->lookup_default_object_id( 'public_group' ), 2,
     '...correct default object ID for public group' );
-is( $ctx->default_object_id( 'site_admin_group' ), 3,
+is( $ctx->lookup_default_object_id( 'site_admin_group' ), 3,
     '...correct default object ID for site admin group' );
 
 # Controller data
 
-my $tt_controller_info = $ctx->lookup_controller( 'tt-template' );
+my $tt_controller_info = $ctx->lookup_controller_config( 'tt-template' );
 is( ref $tt_controller_info, 'HASH',
     'TT controller info available and right type' );
 is( $tt_controller_info->{content_generator}, 'TT',
     '... and has right content generator' );
 is( $tt_controller_info->{class}, 'OpenInteract2::Controller::MainTemplate',
     '... and has right class' );
-my $html_controller_info = $ctx->lookup_controller( 'html-template' );
+my $html_controller_info = $ctx->lookup_controller_config( 'html-template' );
 is( ref $html_controller_info, 'HASH',
     'HTML-Template controller info available and right type' );
-is( $html_controller_info->{content_generator}, 'HTMLT',
+is( $html_controller_info->{content_generator}, 'HTMLTemplate',
     '... and has right content generator' );
 is( $html_controller_info->{class}, 'OpenInteract2::Controller::MainTemplate',
     '... and has right class' );
-my $text_controller_info = $ctx->lookup_controller( 'text-template' );
+my $text_controller_info = $ctx->lookup_controller_config( 'text-template' );
 is( ref $text_controller_info, 'HASH',
     'Text-Template controller info available and right type' );
-is( $text_controller_info->{content_generator}, 'TextTmpl',
+is( $text_controller_info->{content_generator}, 'TextTemplate',
     '... and has right content generator' );
 is( $text_controller_info->{class}, 'OpenInteract2::Controller::MainTemplate',
     '... and has right class' );
-my $raw_controller_info = $ctx->lookup_controller( 'raw' );
+my $raw_controller_info = $ctx->lookup_controller_config( 'raw' );
 is( ref $raw_controller_info, 'HASH',
     'Raw controller info available and right type' );
 is( $raw_controller_info->{class}, 'OpenInteract2::Controller::Raw',
     '... and has right class' );
-my $all_controller_info = $ctx->lookup_controller;
+my $all_controller_info = $ctx->lookup_controller_config;
 is( ref $all_controller_info, 'HASH',
     'All controller info available and right type' );
 is( scalar keys %{ $all_controller_info }, 4,
@@ -252,25 +251,41 @@ is( scalar keys %{ $all_controller_info }, 4,
 
 # Content generator data
 
-my $tt_generator_info = $ctx->lookup_content_generator( 'TT' );
+my $tt_generator_info = $ctx->lookup_content_generator_config( 'TT' );
 is( ref $tt_generator_info, 'HASH',
     'TT content generator available and right type' );
+is( keys %{ $tt_generator_info }, 8,
+    'TT content generator with right number of keys' );
 is( $tt_generator_info->{class}, 'OpenInteract2::ContentGenerator::TT2Process',
-    '...with correct class' );
-is( $tt_generator_info->{method}, 'process',
-    '...with correct method' );
-my $all_generator_info = $ctx->lookup_content_generator;
+    '...with class' );
+is( $tt_generator_info->{template_ext}, 'tmpl',
+    '...with template extension' );
+is( $tt_generator_info->{cache_size}, 100,
+    '...with cache size' );
+is( $tt_generator_info->{cache_expire}, 900,
+    '...with cache expiration' );
+is( $tt_generator_info->{compile_cleanup}, 1,
+    '...with compile cleanup instruction' );
+is( $tt_generator_info->{compile_ext}, '.ttc',
+    '...with compile extension' );
+is( $tt_generator_info->{custom_init_class}, '',
+    '...with empty custom init class' );
+is( $tt_generator_info->{custom_variable_class}, '',
+    '...with empty custom variable class' );
+my $all_generator_info = $ctx->lookup_content_generator_config;
 is( ref $all_generator_info, 'HASH',
     'All generator info available and right type' );
-is( scalar keys %{ $all_generator_info }, 2,
+is( scalar keys %{ $all_generator_info }, 1,
     '...and right number of them' );
 
 # Content generator object
 
 my $tt_generator = $ctx->content_generator( 'TT' );
-isa_ok( $tt_generator, 'OpenInteract2::ContentGenerator',
+isa_ok( $tt_generator, 'OpenInteract2::ContentGenerator::TT2Process',
         'content generator gets object of correct class' );
-is( $tt_generator->{name}, 'TT',
+isa_ok( $tt_generator, 'OpenInteract2::ContentGenerator',
+        '...and correct parentage' );
+is( $tt_generator->name, 'TT',
     '...and correct type' );
 
 # call up unknown item...
@@ -298,10 +313,12 @@ my %dirs = (
    cache_tt => [ 'cache', 'tt' ],
    config   => [ 'conf' ],
    data     => [ 'data' ],
+   msg      => [ 'msg' ],
    mail     => [ 'mail' ],
    overflow => [ 'overflow' ],
    upload   => [ 'uploads' ],
    template => [ 'template' ],
+   package  => [ 'pkg' ],
 );
 
 is( keys %{ $ctx->server_config->{dir} }, keys( %dirs ) + 1,

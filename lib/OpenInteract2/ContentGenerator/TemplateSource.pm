@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::TemplateSource;
 
-# $Id: TemplateSource.pm,v 1.7 2003/08/27 15:50:18 lachoy Exp $
+# $Id: TemplateSource.pm,v 1.11 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,11 +8,13 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub identify {
     my ( $class, $template_source ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
 
     unless ( ref $template_source eq 'HASH' ) {
         $log->error( "Template source not hashref: ", ref $template_source );
@@ -20,6 +22,18 @@ sub identify {
     }
 
     my ( $source_type, $source, $name );
+
+    if ( my $key = $template_source->{message_key} ) {
+        my $lh = CTX->request->language_handle;
+        my $template_name = $lh->maketext( $key );
+        unless ( $template_name ) {
+            oi_error "No template found for message key '$key'";
+        }
+        $template_source->{name} = $template_name;
+    }
+
+    # don't make this an elsif since the previous condition sets a
+    # template name
 
     if ( $template_source->{name} ) {
         $source_type = 'NAME';
@@ -54,19 +68,11 @@ sub identify {
             $log->debug( "Source template from template object [$name]" );
     }
 
-    # TODO: Using 'db' will be deprecated soon...
-
     elsif ( $template_source->{db} ) {
-        unless ( $template_source->{package} ) {
-            oi_error  "Must give 'package' along with 'db' when processing ",
-                      "template. [Given: $template_source->{db}]";
-        }
-        $source_type = 'NAME';
-        $name        = join( '::', $template_source->{package},
-                                   $template_source->{db} );
-        $source      = $name;
-        $log->is_debug &&
-            $log->debug( "Source template from db/pkg [$name]" );
+        oi_error "Please declare your template using the 'name = pkg::name' ",
+                 "syntax rather than the 'db = name, package = pkg' one. ",
+                 "(Given db: $template_source->{db}; ",
+                 "$template_source->{package}";
     }
 
     # Uh oh...
@@ -106,27 +112,41 @@ OpenInteract2::ContentGenerator::TemplateSource - Common routines for loading co
 
  # Sample from Text::Template content generator
  
- sub process {
-     my ( $class, $template_config, $template_vars, $template_source ) = @_;
-     my $SOURCE_CLASS = 'OpenInteract2::ContentGenerator::TemplateSource';
-     my ( $source_type, $source ) = SOURCE_CLASS->identify( $template_source );
-     if ( $source_type eq 'NAME' ) {
-         my ( $template, $filename, $modified ) =
-                         SOURCE_CLASS->load_source( $source );
-         $source_type = 'STRING';
-         $source      = $template;
-     }
-     $template_config->{TYPE}   = $source_type;
-     $template_config->{SOURCE} = $source;
-     my $template = Text::Template->new( %{ $template_config } );
-     unless ( $template ) {
-         oi_error "Failed to create template parsing object: ",
+ sub generate {
+    my ( $self, $template_config, $template_vars, $template_source ) = @_;
+    $log ||= get_logger( LOG_TEMPLATE );
+    my ( $source_type, $source ) =
+        OpenInteract2::ContentGenerator::TemplateSource->identify( $template_source );
+    if ( $source_type eq 'NAME' ) {
+        my ( $template, $filename, $modified ) =
+            OpenInteract2::ContentGenerator::TemplateSource->load_source( $source );
+        $source_type = 'STRING';
+        $source      = $template;
+        $log->is_debug &&
+            $log->debug( "Loading from name $source" );
+    }
+    else {
+        $log->is_debug &&
+            $Log->Debug( "Loading from source $source_type" );
+    }
+    $template_config->{TYPE}   = $source_type;
+    $template_config->{SOURCE} = ( ref $source eq 'SCALAR' )
+                                   ? $$source : $source;
+    my $template = Text::Template->new( %{ $template_config } );
+    unless ( $template ) {
+        my $msg = "Failed to create template parsing object: " .
                   $Text::Template::ERROR;
-     }
-     my $content = $template->fill_in( HASH => $template_vars );
-     unless ( $content ) {
-         oi_error "Failed to fill in template: $Text::Template::ERROR";
-     }
+        $log->error( $msg );
+        oi_error $msg;
+    }
+    my $content = $template->fill_in( HASH => $template_vars );
+    unless ( $content ) {
+        my $msg = "Failed to fill in template: $Text::Template::ERROR";
+        $log->error( $msg );
+        oi_error $msg ;
+    }
+    return $content;
+ }
 
 =head1 CLASS METHODS
 
@@ -134,13 +154,25 @@ B<identify( \%template_source )>
 
 Checks C<\%template_source> for template information and returns a
 source type and source. Here are the types of information we check for
-in C<\%template_source> and what's returned:
+in C<\%template_source> and what is returned:
 
 =over 4
 
 =item *
 
-Key B<name>: Set source type to 'NAME' and source to the value of the C<name> key.
+Key B<name>: Set source type to 'NAME' and source to the value of the
+C<name> key. (This is the most common condition.)
+
+=item *
+
+Key B<message_key>: If we can lookup a template name from the language
+handle retured by the L<OpenInteract2::Request}OpenInteract2::Request>
+object set source type to 'NAME' and source to the value of the
+message key found from the language handle.
+
+Throws an exception if the language handle does not return a value for
+the message key lookup (that is, you do not have the key defined in
+any of your message files).
 
 =item *
 
@@ -163,9 +195,10 @@ C<object>.
 
 =back
 
-If none of these are found an exception is thrown.
+If none of these are found an exception is thrown. (We throw a
+different exception if you use the ancient 'db'/'package' syntax.)
 
-Additionally, if we're able to pull a name from the template source
+Additionally, if we are able to pull a name from the template source
 and the current L<OpenInteract2::Controller|OpenInteract2::Controller>
 object can handle it, we call C<add_template_used()> on it, passing it
 the template name.
@@ -186,7 +219,7 @@ modified time (which is a L<DateTime|DateTime> object).
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

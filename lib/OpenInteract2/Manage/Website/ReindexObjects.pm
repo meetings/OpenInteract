@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ReindexObjects;
 
-# $Id: ReindexObjects.pm,v 1.2 2003/07/17 03:36:28 lachoy Exp $
+# $Id: ReindexObjects.pm,v 1.3 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -9,7 +9,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::Website::ReindexObjects::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ReindexObjects::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'reindex_objects';
@@ -199,7 +199,7 @@ Success/failure message.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003 Chris Winters. All rights reserved.
+Copyright (C) 2003-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

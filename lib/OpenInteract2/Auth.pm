@@ -1,21 +1,23 @@
 package OpenInteract2::Auth;
 
-# $Id: Auth.pm,v 1.15 2003/09/05 13:30:29 lachoy Exp $
+# $Id: Auth.pm,v 1.18 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( user groups );
 __PACKAGE__->mk_accessors( @FIELDS );
 
 my ( $AUTH_USER_CLASS, $AUTH_GROUP_CLASS, $AUTH_ADMIN_CLASS );
 my ( $USE_CUSTOM, $CUSTOM_CLASS, $CUSTOM_METHOD, $CUSTOM_FAIL_METHOD );
+
+my ( $log );
 
 sub new {
     my ( $class, $params ) = @_;
@@ -58,7 +60,7 @@ sub is_logged_in {
 
 sub login {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     my $request = CTX->request;
 
     my ( $is_logged_in );
@@ -76,15 +78,21 @@ sub login {
     # TODO: Throw exception here?
 
     unless ( $self->user ) {
-        $log->error( "No user returned from '$AUTH_USER_CLASS'" );
+        $log->error( "No user returned from '$AUTH_USER_CLASS'; this is a ",
+                     "serious error with the authentication class since ",
+                     "it should always return a user object" );
         return;
     }
     $request->auth_user( $self->user );
     $request->auth_is_logged_in( $self->is_logged_in );
 
-    # Now that we have the user created we can create the theme
+    # Now that we have the user created we can create the theme...
 
     $request->create_theme;
+
+    # ...and load the languages
+
+    $request->find_language;
 
     unless ( ref $self->groups eq 'ARRAY' ) {
         $AUTH_GROUP_CLASS->get_groups( $self );
@@ -105,7 +113,7 @@ sub _check_login_required {
     my ( $self ) = @_;
     my $login_info = CTX->lookup_login_config;
     return unless ( $login_info->{required} and ! $self->is_logged_in );
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     $log->is_info &&
         $log->info( "Logins are required and user is not logged in; ",
                     "checking to see if URL is okay for display" );
@@ -147,7 +155,7 @@ sub _check_login_required {
 
 sub run_custom_handler {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     unless ( $USE_CUSTOM ) {
         $USE_CUSTOM = $self->_include_custom_class;
     }
@@ -198,7 +206,7 @@ sub _include_impl_classes {
 
 sub _include_custom_class {
     my ( $class ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     my $login_config = CTX->lookup_login_config;
     $CUSTOM_CLASS = $login_config->{custom_handler};
     unless ( $CUSTOM_CLASS ) {
@@ -373,7 +381,7 @@ L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

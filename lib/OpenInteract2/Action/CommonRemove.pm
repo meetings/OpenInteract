@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonRemove;
 
-# $Id: CommonRemove.pm,v 1.10 2003/08/20 13:32:22 lachoy Exp $
+# $Id: CommonRemove.pm,v 1.13 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -9,10 +9,12 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
 
+my ( $log );
+
 sub remove {
     my ( $self ) = @_;
     $self->_remove_init_param;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $fail_task = $self->param( 'c_remove_fail_task' );
     my $object = eval { $self->_common_fetch_object };
@@ -93,9 +95,14 @@ OpenInteract2::Action::CommonRemove - Task to remove an object
  
  use base qw( OpenInteract2::Action::CommonRemove );
  
- # In your action configuration:
+ # Relevant configuration entries in your action.ini
  
  [myaction]
+ ...
+ c_object_type                = myobject
+ c_remove_fail_task           = display
+ c_remove_security_fail_task  = display
+ c_remove_task                = /index.html
 
 =head1 SUPPORTED TASKS
 
@@ -179,7 +186,7 @@ cases except if the requested object is not found.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

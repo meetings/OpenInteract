@@ -1,6 +1,6 @@
 package OpenInteract2::File;
 
-# $Id: File.pm,v 1.7 2003/08/26 13:29:43 lachoy Exp $
+# $Id: File.pm,v 1.11 2004/05/22 15:34:47 lachoy Exp $
 
 use strict;
 use File::Path;
@@ -8,7 +8,7 @@ use File::Spec;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 # If $filename exists in the website, return the full path; otherwise
 # undef
@@ -52,8 +52,7 @@ sub save_file {
 
 sub create_filename {
     my ( $class, $filename ) = @_;
-    my $server_config = CTX->server_config;
-    my $website_dir = $server_config->{dir}{website};
+    my $website_dir = CTX->lookup_directory( 'website' );
 
     my ( $vol, $dir, $file ) = File::Spec->splitpath( $filename );
 
@@ -76,11 +75,11 @@ sub create_filename {
             $dir = File::Spec->catdir( $website_dir, @all_dirs );
         }
         else {
-            $dir = File::Spec->catdir( $server_config->{dir}{upload}, @all_dirs );
+            $dir = File::Spec->catdir( CTX->lookup_directory( 'upload' ), @all_dirs );
         }
     }
     else {
-        $dir = $server_config->{dir}{upload};
+        $dir = CTX->lookup_directory( 'upload' );
     }
     return File::Spec->catpath( $vol, $dir, $file );
 }
@@ -92,30 +91,32 @@ sub create_filename {
 # File::MMagic can be wrong sometimes, so we preempt it
 
 my %SIMPLE_TYPES = (
-  pdf  => 'application/pdf',
-  xls  => 'application/vnd.ms-excel',
-  ppt  => 'application/vnd.ms-powerpoint',
-  zip  => 'application/zip',
-  gz   => 'application/gzip',
-  mp3  => 'audio/mpeg',
-  midi => 'audio/midi',
-  wav  => 'audio/x-wav',
+  avi  => 'video/x-msvideo',
   bmp  => 'image/bmp',
-  tif  => 'image/tif',
-  tiff => 'image/tif',
-  jpg  => 'image/jpeg',
-  jpeg => 'image/jpeg',
+  css  => 'text/css',
   gif  => 'image/gif',
-  png  => 'image/png',
+  gz   => 'application/gzip',
   html => 'text/html',
   htm  => 'text/html',
-  rtf  => 'text/rtf',
-  txt  => 'text/plain',
-  xml  => 'text/xml',
+  jpg  => 'image/jpeg',
+  jpeg => 'image/jpeg',
+  js   => 'application/javascript',
+  midi => 'audio/midi',
+  mp3  => 'audio/mpeg',
   mpeg => 'video/mpeg',
   mpg  => 'video/mpeg',
   mov  => 'video/quicktime',
-  avi  => 'video/x-msvideo',
+  pdf  => 'application/pdf',
+  png  => 'image/png',
+  ppt  => 'application/vnd.ms-powerpoint',
+  rtf  => 'text/rtf',
+  tif  => 'image/tif',
+  tiff => 'image/tif',
+  txt  => 'text/plain',
+  xls  => 'application/vnd.ms-excel',
+  xml  => 'text/xml',
+  wav  => 'audio/x-wav',
+  zip  => 'application/zip',
 );
 
 my ( $MAGIC );
@@ -307,7 +308,7 @@ L<File::MMagic|File::MMagic>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

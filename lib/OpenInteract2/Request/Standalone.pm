@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Standalone;
 
-# $Id: Standalone.pm,v 1.7 2003/08/27 15:03:55 lachoy Exp $
+# $Id: Standalone.pm,v 1.10 2004/02/18 05:25:28 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -12,13 +12,15 @@ use OpenInteract2::Upload;
 use OpenInteract2::URL;
 use Sys::Hostname;
 
-$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my ( $CURRENT );
 
 sub init {
     my ( $self, $props ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     $log->is_info &&
         $log->info( "Creating Standalone request" );
 
@@ -36,16 +38,25 @@ sub init {
     $self->referer( $props->{referer} );
     $self->user_agent( $props->{user_agent} );
 
+    my @cookie_pieces = ();
     foreach my $cookie_info ( @{ $props->{cookie} } ) {
         if ( ref $cookie_info ) {
             $self->cookie( $cookie_info->name, $cookie_info->value );
         }
         else {
-            $self->_parse_cookies( $cookie_info );
+            push @cookie_pieces, $cookie_info;
         }
     }
+    if ( scalar @cookie_pieces ) {
+        $self->cookie_header( join( '; ', @cookie_pieces ) );
+    }
 
-    $self->create_session;
+    if ( $props->{accept_language} ) {
+        $self->language_header( $props->{accept_language} );
+    }
+    elsif ( $props->{languages} ) {
+        $self->{_user_language} = $props->{languages};
+    }
 
     $self->server_name( $props->{server_name} );
     $self->remote_host( $props->{remote_host} );
@@ -156,6 +167,7 @@ OpenInteract2::Request::Standalone - Manually create a request object
                     OpenInteract2::Cookie->new( ... ), ],
    upload      => { sendfile   => OpenInteract2::Upload->new( ... ),
                     screenshot => OpenInteract2::Upload->new( ... ) },
+   languages   => [ 'en-UK', 'en-US', 'de', 'fr' ],
  );
  
  # ...and create a new object with it
@@ -170,6 +182,7 @@ OpenInteract2::Request::Standalone - Manually create a request object
  $req->param( eyes => 'two' );
  $req->param( soda => [ 'rc', 'mr. pibb' ] );
  $req->cookie( lastSeen => '1051797475' );
+ $req->language_header( 'en, de;q=.96, fr;q=.92' );
 
 =head1 DESCRIPTION
 
@@ -275,7 +288,7 @@ L<OpenInteract2::Response::Standalone|<OpenInteract2::Response::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

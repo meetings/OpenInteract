@@ -1,30 +1,32 @@
 package OpenInteract2::Auth::AdminCheck;
 
-# $Id: AdminCheck.pm,v 1.9 2003/09/05 13:30:29 lachoy Exp $
+# $Id: AdminCheck.pm,v 1.12 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub is_admin {
     my ( $class, $auth ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     unless ( $auth->is_logged_in ) {
         $log->is_debug &&
             $log->debug( "User not logged in: NOT admin" );
         return $auth->is_admin( 'no' );
     }
-    if ( $auth->user->id eq CTX->default_object_id( 'superuser' ) ) {
+    if ( $auth->user->id eq CTX->lookup_default_object_id( 'superuser' ) ) {
         $log->is_debug &&
             $log->debug( "User is superuser: IS admin" );
         return $auth->is_admin( 'yes' );
     }
 
-    my $site_admin_id = CTX->default_object_id( 'site_admin_group' );
-    my $supergroup_id = CTX->default_object_id( 'supergroup' );
+    my $site_admin_id = CTX->lookup_default_object_id( 'site_admin_group' );
+    my $supergroup_id = CTX->lookup_default_object_id( 'supergroup' );
 
     my $groups = $auth->groups;
     foreach my $group ( @{ $groups } ) {
@@ -69,7 +71,7 @@ Returns: 'yes' if admin, 'no' if not. Also set in C<$auth>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,17 +1,19 @@
 package OpenInteract2::Auth::Group;
 
-# $Id: Group.pm,v 1.14 2003/09/05 13:30:28 lachoy Exp $
+# $Id: Group.pm,v 1.16 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::Group::VERSION  = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::Group::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub get_groups {
     my ( $class, $auth ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     unless ( $auth->is_logged_in ) {
         $log->is_info &&
             $log->info( "No logged-in user found, not retrieving groups." );
@@ -50,7 +52,7 @@ sub _get_cached_groups {
     my ( $class ) = @_;
     my $group_refresh = CTX->lookup_session_config->{cache_group};
     return unless ( $group_refresh > 0 );
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     my $groups = [];
     my $session = CTX->request->session;
     if ( $groups = $session->{_oi_cache}{group} ) {
@@ -76,7 +78,7 @@ sub _set_cached_groups {
                  and $group_refresh > 0 ) {
         return;
     }
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     my $session = CTX->request->session;
     $session->{_oi_cache}{group} = $groups;
     $session->{_oi_cache}{group_refresh_on} = time + ( $group_refresh * 60 );
@@ -124,7 +126,7 @@ Returns: arrayref of groups found; also set into C<$auth>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Datasource::DBI;
 
-# $Id: DBI.pm,v 1.7 2003/06/25 16:47:53 lachoy Exp $
+# $Id: DBI.pm,v 1.10 2004/05/22 01:57:53 lachoy Exp $
 
 use strict;
 use DBI                      qw();
@@ -9,14 +9,16 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant DEFAULT_READ_LEN => 32768;
 use constant DEFAULT_TRUNC_OK => 0;
 
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     unless ( ref $ds_info ) {
         $log->error( "No data given to create DBI [$ds_name] handle" );
         oi_error "Cannot create connection without datasource info";
@@ -45,7 +47,9 @@ sub connect {
         $log->debug( "Trying to connect to DBI with:",
                      CTX->dump( $ds_info ) );
 
-    my $db = DBI->connect( $dsn, $username, $password );
+    my $db = DBI->connect( $dsn, $username, $password,
+                           { RaiseError => 0,
+                             PrintError => 0 } );
     unless ( $db ) {
         oi_datasource_error
                     "Error connecting: $DBI::errstr",
@@ -78,7 +82,7 @@ sub connect {
 
 sub disconnect {
     my ( $class, $handle ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     $log->is_info &&
         $log->info( "Disconnecting handle [$handle->{Name}]" );
     eval { $handle->disconnect };
@@ -248,7 +252,7 @@ PerlEx - http://www.activestate.com/Products/PerlEx/
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

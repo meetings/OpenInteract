@@ -1,5 +1,5 @@
 function confirm_remove( object_type, name, url ) {
-    var msg = 'Do you want to remove ' + object_type + ' (' + name + ') ?'
+    var msg = [% MSG( 'global_javascript.confirm_remove' ) %]
     if ( confirm( msg ) ) {
 	    self.location = url;
     }

@@ -1,11 +1,11 @@
 package OpenInteract2::Action::TemplateOnly;
 
-# $Id: TemplateOnly.pm,v 1.3 2003/07/27 18:21:18 lachoy Exp $
+# $Id: TemplateOnly.pm,v 1.5 2004/05/22 02:06:28 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action );
 
-$OpenInteract2::Action::TemplateOnly::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::TemplateOnly::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 sub _find_task {
     return 'execute_template';
@@ -45,6 +45,15 @@ OpenInteract2::Action::TemplateOnly - Base class for template-only actions
  
  my $box_content = $action->execute;
 
+ # You can also instantiate the action directly
+ my $action = CTX->lookup_action( 'template_only' );
+ 
+ # ...set the parameter
+ $action->param( template => 'base_box::login_box' );
+ 
+ # ...and execute as normal
+ return $action->execute;
+
 =head1 DESCRIPTION
 
 This class implements the B<template_only> action type. What this
@@ -53,7 +62,7 @@ type and most of the work is done for you.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

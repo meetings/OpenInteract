@@ -1,9 +1,9 @@
 package OpenInteract2::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.12 2003/07/12 21:11:20 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.20 2004/05/22 02:01:48 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use Log::Log4perl            qw( get_logger );
 use DateTime;
 use OpenInteract2::Constants qw( :log );
@@ -11,7 +11,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Import;
 
-$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( package );
 OpenInteract2::SQLInstall->mk_accessors( @FIELDS );
@@ -21,7 +23,7 @@ my $DATA_DIR   = 'data';
 
 sub new_from_package {
     my ( $class, $package ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     unless ( UNIVERSAL::isa( $package, 'OpenInteract2::Package' ) ) {
         oi_error "Cannot create SQL installer from item that is not a package";
@@ -131,11 +133,11 @@ sub _set_state {
 ########################################
 # SUBCLASSES OVERRIDE
 
-sub get_structure_set  { return undef }
-sub get_structure_file { return undef }
-sub get_data_file      { return undef }
-sub get_security_file  { return undef }
-
+sub get_structure_set         { return undef }
+sub get_structure_file        { return undef }
+sub get_data_file             { return undef }
+sub get_security_file         { return undef }
+sub get_migration_information { return undef }
 
 
 ########################################
@@ -143,7 +145,7 @@ sub get_security_file  { return undef }
 
 sub install_all {
     my ( $self ) = @_;
-    unless ( ref $self->package eq 'OpenInteract2::Package' ) {
+    unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
         oi_error 'Cannot install without first setting package';
     }
     $self->install_structure;
@@ -158,9 +160,10 @@ sub install_all {
 sub install_structure {
     my ( $self ) = @_;
     my $pkg = $self->package;
-    unless ( ref $pkg eq 'OpenInteract2::Package' ) {
+    unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
         oi_error 'Cannot install structure without first setting package';
     }
+    my $package_name = $pkg->name;
 
     # Note: We can't have the importer send the SQL directly to the
     # database since we may create tables that don't correspond to
@@ -173,6 +176,15 @@ sub install_structure {
 
     my @sets = $self->_massage_arrayref( $self->get_structure_set );
 
+    my $full_spops_conf = CTX->spops_config;
+    unless ( ref( $full_spops_conf ) eq 'HASH' ) {
+        my $website_dir = $pkg->repository->website_dir;
+        oi_error "SPOPS configuration is not yet defined, cannot continue. ",
+                 "This probably means the context didn't initialize ",
+                 "properly -- look in $website_dir/logs/oi2.log for ",
+                 "enlightenment.";
+    }
+
 STRUCTURE:
     foreach my $structure_set ( @sets ) {
         my ( $ds_name, $ds_info, $ds );
@@ -184,10 +196,11 @@ STRUCTURE:
                 $ds_name = $1;
             }
             else {
-                unless ( exists CTX->spops_config->{ $structure_set } ) {
-                    die "Set '$structure_set' is not a valid SPOPS key.\n";
+                unless ( exists $full_spops_conf->{ $structure_set } ) {
+                    oi_error "Set '$structure_set' pulled from package ",
+                             "'$package_name' is not a valid SPOPS key.";
                 }
-                $ds_name = CTX->spops_config->{ $structure_set }{datasource};
+                $ds_name = $full_spops_conf->{ $structure_set }{datasource};
             }
             $ds_info = CTX->datasource_manager->get_datasource_info( $ds_name );
             $ds = CTX->datasource( $ds_name );
@@ -209,13 +222,14 @@ STRUCTURE:
 
             # XXX: Need to use File::Spec here?
             my ( $table_sql );
+            my $relative_file = "$STRUCT_DIR/$structure_file";
+            my $full_file = $pkg->find_file( $relative_file );
             eval {
-                $table_sql = $pkg->read_file(
-                                   "$STRUCT_DIR/$structure_file" );
+                $table_sql = $pkg->read_file( $relative_file );
             };
             if ( $@ or ! $table_sql ) {
                 my $error = $@ ||  "File cannot be found or it is empty";
-                $self->_set_state( $structure_file,
+                $self->_set_state( $full_file,
                                    undef, $error, undef );
                 next STRUCTURE;
             }
@@ -226,12 +240,12 @@ STRUCTURE:
             $self->_set_statement( $structure_file, $full_table_sql );
             eval { $ds->do( $full_table_sql ) };
             if ( $@ ) {
-                $self->_set_status( $structure_file, undef );
-                $self->_set_error( $structure_file, $@ );
+                $self->_set_status( $full_file, undef );
+                $self->_set_error( $full_file, $@ );
             }
             else {
-                $self->_set_status( $structure_file, 1 );
-                $self->_set_error( $structure_file, undef );
+                $self->_set_status( $full_file, 1 );
+                $self->_set_error( $full_file, undef );
             }
         }
     }
@@ -241,9 +255,9 @@ STRUCTURE:
 
 sub _transform_usertype {
     my ( $self, $sql ) = @_;
-    my $type = CTX->server_config->{id}{user_type} || 'int';
+    my $type = CTX->lookup_id_config( 'user_type' ) || 'int';
     if ( $type eq 'char' ) {
-        my $size = CTX->server_config->{id}{user_size} || 25;
+        my $size = CTX->lookup_id_config( 'user_size' ) || 25;
         $$sql =~ s/%%USERID_TYPE%%/VARCHAR($size)/g;
     }
     elsif ( $type eq 'int' ) {
@@ -258,9 +272,9 @@ sub _transform_usertype {
 
 sub _transform_grouptype {
     my ( $self, $sql ) = @_;
-    my $type = CTX->server_config->{id}{group_type} || 'int';
+    my $type = CTX->lookup_id_config( 'group_type' ) || 'int';
     if ( $type eq 'char' ) {
-        my $size = CTX->server_config->{id}{group_size} || 25;
+        my $size = CTX->lookup_id_config( 'group_size' ) || 25;
         $$sql =~ s/%%GROUPID_TYPE%%/VARCHAR($size)/g;
     }
     elsif ( $type eq 'int' ) {
@@ -279,7 +293,7 @@ sub _transform_grouptype {
 
 sub install_data {
     my ( $self ) = @_;
-    unless ( ref $self->package eq 'OpenInteract2::Package' ) {
+    unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
         oi_error 'Cannot install data without first setting package';
     }
     my @files = $self->_massage_arrayref( $self->get_data_file );
@@ -290,7 +304,7 @@ sub install_data {
 
 sub install_security {
     my ( $self ) = @_;
-    unless ( ref $self->package eq 'OpenInteract2::Package' ) {
+    unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
         oi_error 'Cannot install data without first setting package';
     }
     my @files = $self->_massage_arrayref( $self->get_security_file );
@@ -305,24 +319,25 @@ sub process_data_file {
 
 DATAFILE:
     foreach my $data_file ( @files ) {
-        my $data_text = $pkg->read_file(
-                                   "$DATA_DIR/$data_file" );
+        my $relative_file = "$DATA_DIR/$data_file";
+        my $full_file = $pkg->find_file( $relative_file );
+        my $data_text = $pkg->read_file( $relative_file );
         my ( $data_struct );
         {
             no strict 'vars';
             $data_struct = eval $data_text;
             if ( $@ ) {
-                $self->_set_state( $data_file,
+                $self->_set_state( $full_file,
                                    undef,
                                    "Invalid Perl data structure: $@",
                                    undef );
                 next DATAFILE;
             }
         }
-
+        $log->warn( "Data structure read from '$full_file': ", CTX->dump( $data_struct ) );
         my $import_type = $data_struct->[0]->{import_type};
         unless ( $import_type ) {
-            $self->_set_state( $data_file,
+            $self->_set_state( $full_file,
                                undef,
                                "No 'import_type' specified, cannot process",
                                undef );
@@ -334,7 +349,7 @@ DATAFILE:
                                      ->assign_raw_data( $data_struct );
         };
         if ( $@ ) {
-            $self->_set_state( $data_file,
+            $self->_set_state( $full_file,
                                undef,
                                "Failed to create importer: $@",
                                undef );
@@ -396,11 +411,11 @@ DATAFILE:
         }
         my $insert_ok = join( ', ', @ok );
         if ( $file_ok ) {
-            $self->_set_state( $data_file,
+            $self->_set_state( $full_file,
                                1, undef, "Inserted: $insert_ok" );
         }
         else {
-            $self->_set_state( $data_file,
+            $self->_set_state( $full_file,
                                undef,
                                join( "\n", @errors ),
                                "Inserted: $insert_ok" );
@@ -417,8 +432,10 @@ sub transform_data {
         if ( $metadata->{transform_default} ) {
             for ( @{ $metadata->{transform_default} } ) {
                 my $idx = $field_ord->{ $_ };
-                $data->[ $idx ] =
+                if ( $data->[ $idx ] ) {
+                    $data->[ $idx ] =
                         $self->_transform_default( $data->[ $idx ] );
+                }
             }
         }
         if ( $metadata->{transform_now} ) {
@@ -434,15 +451,310 @@ sub transform_data {
 
 sub _transform_default {
     my ( $self, $value ) = @_;
-    my $defaults = CTX->server_config->{default_objects};
-    return ( $defaults->{ $value } )
-             ? $defaults->{ $value } : $value;
+    return $value unless ( $value );
+    my $default_value = CTX->lookup_default_object_id( $value );
+    return $default_value || $value;
 }
 
 
 sub _transform_now {
     my ( $self ) = @_;
     return DateTime->now->strftime( '%Y-%m-%d %T' );
+}
+
+
+########################################
+# MIGRATE
+
+sub migrate_data {
+    my ( $self, $migrate_ds ) = @_;
+    unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
+        oi_error 'Cannot migrate data without first setting package';
+    }
+    $log ||= get_logger( LOG_INIT );
+
+    my @migrations = $self->_massage_arrayref(
+        $self->get_migration_information()
+    );
+    unless ( scalar @migrations > 0 ) {
+        $log->info( "No migrations found for package ", $self->package->name,
+                    "; nothing to do" );
+        return;
+    }
+
+    # Disable tracking using a supersekrit invocation; this should
+    # last until the subroutine ends
+
+    local $OpenInteract2::SPOPS::TRACKING_DISABLED = 1;
+
+    $log->info( "Migrating data from package ", $self->package->name, " ",
+                 "with ", scalar @migrations, " migration packets." );
+MIGRATION:
+    foreach my $migration_info ( @migrations ) {
+
+        # Now do the migration for this information. Each migration
+        # implementation routine is responsible for adding the
+        # status(es) of the action.
+
+        # First try data-to-object...
+
+        if ( $migration_info->{spops_class} ) {
+            $self->_migrate_data_to_object( $migration_info, $migrate_ds );
+        }
+
+        # ...and data-to-data
+
+        else {
+            $self->_migrate_data_to_data( $migration_info, $migrate_ds );
+        }
+    }
+    return $self;
+}
+
+# $info should be something like:
+#  \%  spops_class   => $
+#      table         => $
+#      field         => { new => \@, old => \@ }
+#      transform_sub => \& | [ \& ]
+#      include_id    => $ ('yes|no')
+
+sub _migrate_data_to_object {
+    my ( $self, $info, $migrate_ds ) = @_;
+    $log ||= get_logger( LOG_INIT );
+
+    my $spops_class = $info->{spops_class};
+    my $state_tag = "Migration to class $spops_class";
+    $log->info( "Migrating data to class '$spops_class'" );
+
+    # First be sure that we've actually got an SPOPS class...
+
+    my $config = eval { $spops_class->CONFIG };
+    if ( $@ or ! $config ) {
+        my $error = $@ || 'not a valid SPOPS class';
+        $self->_set_state( $state_tag, undef,
+                           "Failed to read configuration from class: $error",
+                           undef );
+        $log->error( "Cannot read CONFIG from '$spops_class': $error" );
+        return;
+    }
+
+    # If 'table' undefined use the value from the SPOPS class for both
+    # source and destination
+
+    unless ( $info->{table} ) {
+        $info->{table} = $spops_class->table_name;
+    }
+
+    # If 'field' undefined use the value from the SPOPS class for both
+    # source and destination
+
+    unless ( $info->{field} ) {
+        $info->{field} = $spops_class->field_list;
+    }
+
+    $log->info( "Reading old data from table '$info->{table}'" );
+
+    my @old_fields = ();
+    if ( ref $info->{field} eq 'HASH' and scalar keys %{ $info->{field} } ) {
+        @old_fields = $self->_massage_arrayref( $info->{field}{old} );
+    }
+    elsif ( ref $info->{field} eq 'HASH' ) {
+        @old_fields = ();
+    }
+    else {
+        @old_fields = $self->_massage_arrayref( $info->{field} );
+    }
+
+    # If 'fields' undefined or empty then pull the fieldnames from the
+    # SPOPS class, assuming they're the same between the two tables
+
+    if ( scalar @old_fields == 0 ) {
+        @old_fields = @{ $spops_class->field_list };
+    }
+    $log->info( "Reading data from old fields: ",
+                join( ', ', @old_fields ) );
+
+    my $records = eval {
+        $self->_migrate_fetch_old_data(
+                         $migrate_ds, $info->{table}, \@old_fields );
+    };
+    if ( $@ ) {
+        $log->error( "Failed to fetch old data: $@" );
+        $self->_set_state( $state_tag, undef,
+                           "Failed to fetch data from old datasource: $@",
+                           undef );
+        return;
+    }
+    my @object_fields = ( ref $info->{field} eq 'HASH' )
+                          ? $self->_massage_arrayref( $info->{field}{new} )
+                          : $self->_massage_arrayref( $info->{field} );
+    my @transforms = $self->_massage_arrayref( $info->{transform_sub} );
+
+    my @errors = ();
+    my $success = 0;
+    my $rec_count = 0;
+
+    my $num_fields = scalar( @object_fields ) - 1;
+    foreach my $rec ( @{ $records } ) {
+        $rec_count++;
+#        $log->info( "Record fetched:\n", CTX->dump( $rec ) );
+        my %object_data = map { $object_fields[ $_ ] => $rec->[ $_ ] }
+                              ( 0 .. $num_fields );
+#        $log->info( "Assigning data to new object\n", CTX->dump( \%object_data ) );
+        my $object = $spops_class->new( \%object_data );
+        foreach my $tsub ( @transforms ) {
+            next unless ( ref $tsub eq 'CODE' );
+            $tsub->( $info, $rec, $object );
+        }
+        $log->info( "Trying to create object [#$rec_count] ID ",
+                    "[", $object->id, "]" );
+        eval { $object->save({ skip_security => 'yes', is_add => 1 }) };
+        if ( $@ ) {
+            $log->error( "Failed with [#$rec_count]: $@" );
+            push @errors, "Record #$rec_count (ID: ", scalar( $object->id ), ": $@";
+        }
+        else {
+            $log->info( "Added record [#$rec_count] ok" );
+            $success++;
+        }
+    }
+    if ( scalar @errors ) {
+        $self->_set_state( $state_tag, undef,
+                           join( "\n", @errors ),
+                           "Migrated: $success records" );
+    }
+    else {
+        $self->_set_state( $state_tag, 1, undef,
+                           "Migrated: $success records" );
+    }
+}
+
+# $info should be something like:
+#  \%  table => { new => $, old => $ }
+#      field => { new => \@, old => \@ },
+#      transform_sub => [ \& ],
+
+sub _migrate_data_to_data {
+    my ( $self, $info, $migrate_ds ) = @_;
+    $log ||= get_logger( LOG_INIT );
+
+    # Do some initial sanity checking
+
+    unless ( $info->{table} ) {
+        $self->_set_state( "Migration (unknown)",
+                           undef,
+                           "The key 'table' must be specified in the migration information",
+                           undef );
+        return;
+    }
+
+    my @old_fields = ( ref $info->{field} eq 'HASH' )
+                       ? $self->_massage_arrayref( $info->{field}{old} )
+                       : $self->_massage_arrayref( $info->{field} );
+    my $old_table = ( ref $info->{table} eq 'HASH' )
+                      ? $info->{table}{old}
+                      : $info->{table};
+    my @new_fields = ( ref $info->{field} eq 'HASH' )
+                       ? $self->_massage_arrayref( $info->{field}{new} )
+                       : $self->_massage_arrayref( $info->{field} );
+    my $new_table = ( ref $info->{table} eq 'HASH' )
+                      ? $info->{table}{new}
+                      : $info->{table};
+    my $state_tag = "Migration from $old_table -> $new_table";
+    $log->info( "Migrating data from table '$old_table' to '$new_table'" );
+    $log->info( "Migrating data from fields\n[",
+                join( ', ', @old_fields ), "] to\n[",
+                join( ', ', @new_fields ), "]" );
+
+    my $records = eval {
+        $self->_migrate_fetch_old_data( $migrate_ds, $old_table, \@old_fields );
+    };
+    if ( $@ ) {
+        $log->error( "Failed to fetch old data: $@" );
+        $self->_set_state( $state_tag, undef,
+                           "Failed to fetch data from old datasource: $@",
+                           undef );
+        return;
+    }
+
+    my $new_field_listing = join( ', ', @new_fields );
+    my $new_field_ph      = join( ', ', map { '?' } @new_fields );
+    my $insert_sql = qq{
+        INSERT INTO $new_table ( $new_field_listing )
+        VALUES ( $new_field_ph )
+    };
+    $log->info( "Generated INSERT prepare SQL:\n$insert_sql" );
+
+    # gets the primary datasource...
+    my $new_ds = CTX->datasource;
+    my ( $sth );
+    eval {
+        $sth = $new_ds->prepare( $insert_sql );
+    };
+    if ( $@ ) {
+        $log->error( "Failed to prepare INSERT: $@" );
+        $self->_set_state( $state_tag, undef,
+                           "Cannot prepare INSERT for new data: $@",
+                           undef );
+        return;
+    }
+
+    my @transforms = $self->_massage_arrayref( $info->{transform_sub} );
+    my @errors = ();
+    my $success = 0;
+    my $rec_count = 0;
+    my $num_fields = scalar( @new_fields ) - 1;
+
+    foreach my $rec ( @{ $records } ) {
+        $rec_count++;
+        #$log->info( "Assigning record\n", CTX->dump( $rec ) );
+        my %new_value_hash = map { $new_fields[ $_ ] => $rec->[ $_ ] }
+                                 ( 0 .. $num_fields );
+        foreach my $tsub ( @transforms ) {
+            next unless ( ref $tsub eq 'CODE' );
+            $tsub->( $info, $rec, \%new_value_hash );
+        }
+        my @insert_data = map { $new_value_hash{ $_ } } @new_fields;
+        $log->info( "Creating new record with data [",
+                    join( "] [", @insert_data ), "]" );
+        eval { $sth->execute( @insert_data ) };
+        if ( $@ ) {
+            $log->error( "Error creating new record [#$rec_count]: $@" );
+            push @errors, "Record #$rec_count: $@";
+        }
+        else {
+            $log->error( "Added new record [#$rec_count] ok" );
+            $success++;
+        }
+    }
+    if ( scalar @errors ) {
+        $self->_set_state( $state_tag, undef,
+                           join( "\n", @errors ),
+                           "Migrated: $success records" );
+    }
+    else {
+        $self->_set_state( $state_tag, 1, undef,
+                           "Migrated: $success records" );
+    }
+}
+
+sub _migrate_fetch_old_data {
+    my ( $self, $ds, $table, $fields ) = @_;
+    $log ||= get_logger( LOG_INIT );
+    my $num_fields = scalar( @{ $fields } ) - 1;
+    my $field_listing = join( ', ', @{ $fields } );
+    my $sql = qq{SELECT $field_listing FROM $table};
+    $log->info( "SQL for fetching old data:\n$sql" );
+    my $sth = $ds->prepare( $sql );
+    $sth->execute;
+    my @records = ();
+    while ( my $row = $sth->fetchrow_arrayref ) {
+        #my %data = map { $fields->[ $_ ] => $row->[ $_ ] } ( 0..$num_fields );
+        #push @records, \%data;
+        push @records, [ @{ $row } ];
+    }
+    $log->info( "Returning ", scalar( @records ), " records from old table" );
+    return \@records;
 }
 
 
@@ -473,12 +785,6 @@ OpenInteract2::SQLInstall -- Dispatcher for installing various SQL data from pac
  use strict;
  use base qw( OpenInteract2::SQLInstall );
  
- my %TABLES = (
-    sybase  => [ 'myobj_sybase.sql' ],
-    oracle  => [ 'myobj_oracle.sql', 'myobj_sequence.sql' ],
-    default => [ 'myobj.sql' ],
- );
- 
  # We only define one object in this package
  sub get_structure_set {
      return 'myobj';
@@ -493,7 +799,10 @@ OpenInteract2::SQLInstall -- Dispatcher for installing various SQL data from pac
  }
  
  # INSTALLER USERS
- # Use this class in a separate program
+ 
+ # See the management tasks for doing this for you, but you can also
+ # use this class in a separate program
+ 
  use OpenInteract2::Context qw( CTX );
  use OpenInteract2::SQLInstall;
  
@@ -507,6 +816,10 @@ OpenInteract2::SQLInstall -- Dispatcher for installing various SQL data from pac
  
  # ... or all at once
  $installer->install_all;
+_
+ # ... or migrate from an old package
+ $installer->install_structure;
+ $installer->migrate_data( 'old_datasource_name' );
 
 =head1 DESCRIPTION
 
@@ -543,6 +856,8 @@ variety of applications for which OpenInteract can be used.
 
 =head1 USERS: HOW TO MAKE IT HAPPEN
 
+=head2 Typical Use
+
 Every package has a module that has a handful of procedures specified
 in such a way that OpenInteract knows what to call and for which
 database. Generally, all you need to deal with is the wrapper provided
@@ -562,6 +877,19 @@ As long as you have specified your databsources properly in your
 C<conf/server.ini> file and enabled any custom associations between
 the datasources and SPOPS objects, everything should flow smooth as
 silk.
+
+=head2 Migrating Data
+
+If you are migrating data from a version of this package installed in
+OpenInteract 1.x, you will generally want:
+
+ oi2_manage install_sql_structure --website_dir=/home/httpd/myOI --package=mypackage
+ oi2_manage migrate_data --website_dir=/home/httpd/myOI --package=mypackage
+
+Note that this will generally B<not> migrate the security data for the
+handlers/objects. To do this run:
+
+ oi2_manage migrate_data --website_dir=/home/httpd/myOI --package=base_security
 
 =head1 DEVELOPERS: CODING
 
@@ -762,12 +1090,234 @@ items together:
      $self->SUPER::transform_data( $importer );
  }
 
+B<migrate_data( $old_datasource )>
+
+If you override this method you need to do part or all of the data
+migration yourself. You can also use a more declarative style and
+override C<get_migration_information()>, specifying the keys and
+tables to use for the migration. This is recommended.
+
+Note that C<$old_datasource> is just a DBI database handle which you
+can create and connect in any manner you choose. It's normally
+specified by the user and created by the framework for you.
+
+B<get_migration_information()>
+
+Returns an arrayref of hashrefs describing how to migrate data for
+this package. See L<DEVELOPERS: MIGRATING DATA> for more information
+
+=head1 DEVELOPERS: MIGRATING DATA
+
+Since OpenInteract2 is a fairly major upgrade you may want to take the
+opportunity to rethink how you're organizing your data, a difficult
+task to do when you're trying to maintain the status quo. Several of
+the packages in OI2 took advantage of this so we needed to create a
+framework to make moving data easy. Thus this section.
+
+This class supports two types of migration: moving data from a table
+to another table (known as 'data-to-data') or moving data from a table
+to a set of SPOPS objects which save themselves
+('data-to-object'). The latter is preferred because it takes advantage
+of pre-existing SPOPS hooks for data transformation and collection
+such as full-text indexing.
+
+=head2 Moving data from table to objects
+
+For a B<data-to-object> migration you can specify a number of
+fields. Full examples follow.
+
+=over 4
+
+=item *
+
+B<spops_class> ($)
+
+The class of the SPOPS object you're migrating data to.
+
+=item *
+
+B<table> ($)
+
+The name of the table you're migrating data from. You don't need to
+specify the destination table since the metadata in the SPOPS class
+will take care of that.
+
+You can leave this undefined if the name of the table is the same in
+the source and destination -- we'll just use the value pulled from
+C<spops_class> for both.
+
+=item *
+
+B<field> (\@ or \%)
+
+You can either use an arrayref to name the fields, in which case
+you're using the names from the old datasource as the fieldnames in
+your SPOPS object. Or you can use a hashref, naming the fields in the
+old table in an arrayref using the key 'old', fields in the SPOPS
+object using 'new', where the first field in 'old' maps to the first
+field in 'new', etc.
+
+If you assign undef, an empty arrayref or an empty hashref to this key
+we'll get the fieldnames from the C<spops_class> method 'field_list'
+and use them for both the source and destination.
+
+=item *
+
+B<include_id> ('yes' (default) or 'no')
+
+When moving data you'll almost certainly wish to preserve the IDs of
+the objects you're moving. This is the default, which overrides the
+SPOPS default of generating IDs for you, even if you specify a value
+for the ID.
+
+=item *
+
+B<transform_sub> (\& or \@) (optional)
+
+Pass along any transformation subroutines in an arrayref of
+coderefs. (A single routine can be passed by itself.) Each subroutine
+should take three arguments: the migration information, a hashref of
+the source database row, and the SPOPS object created from that
+information. No return value is required: if you need to modify the
+data to be saved change the SPOPS object.
+
+=back
+
+Here's an example of the most common case: we're moving data between a
+table and an SPOPS class with no transformation, the same table name
+and the same field names:
+
+ sub get_migration_info {
+     my %user_info = ( spops_class => 'OpenInteract2::User' );
+     return [ \%user_info ];
+ }
+
+Here's an example where we're using the same table name between the
+two databases but the fieldnames are changing:
+
+ sub get_migration_info {
+     my %user_info = (
+       spops_class => 'OpenInteract2::User',
+       field       => { old => [ 'user_id', 'login_name', 'first_name', 'last_name' ],
+                        new => [ 'sys_user_id', 'sys_login_name', 'sys_first_name', 'sys_last_name' ] });
+     return [ \%user_info ];
+ }
+
+Here's an example where the table names change as well:
+
+ sub get_migration_info {
+     my %user_info = (
+       spops_class => 'OpenInteract2::User',
+       table       => { old => 'sys_user',
+                        new => 'user' },
+       field       => { old => [ 'user_id', 'login_name', 'first_name', 'last_name' ],
+                        new => [ 'sys_user_id', 'sys_login_name', 'sys_first_name', 'sys_last_name' ] }
+     );
+     return [ \%user_info ];
+ }
+
+And here's an example of a transformation subroutine that smashes the
+first and last name into a new field, wiki name:
+
+ sub _create_wiki_name {
+     my ( $migration_info, $db_row, $user ) = @_;
+     $user->wiki_name( ucfirst( lc( $user->first_name ) ) .
+                       ucfirst( lc( $user->last_name ) ) );
+ }
+
+And you'd pass this to the process like this:
+
+ sub get_migration_info {
+     my %user_info = ( spops_class => 'OpenInteract2::User',
+                       table       => 'sys_user',
+                       field       => [ 'user_id', 'login_name', 'first_name', 'last_name' ],
+                       transform_sub => \&_create_wiki_name, );
+     return [ \%user_info ];
+ }
+
+=head2 Moving data from table to table
+
+You should only need to use this when you're moving data between
+tables that aren't represented by SPOPS objects.
+
+Note that you cannot specify a destination datasource for this type of
+migration. We just use the default DBI datasource.
+
+For each B<data-to-data> migration here's what you need to specify:
+
+=over 4
+
+=item *
+
+B<table> ($ or \%)
+
+You can either use a scalar to name the table, in which case it's the
+same name in the old and new databases, or you can name the table the
+old data are held in using the key 'old', new data using 'new'.
+
+=item *
+
+B<field> (\@ or \%)
+
+You can either use an arrayref to name the fields, in which case
+they're the same names in the old and new databases, or you can name
+the fields in the old table in an arrayref using the key 'old', new
+fields using 'new', where the first field in 'old' maps to the first
+field in 'new', etc.
+
+=item *
+
+B<transform_sub> (\& or \@) (optional)
+
+Pass along any transformation subroutines in an arrayref of
+coderefs. (A single routine can be passed by itself.) Each subroutine
+should take three arguments: the migration information, the arrayref
+of data pulled from the database, and a hashref of new field to that
+field's value. The routine should not return anything, instead
+modifying the hashref of new field data in place.
+
+=back
+
+Here's an example of the most common case: we're moving data between
+two tables with the same structure with no transformation:
+
+ sub get_migration_info {
+     my %sys_group_info = ( table => 'sys_group_user',
+                            field => [ 'group_id', 'user_id' ] );
+     return [ \%sys_group_info ];
+ }
+
+Here's an example where we're using the same table name between the
+two databases but the fieldnames are changing:
+
+ sub get_migration_info {
+     my %sys_group_info = ( table => 'sys_group_user',
+                            field => { old => [ 'group_id', 'user_id' ],
+                                       new => [ 'sys_group_id', 'sys_user_id' ], } );
+     return [ \%sys_group_info ];
+ }
+
+Here's an example where the table names change as well:
+
+ sub get_migration_info {
+     my %sys_group_info = ( table => { old => 'sys_group_user',
+                                       new => 'group_user_map', },
+                            field => { old => [ 'group_id', 'user_id' ],
+                                       new => [ 'sys_group_id', 'sys_user_id' ], } );
+     return [ \%sys_group_info ];
+ }
+
 =head1 DEVELOPERS: IMPORTING DATA
 
 We need to be able to pass data from one database to another and be
 very flexible as to how we do it. The various data file formats have
 taken care of everything I could think of -- hopefully you will think
 up some more.
+
+The data file discussed below is a Perl data structure. This does
+against the general OI2 bias against using data structures for humans
+to edit, but since this is generally a write-once operation it's not
+as important that it be human-readable.
 
 To begin, there are two elements to a data file. The first element
 tells the installer what type of data follows -- should we create
@@ -846,7 +1396,7 @@ So these steps would look like:
  my $object_class = 'OpenInteract2::Security';
  my %field_num = { class => 0, object_id => 1, scope => 2,
                    scope_id => 3, security_level => 4 };
- my $defaults = CTX->server_config->{default_objects};
+ my $defaults = CTX->lookup_default_object_id;
  foreach my $row ( @{ $data_rows } ) {
    my $object = $object_class->new();
    $object->{class}     = $row->[ $field_num{class} ];
@@ -862,6 +1412,9 @@ So these steps would look like:
 There are currently just a few behaviors you can set to transform the
 data before it gets saved (see C<transform_data()> above), but the
 interface is there to do just about anything you can imagine.
+
+If you're interested in learning more about this process see
+L<SPOPS::Manual::ImportExport|SPOPS::Manual::ImportExport>.
 
 =head2 SQL Processing
 
@@ -1048,7 +1601,7 @@ L<DBI|DBI>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -20,7 +20,6 @@
       search_results_key - 'search_id'
       
   ########################################-%]
-
 [%- DEFAULT align              = 'right';
     DEFAULT table_width        = '90%';
     DEFAULT search_results_key = 'search_id'; -%]

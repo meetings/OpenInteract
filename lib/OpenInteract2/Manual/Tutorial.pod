@@ -763,11 +763,11 @@ look for our table. In theory we can also change the implementation
 behind the scenes to use stylesheets instead of tables.
 
 Line 1 invokes the OI plugin (see
-L<OpenInteract2::ContentGenerator::TT2Plugin|OpenInteract2::ContentGenerator::TT2Plugin>)
-to set the title of the page. Line 5 outputs the HTML to start the
-form, using the 'ACTION' and 'TASK' keywords to construct a URL for
-the 'action' attribute rather than specifying the URL ourselves. Line
-7 starts the table with a border around it for the form.
+L<OpenInteract2::TT2::Plugin|OpenInteract2::TT2::Plugin>) to set the
+title of the page. Line 5 outputs the HTML to start the form, using
+the 'ACTION' and 'TASK' keywords to construct a URL for the 'action'
+attribute rather than specifying the URL ourselves. Line 7 starts the
+table with a border around it for the form.
 
 Lines 9-11 define the row and input for the title the user will search
 for, and line 13 defines the row with the 'submit' button, here
@@ -1504,7 +1504,7 @@ template, 'total_hits', which we can use to display how many entries
 we found. (Note that 'total_hits' is only provided when you're using
 paged results, but since that's the default and we didn't change the
 setting we can use the parameter. See
-L<OpenInteract::Action::CommonSearch|OpenInteract::Action::CommonSearch>
+L<OpenInteract2::Action::CommonSearch|OpenInteract2::Action::CommonSearch>
 for more.)
 
 Finally, on line 25 we had to modify our 'FOREACH' loop into a 'WHILE'
@@ -1528,7 +1528,7 @@ First, we'll modify the configuration file with the new fields:
   10: c_search_fields_exact     = publisher
 
 Next, we'll modify the template:
-h
+
   15: [% INCLUDE label_form_text_row( label = "Author's Last Name",
   16:                                 name  = 'author_last',
   17:                                 size  = 30 ) %]
@@ -1673,8 +1673,8 @@ reflect the updates, bundle the package up and install it:
 
 Restart your server and run a search, then click on a title. There's
 your detailed record! There aren't many details to speak of, but we
-can add more later without modify the code, or even configuration, at
-all.
+can add more later without modifying the code, or even configuration,
+at all.
 
 =head2 Update existing objects
 
@@ -2039,7 +2039,7 @@ L<http://openinteract.sourceforge.net/cgi-bin/twiki/view/OI/OpenInteract2Tutoria
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

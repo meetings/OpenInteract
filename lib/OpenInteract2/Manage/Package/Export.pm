@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Package::Export;
 
-# $Id: Export.pm,v 1.10 2003/07/16 12:22:02 lachoy Exp $
+# $Id: Export.pm,v 1.11 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 use Cwd qw( cwd );
 use File::Spec;
 
-$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -180,7 +180,7 @@ File created by the export
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonSearch;
 
-# $Id: CommonSearch.pm,v 1.10 2003/07/11 05:11:15 lachoy Exp $
+# $Id: CommonSearch.pm,v 1.13 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -10,7 +10,9 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::ResultsManage;
 
-$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 ########################################
 # SEARCH FORM
@@ -44,7 +46,7 @@ sub _search_form_init_param {
 sub search {
     my ( $self ) = @_;
     $self->_search_init_param;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my %tmpl_params = ();
 
@@ -199,7 +201,7 @@ sub _search_catch_errors {
 
 sub _search_build_and_run {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     $self->_search_build_criteria;
     $self->_search_build_where_clause;
@@ -246,7 +248,7 @@ sub _search_build_and_run {
 
 sub _search_build_criteria {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $object_class = $self->param( 'c_object_class' );
     my $object_table = $object_class->base_table;
@@ -281,7 +283,7 @@ sub _search_build_criteria {
 
 sub _search_build_where_clause {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $criteria = $self->param( 'c_search_criteria' );
 
@@ -464,16 +466,35 @@ OpenInteract2::Action::CommonSearch - Implement searching functionality for SPOP
 =head1 SYNOPSIS
 
  # Just subclass and the tasks 'search_form' and 'search' are
- # implemented!
+ # implemented
  
  package OpenInteract2::Action::MyAction;
  
  use strict;
  use base qw( OpenInteract2::Action::CommonSearch );
  
- # In your action configuration:
+ # Relevant configuration entries in your action.ini
  
  [myaction]
+ ...
+ c_object_type                  = book
+ c_search_form_template         = mypkg::search_form
+ c_search_results_template      = mypkg::search_results
+ c_search_fields_like           = author
+ c_search_fields_exact          = publisher
+ c_search_fields_left_exact     = title
+ c_search_fields_right_exact    = who_knows
+ c_search_fields_exact          = co_author.name
+ c_search_results_order         = title
+ c_search_results_paged         = yes
+ c_search_results_page_size     = 50
+ c_search_results_cap           = 500
+ c_search_fail_task             = search_form
+ c_search_results_cap_fail_task = search_form
+ 
+ [myaction c_search_table_links]
+ co_author = book.book_id
+ co_author = co_author.book_id
 
 =head1 SUPPORTED TASKS
 
@@ -779,11 +800,11 @@ Maps zero or more table names to the necessary information to build a
 WHERE clause that joins the relevant tables together on the proper
 fields.
 
-Note: This discussion may seem confusing but it can be extremely
-useful: for instance, if you want to search by a person's city but the
-address information is in a separate table. If we stuck to the
-one-object/one-table mentality then you'd have to break normalization
-or some other hack.
+ NOTE: This discussion may seem confusing but it can be extremely
+ useful: for instance, if you want to search by a person's city but
+ the address information is in a separate table. If we stuck to the
+ one-object/one-table mentality then you'd have to break normalization
+ or some other hack.
 
 The values assigned to each table name enable us to build a join
 clause to link our table (the one with the object being searched) to
@@ -978,7 +999,7 @@ should be saved in her session (or a cookie?) so it's sticky.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,13 +1,13 @@
 package OpenInteract2::Conversion::IniConfig;
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use OpenInteract2::Exception qw( oi_error );
 
 my @FIELDS = qw( old_content old_config transforms );
 __PACKAGE__->mk_accessors( @FIELDS );
 
-$OpenInteract2::Conversion::IniConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Conversion::IniConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub new {
     my ( $class, $old_something ) = @_;
@@ -387,7 +387,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

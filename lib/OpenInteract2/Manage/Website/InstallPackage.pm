@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::InstallPackage;
 
-# $Id: InstallPackage.pm,v 1.10 2003/08/30 15:36:01 lachoy Exp $
+# $Id: InstallPackage.pm,v 1.12 2004/05/22 15:41:01 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Repository;
 
-$OpenInteract2::Manage::Website::Install::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Install::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -30,6 +30,12 @@ sub get_parameters {
         },
     };
 }
+
+sub setup_task {
+    my ( $self ) = @_;
+    $self->_setup_context( { skip => 'initialize temp lib' } );
+}
+
 
 # RUN
 
@@ -162,7 +168,7 @@ Version of package installed
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

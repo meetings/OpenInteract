@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Apache;
 
-# $Id: Apache.pm,v 1.11 2003/08/27 15:03:55 lachoy Exp $
+# $Id: Apache.pm,v 1.14 2004/02/18 05:25:28 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -12,14 +12,16 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( apache );
 OpenInteract2::Request::Apache->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_REQUEST );
+    $log ||= get_logger( LOG_REQUEST );
     $log->is_info &&
         $log->info( "Creating Apache 1.x request" );
     unless ( ref $params->{apache} ) {
@@ -76,9 +78,7 @@ sub init {
     $self->referer( $head_in->{'Referer'} );
     $self->user_agent( $head_in->{'User-Agent'} );
     $self->cookie_header( $head_in->{'Cookie'} );
-    $self->_parse_cookies;
-
-    $self->create_session;
+    $self->language_header( $head_in->{'Accept-Language'} );
 
     my $srv = $self->apache->server;
     $self->server_name( $srv->server_hostname );
@@ -121,7 +121,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

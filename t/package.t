@@ -1,12 +1,12 @@
 # -*-perl-*-
 
-# $Id: package.t,v 1.8 2003/08/20 13:37:39 lachoy Exp $
+# $Id: package.t,v 1.11 2004/02/16 20:23:45 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
 use File::Copy qw( cp );
-use Test::More  tests => 120;
+use Test::More  tests => 121;
 
 require_ok( 'OpenInteract2::Package' );
 
@@ -68,7 +68,6 @@ my $package_dir  = get_test_package_dir();
           'Expected export error with empty package' );
 
     my $tmp_dir = get_tmp_dir();
-    chdir( $tmp_dir );
     my $expected_zipfile = File::Spec->catfile( $tmp_dir, 'fruit-1.00.zip' );
 
     # if left over from old run...
@@ -79,6 +78,8 @@ my $package_dir  = get_test_package_dir();
     my $d_package = eval {
         OpenInteract2::Package->new({ directory => $package_dir })
     };
+
+    chdir( $tmp_dir );
     my $export_filename = eval { $d_package->export };
     ok( ! $@,
         'Export execution' );
@@ -127,6 +128,7 @@ my $package_dir  = get_test_package_dir();
     # Cleanup
 
     unlink( $export_filename );
+    chdir( $original_pwd );
 }
 
 
@@ -313,41 +315,47 @@ my $package_dir  = get_test_package_dir();
 # CREATE SKELETON
 
 {
+    my $source_dir = get_source_dir();
+    my %skel_args = ( source_dir => $source_dir );
+
     # Expect this to die since we're not giving a name
 
-    eval { OpenInteract2::Package->create_skeleton() };
+    eval { OpenInteract2::Package->create_skeleton( { %skel_args } ) };
     like( $@, qr/^Must pass in package name/,
           "Expected error with no name to create package" );
 
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => '   ' }) };
+    like( $@, qr/Name must not be blank/,
+          "Expected error with blank name to create package" );
+
     # Expect these to die since we're giving a bad name (like Bon Jovi, arg)
 
-    eval { OpenInteract2::Package->create_skeleton({ name => 'my package' }) };
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'my package' }) };
     like( $@, qr/Name must not have spaces/,
           "Expected error with spaces in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ name => 'my-package' }) };
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'my-package' }) };
     like( $@, qr/Name must not have dashes/,
           "Expected error with dashes in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ name => '2mypackage' }) };
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => '2mypackage' }) };
     like( $@, qr/Name must not start with a number/,
           "Expected error with leading number in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ name => 'mypackagenum#' }) };
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'mypackagenum#' }) };
     like( $@, qr/Name must not have non-word characters/,
           "Expected error with non-word chars in name to create package" );
 
     # Now we're doing the actual work
 
-    my $pwd = get_current_dir();
     my $skel_work_dir = File::Spec->catdir( get_tmp_dir(), 'skel' );
     rmtree( $skel_work_dir ) if ( -d $skel_work_dir );
     mkpath( $skel_work_dir );
     chdir( $skel_work_dir );
 
-    my $source_dir = get_source_dir();
     my $skel_pkg = eval {
         OpenInteract2::Package->create_skeleton({ name       => 'foo',
                                                   source_dir => $source_dir })
     };
     ok( ! $@, 'Create skeleton superficially succeeded' );
+    diag( "Error creating skeleton: $@" ) if ( $@ );
     my @dirs  = ( 'conf', 'data',  'doc', 'script', 'struct', 'template',
                   'html', [ 'html', 'images' ],
                   'OpenInteract2', ['OpenInteract2', 'Action' ],
@@ -383,10 +391,10 @@ my $package_dir  = get_test_package_dir();
 
     # Expect this to die since the directory will already exist
 
-    eval { OpenInteract2::Package->create_skeleton({ name => 'foo' }) };
+    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'foo' }) };
     like( $@, qr/^Cannot create package destination directory.*already exists$/,
           "Expected error since destionation directory exists" );
-    chdir( $pwd );
+    chdir( $original_pwd );
 }
 
 

@@ -1,12 +1,12 @@
 package OpenInteract2::SPOPS::LDAP;
 
-# $Id: LDAP.pm,v 1.5 2003/07/12 21:15:40 lachoy Exp $
+# $Id: LDAP.pm,v 1.6 2004/02/17 04:30:21 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::SPOPS );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 # See OpenInteract2::Config::Initializer for initialization behavior
 
@@ -114,7 +114,7 @@ L<SPOPS::LDAP|SPOPS::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 MSN Marketing Service Nordwest, GmbH. All rights
+Copyright (c) 2001-2004 MSN Marketing Service Nordwest, GmbH. All rights
 reserved.
 
 This library is free software; you can redistribute it and/or modify

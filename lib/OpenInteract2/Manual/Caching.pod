@@ -40,38 +40,38 @@ The following keys in your server configuration are used in caching:
 
 =item *
 
-C<cache_info.data.use>: If set to true, content caching is enabled; if
+C<cache.use>: If set to true, content caching is enabled; if
 set to false, it is disabled.
 
 =item *
 
-C<cache_info.data.cleanup>: If true we delete and recreate the cache
+C<cache.cleanup>: If true we delete and recreate the cache
 directory every time the server starts up. This is recommended.
 
 =item *
 
-C<cache_info.data.class>: Cache implementation to use.  Currently only
+C<cache.class>: Cache implementation to use.  Currently only
 L<OpenInteract2::Cache::File|OpenInteract2::Cache::File> is supported.
 
 =item *
 
-C<cache_info.data.directory>: The directory where we put the cached
+C<cache.directory>: The directory where we put the cached
 content. This is normally C<$WEBSITE_DIR/cache/content>.
 
 =item *
 
-C<cache_info.data.default_expire>: number of seconds used for the
+C<cache.default_expire>: number of seconds used for the
 cached content expiration. You can override this on a case-by-case
 basis.
 
 =item *
 
-C<cache_info.data.max_size>: Max size the cache should be allowed to
+C<cache.max_size>: Max size the cache should be allowed to
 grow, in bytes.
 
 =item *
 
-C<cache_info.data.directory_depth>: If you find that retrieving cached
+C<cache.directory_depth>: If you find that retrieving cached
 content is slow because of the number of items in a particular
 directory, increase this number.
 
@@ -344,14 +344,15 @@ compiling:
 
 =item *
 
-C<template_info.cache_size>: This is the main parameter, describing
+C<content_generator.TT.cache_size>: This is the main parameter, describing
 how many cached templates TT will hold in memory. The only restriction
 on a high value is your memory, so experiment with as high a number as
 possible.
 
-If you set this to 0 then caching will be disabled. This is useful when
-you're doing debugging on your site, but it will make things noticably
-slower.
+If you set this to 0 then caching will be disabled. This is useful
+when you're doing debugging on your site, but it can make things
+noticably slower if you have lots of requests, where 'lots' means
+'more than a handful'.
 
 =item *
 
@@ -360,17 +361,19 @@ in the filesystem. This is normally C<$WEBSITE_DIR/cache/tt>
 
 =item *
 
-C<cache_info.template.expire>: Sets the expiration (in seconds) for how long the
-templates remain cached in memory before they're reparsed.
+C<content_generator.TT.cache_expire>: Sets the expiration (in seconds)
+for how long the templates remain cached in memory before they're
+reparsed.
 
 =item *
 
-C<template_info.compile_cleanup>: If set to a true value, we clean out
-the template compile directory when the Apache server starts up.
+C<content_generator.TT.compile_cleanup>: If set to a true value, we
+clean out the template compile directory when the Apache server starts
+up.
 
 =item *
 
-C<template_info.compile_ext>: Extension of the file created when the
+C<content_generator.TT.compile_ext>: Extension of the file created when the
 template is compiled to the filesystem.
 
 =back
@@ -389,7 +392,7 @@ Be warned: this produces a prodigious amount of messages.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

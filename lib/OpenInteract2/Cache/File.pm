@@ -1,6 +1,6 @@
 package OpenInteract2::Cache::File;
 
-# $Id: File.pm,v 1.6 2003/07/01 03:57:52 lachoy Exp $
+# $Id: File.pm,v 1.9 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Cache );
@@ -9,14 +9,16 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Cache::File::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my $DEFAULT_SIZE   = 2000000;  # 10 MB -- max size of cache
 my $DEFAULT_EXPIRE = 86400;    # 1 day
 
 sub initialize {
     my ( $self, $cache_conf ) = @_;
-    my $log = get_logger( LOG_CACHE );
+    $log ||= get_logger( LOG_CACHE );
 
     # Allow values that are passed in to override anything
     # set in the config object
@@ -87,7 +89,7 @@ B<initialize( \%config )>
 
 Creates a new L<Cache::FileCache|Cache::FileCache> object for later
 use, initializing it with the values from C<\%config> -- this
-corresponds to the data under C<cache_info.data> in your server
+corresponds to the data under C<cache> in your server
 configuration. Here's what you can set:
 
 =over 4
@@ -124,7 +126,7 @@ some filesystems.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

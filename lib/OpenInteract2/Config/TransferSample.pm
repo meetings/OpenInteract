@@ -1,7 +1,7 @@
 package OpenInteract2::Config::TransferSample;
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use File::Copy               qw( cp );
 use File::Spec;
 use OpenInteract2::Constants qw( :log );
@@ -9,7 +9,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Template;
 
-$OpenInteract2::Config::TransferSample::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::TransferSample::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( source_dir file_spec files_copied );
 __PACKAGE__->mk_accessors( @FIELDS );
@@ -307,7 +307,7 @@ to see what's new.)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

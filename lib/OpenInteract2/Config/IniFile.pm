@@ -1,13 +1,13 @@
 package OpenInteract2::Config::IniFile;
 
-# $Id: IniFile.pm,v 1.4 2003/06/24 03:35:38 lachoy Exp $
+# $Id: IniFile.pm,v 1.6 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Config );
 use OpenInteract2::Config::Ini;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use constant META_KEY => '_INI';
 
@@ -89,13 +89,13 @@ Nothing known.
 
 =head1 SEE ALSO
 
-L<OpenInteract::Config::Ini|OpenInteract::Config::Ini>
+L<OpenInteract2::Config::Ini|OpenInteract2::Config::Ini>
 
 L<OpenInteract2::Config|OpenInteract2::Config>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

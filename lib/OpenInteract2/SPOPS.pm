@@ -1,6 +1,6 @@
 package OpenInteract2::SPOPS;
 
-# $Id: SPOPS.pm,v 1.20 2003/09/05 02:20:31 lachoy Exp $
+# $Id: SPOPS.pm,v 1.25 2004/02/26 00:58:57 lachoy Exp $
 
 use strict;
 use Digest::MD5              qw( md5_hex );
@@ -11,12 +11,17 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Util;
 use SPOPS::ClassFactory      qw( OK NOTIFY );
 
-$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 # TODO:
 #   - move object key stuff to a separate class
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
+
+# This is not public, look away, look away!
+$OpenInteract2::SPOPS::TRACKING_DISABLED = 0;
 
 ########################################
 # RULESET FACTORY BEHAVIOR
@@ -35,7 +40,7 @@ sub ruleset_factory {
 
 sub save_object_key {
     my ( $self, $p ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log ||= get_logger( LOG_SPOPS );
 
     # Don't create an object key if we're explicitly told not to
     return 1 if ( $self->CONFIG->{skip_object_key} || $p->{skip_object_key} );
@@ -135,6 +140,7 @@ sub fetch_object_by_key {
 sub log_action {
     my ( $self, $action, $id ) = @_;
     return 1   unless ( $self->CONFIG->{track}{ $action } );
+    return 1   if ( $OpenInteract2::SPOPS::TRACKING_DISABLED );
     return $self->log_action_enter( $action, $id );
 }
 
@@ -146,29 +152,36 @@ sub log_action {
 
 sub log_action_enter {
     my ( $self, $action, $id, $uid ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log ||= get_logger( LOG_SPOPS );
 
     my $req = CTX->request;
     my $log_msg = 'no log message';
+
+    # This looks weird but it's here for when you run actions not
+    # logged in as user and outside the bounds of a request/response
+    # lifecycle...
+
     if ( UNIVERSAL::isa( $req, 'OpenInteract2::Request' ) )  {
         $uid ||= $req->auth_user_id;
         $log_msg = $req->param( '_log_message' );
     }
     else {
-        $uid ||= CTX->server_config->{default_objects}{superuser};
+        $uid ||= CTX->lookup_default_object_id( 'superuser' );
     }
     my $now = DateTime->now;
     my $class = ref $self || $self;
     $log->is_debug &&
         $log->debug( "Log [$action] [$class] [$id] by [$uid] [$now]" );
-    my $object_action = eval { CTX->lookup_object( 'object_action' )
-                                  ->new({ class     => $class,
-                                          object_id => $id,
-                                          action    => $action,
-                                          action_by => $uid,
-                                          action_on => $now,
-                                          notes     => $log_msg })
-                                  ->save() };
+    my $object_action = eval {
+        CTX->lookup_object( 'object_action' )
+           ->new({ class     => $class,
+                   object_id => $id,
+                   action    => $action,
+                   action_by => $uid,
+                   action_on => $now,
+                   notes     => $log_msg })
+           ->save()
+    };
     if ( $@ ) {
         $log->error( "Log entry failed: $@" );
         return undef;
@@ -181,7 +194,7 @@ sub log_action_enter {
 
 sub fetch_creator {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log ||= get_logger( LOG_SPOPS );
 
     # Bail if it's not an already-existing object
 
@@ -213,7 +226,8 @@ sub is_creator {
 
     # the great and powerful superuser sees all
 
-    return 1 if ( $uid eq CTX->server_config->{default_objects}{superuser} );
+    return 1 if ( $uid eq CTX->lookup_default_object_id( 'superuser' ) );
+
     my $creator = $self->fetch_creator;
     return ( $creator->id eq $uid );
 }
@@ -226,7 +240,7 @@ sub is_creator {
 
 sub fetch_updates {
     my ( $self, $opt ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log ||= get_logger( LOG_SPOPS );
 
     # Bail if it's not an already-saved object
 
@@ -266,13 +280,11 @@ sub get_security_scopes {
 # supergroup
 
 sub get_superuser_id  {
-    return CTX->server_config
-              ->{default_objects}{superuser}
+    return CTX->lookup_default_object_id( 'superuser' );
 }
 
 sub get_supergroup_id  {
-    return CTX->server_config
-              ->{default_objects}{supergroup}
+    return CTX->lookup_default_object_id( 'supergroup' );
 }
 
 ########################################
@@ -293,9 +305,13 @@ sub global_datasource_handle {
 # access to the various objects and resources
 
 sub global_cache                 { return CTX->cache           }
+
+# ugh .. is this used
 sub global_config                { return CTX->server_config          }
+
 # Is this right? Is this needed?
 sub global_secure_class          { return CTX->lookup_object( 'secure' ) }
+
 sub global_security_object_class { return CTX->lookup_object( 'security' ) }
 sub global_user_class            { return CTX->lookup_object( 'user' ) }
 sub global_group_class           { return CTX->lookup_object( 'group' ) }
@@ -318,7 +334,7 @@ sub global_group_current {
 
 sub notify {
     my ( $item, $p ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log ||= get_logger( LOG_SPOPS );
 
     my $req = CTX->request;
     $p->{object} ||= [];
@@ -351,7 +367,7 @@ End $p->{name} object
 OBJECT
     }
     my $from_email = $p->{email_from} ||
-                     CTX->server_config->{mail}{admin_email};
+                     CTX->lookup_mail_config->{admin_email};
     eval {
         OpenInteract2::Util->send_email({ to      => $p->{email},
                                           from    => $from_email,
@@ -375,10 +391,22 @@ OpenInteract2::SPOPS - Define common behaviors for all SPOPS objects in the Open
 
 =head1 SYNOPSIS
 
- # In configuration file
- 'myobj' => {
-    'isa'   => [ qw/ ... OpenInteract2::SPOPS::DBI ... / ],
- }
+ # In the server configuration ($WEBSITE_DIR/conf/server.ini)
+ 
+ # First define the datasource type ('DBI') and associate that type
+ # with an OI2::SPOPS subclass...
+ 
+ [datasource_type DBI]
+ connection_manager = OpenInteract2::Datasource::DBI
+ spops_config       = OpenInteract2::SPOPS::DBI
+ 
+ # Then declare a datasource and associate it with that type; SPOPS
+ # objects associated with this datasource will have 'OI2::SPOPS::DBI'
+ # automatically placed in the 'isa'.
+ 
+ [datasource main]
+ type          = DBI
+ ...
 
 =head1 DESCRIPTION
 
@@ -390,7 +418,8 @@ SPOPS. Think of this class as a bridge between the two.
 
 Note that while most of the functionality is in this class, you will
 always want to use one of the implementations-specific child classes
--- see L<OpenInteract2::SPOPS::DBI> and L<OpenInteract2::SPOPS::LDAP>.
+-- see L<OpenInteract2::SPOPS::DBI|OpenInteract2::SPOPS::DBI> and
+L<OpenInteract2::SPOPS::LDAP|OpenInteract2::SPOPS::LDAP>.
 
 =head1 OBJECT TRACKING METHODS
 
@@ -570,17 +599,9 @@ Notes that lead off an email.
 
 =back
 
-=head1 TO DO
-
-Nothing known.
-
-=head1 BUGS
-
-None known.
-
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

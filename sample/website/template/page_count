@@ -12,10 +12,8 @@
   Defaults:
     break_count = 20
   ########################################-%]
-
 [%- DEFAULT break_count = 20 -%]
-
-Page&nbsp;[&nbsp;
+[%- MSG( 'page_count.page_label' ) %]&nbsp;[&nbsp;
 [%- FOREACH page_count = [ 1 .. total_pages ] -%]
   [%- IF page_count == 1 -%]
     [%- IF current_pagenum != 1 -%]

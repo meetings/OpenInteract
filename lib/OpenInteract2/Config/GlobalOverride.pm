@@ -1,12 +1,12 @@
 package OpenInteract2::Config::GlobalOverride;
 
-# $Id: GlobalOverride.pm,v 1.3 2003/06/24 03:35:38 lachoy Exp $
+# $Id: GlobalOverride.pm,v 1.5 2004/02/17 04:30:13 lachoy Exp $
 
 use strict;
 use OpenInteract2::Config;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 ########################################
 # CLASS METHODS
@@ -209,7 +209,7 @@ sub _key_iterate {
 
 sub _add_action {
     my ( $rule, $item, $key ) = @_;
-    my $type = $rule->{type};
+    my $type = $rule->{type} || '';
     unless ( $type ) {
         $type = 'list'  if ( ref $item->{ $key } eq 'ARRAY' );
         $type = 'hash'  if ( ref $item->{ $key } eq 'HASH' );
@@ -429,7 +429,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

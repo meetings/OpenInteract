@@ -159,9 +159,9 @@ Here's an example using the 'news' object:
   ...
   
   [news display]
-  ACTION = news
-  TASK   = display
-
+  ACTION    = news
+  TASK      = display
+  TASK_EDIT = display_form
 
 So this says to generate the URL to display a news object, first
 lookup the URL for the 'news' action, use the 'display' task and then
@@ -171,11 +171,13 @@ append the ID of the object as necessary. So when you call:
         CTX->lookup_object( 'news ' )->fetch( 15 )
     };
     my $object_info = $news->object_description;
-    print "URL for this news object: $object_info->{url}";
+    print "URL to display this news object: $object_info->{url}";
+    print "URL to edit this news object: $object_info->{url_edit}";
 
 the result would be:
 
-  URL for this news object: /News/display/?news_id=15
+  URL to display this news object: /News/display/?news_id=15
+  URL to edit this news object: /News/display_form/?news_id=15
 
 And if you were deployed under the URL space '/MyApp' it would look
 like this:
@@ -245,7 +247,7 @@ L<SPOPS::Tool::DateConvert|SPOPS::Tool::DateConvert>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,10 +1,11 @@
-[%########################################
-  header_row( labels )
-     Row with header cells.
-  ########################################-%]
-
 <tr valign="bottom" align="center">
-[% FOREACH label = labels -%]
-   [% INCLUDE header_cell -%]
-[% END -%]
+[%- IF labels;
+        FOREACH label = labels;
+            INCLUDE header_cell;
+        END;
+    ELSIF label_keys;
+        FOREACH label_key = label_keys;
+            INCLUDE header_cell;
+        END;
+    END -%]
 </tr>

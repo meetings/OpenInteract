@@ -1,6 +1,6 @@
-package OpenInteract2::ContentGenerator::TT2Provider;
+package OpenInteract2::TT2::Provider;
 
-# $Id: TT2Provider.pm,v 1.5 2003/08/27 15:50:18 lachoy Exp $
+# $Id: Provider.pm,v 1.4 2004/02/18 05:25:28 lachoy Exp $
 
 use strict;
 use base qw( Template::Provider );
@@ -10,7 +10,9 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::ContentGenerator::TT2Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
 use constant DEFAULT_TEMPLATE_EXTENSION   => 'template';
@@ -33,7 +35,7 @@ use constant STAT   => 5;
 
 sub fetch {
 	my ( $self, $text ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
 	my ( $name );
 
 	# if scalar or glob reference, then get a unique name to cache by
@@ -136,7 +138,7 @@ sub fetch {
 
 sub _load {
     my ( $self, $name, $content ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
 	$log->is_debug &&
         $log->debug( "_load(@_[1 .. $#_])" );
 
@@ -210,7 +212,7 @@ sub _load {
 
 sub _refresh {
 	my ( $self, $slot ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
+    $log ||= get_logger( LOG_TEMPLATE );
 
     $log->is_debug &&
         $log->debug( "_refresh([ @$slot ])" );
@@ -218,8 +220,8 @@ sub _refresh {
     # If the cache time has expired reload the entry
 
     my $do_reload = 0;
-    my $server_config = CTX->server_config;
-    my $max_cache_time = $server_config->{cache}{template}{expire}
+    my $tt_config = CTX->lookup_content_generator_config( 'TT' );
+    my $max_cache_time = $tt_config->{cache_expire}
                          || DEFAULT_MAX_CACHE_TIME;
 	my ( $data, $error );
 	if ( ( $slot->[ DATA ]->{time} - time ) > $max_cache_time ) {
@@ -295,25 +297,25 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::ContentGenerator::TT2Provider - Retrieve templates for the Template Toolkit
+OpenInteract2::TT2::Provider - Retrieve templates for the Template Toolkit
 
 =head1 SYNOPSIS
 
- $Template::Config::CONTEXT = 'OpenInteract2::ContentGenerator::TT2Context';
+ $Template::Config::CONTEXT = 'OpenInteract2::TT2::Context';
  my $template = Template->new(
                        COMPILE_DIR    => '/tmp/ttc',
                        COMPILE_EXT    => '.ttc',
-                       LOAD_TEMPLATES => [ OpenInteract2::ContentGenerator::TT2Provider->new ] );
+                       LOAD_TEMPLATES => [ OpenInteract2::TT2::Provider->new ] );
  my ( $output );
  $template->process( 'package::template', \%params, \$output );
 
 =head1 DESCRIPTION
 
 B<NOTE>: As shown above, you need to use
-L<OpenInteract2::ContentGenerator::TT2Context|OpenInteract2::ContentGenerator::TT2Context>
-as a context for your templates since our naming scheme
-('package::name') collides with the TT naming scheme for specifying a
-prefix before a template.
+L<OpenInteract2::TT2::Context|OpenInteract2::TT2::Context> as a
+context for your templates since our naming scheme ('package::name')
+collides with the TT naming scheme for specifying a prefix before a
+template.
 
 This package is a provider for the Template Toolkit while running
 under OpenInteract. Being a provider means that TT hands off any
@@ -414,7 +416,7 @@ Slashcode L<http://www.slashcode.com/|http://www.slashcode.com/>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

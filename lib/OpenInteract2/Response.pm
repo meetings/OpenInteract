@@ -1,15 +1,18 @@
 package OpenInteract2::Response;
 
-# $Id: Response.pm,v 1.16 2003/08/30 15:47:15 lachoy Exp $
+# $Id: Response.pm,v 1.22 2004/04/28 01:29:46 lachoy Exp $
 
 use strict;
-use base qw( Class::Factory Class::Accessor );
+use base qw( Class::Factory Class::Accessor::Fast );
+use HTTP::Status             qw( RC_FOUND );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
-use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 ########################################
 # ACCESSORS
@@ -17,7 +20,7 @@ $OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\
 # TODO: 'error_hold' is temporary, until we get the error reporting
 # back to the template worked out
 
-my @FIELDS         = qw( status controller send_file content );
+my @FIELDS = qw( status controller send_file send_filehandle content );
 __PACKAGE__->mk_accessors( @FIELDS, 'error_hold' );
 
 my ( $RESPONSE_TYPE, $RESPONSE_CLASS );
@@ -46,7 +49,7 @@ sub get_current { return $RESPONSE_CLASS->get_current }
 
 sub new {
     my ( $class, @params ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     unless ( $RESPONSE_CLASS ) {
         $log->fatal( "No response implementation type set" );
         oi_error 'Before creating an OpenInteract2::Response object you ',
@@ -73,7 +76,7 @@ sub content_type {
 }
 
 
-# TODO: We may want to dereference $self->{header} before sending it
+# TODO: We may want to dereference $self->{_header} before sending it
 # back, otherwise people can add headers directly to the hash. OTOH,
 # this may be a good thing...
 
@@ -84,25 +87,33 @@ sub header {
     unless ( $name ) {
         return $self->{_header};
     }
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     if ( $value ) {
         $self->{_header}{ $name } = $value;
         $log->is_debug &&
-            $log->debug( "Setting header [$name] to [$value]" );
+            $log->debug( "Setting header '$name' to '$value'" );
     }
     return $self->{_header}{ $name };
 }
 
 sub remove_header {
     my ( $self, $name ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     if ( $name ) {
         $log->is_debug &&
-            $log->debug( "Removing header [$name] from response" );
+            $log->debug( "Removing header '$name' from response" );
         return delete $self->{_header}{ $name };
     }
 }
 
+sub is_redirect {
+    my ( $self ) = @_;
+    my $is_redir = ( $self->status && $self->status == RC_FOUND );
+    $log->is_debug &&
+        $log->debug( sprintf( "Checking to see if status '%s' is redirect: %s",
+                              $self->status, $is_redir ) );
+    return $is_redir;
+}
 
 # Cookies are special types of headers; the response should collect
 # all of these and put them into the header in send()
@@ -110,7 +121,7 @@ sub remove_header {
 
 sub cookie {
     my ( $self, $cookie ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     unless ( $cookie ) {
         return [ values %{ $self->{_cookie} } ];
     }
@@ -127,17 +138,17 @@ sub cookie {
         return;
     }
     $log->is_debug &&
-        $log->debug( "Setting cookie [$name] to [$cookie]" );
+        $log->debug( "Setting cookie '$name' to '$cookie'" );
     $self->{_cookie}{ $name } = $cookie;
     return $cookie;
 }
 
 sub remove_cookie {
     my ( $self, $name ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     if ( $name ) {
         $log->is_debug &&
-            $log->debug( "Removing cookie [$name] from response" );
+            $log->debug( "Removing cookie '$name' from response" );
         return delete $self->{_cookie}{ $name };
     }
 }
@@ -151,23 +162,33 @@ sub save_session {
 
 sub set_file_info {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
     my $filename = $self->send_file;
-    unless ( $filename ) {
+    my $filehandle = $self->send_filehandle;
+    unless ( $filename || $filehandle ) {
         return undef;
     }
-    unless ( -f $filename ) {
-        oi_error "Cannot set outbound file information for [$filename]: ",
-                 "file does not exist";
+
+    if ( $filename ) {
+        unless ( -f $filename ) {
+            oi_error "Cannot set outbound file information for ",
+                     "'$filename': file does not exist";
+        }
+        $log->is_debug &&
+            $log->debug( "Set response information for file '$filename'" );
+        unless ( $self->header( 'Content-Length' ) ) {
+            $self->header( 'Content-Length', (stat $filename)[7] );
+        }
+        unless ( $self->header( 'Content-Type' ) ) {
+            $self->content_type(
+                OpenInteract2::File->get_mime_type({
+                    filename => $filename
+                })
+            );
+        }
     }
-    $log->is_debug &&
-        $log->debug( "Set response information for file [$filename]" );
-    unless ( $self->header( 'Content-Length' ) ) {
-        $self->header( 'Content-Length', (stat $filename)[7] );
-    }
-    unless ( $self->header( 'Content-Type' ) ) {
-        $self->content_type( OpenInteract2::File->get_mime_type({
-                                             filename => $filename }) );
+    elsif ( $filehandle ) {
+        $self->header( 'Content-Length', (stat $filehandle)[7] );
     }
 }
 
@@ -179,6 +200,11 @@ sub return_url {
     if ( $return_url ) {
         $self->{return_url} =
             OpenInteract2::URL->create_relative_to_absolute( $return_url );
+    }
+    unless ( $self->{return_url} ) {
+        my $url = DEPLOY_URL || '/';
+        $self->{return_url} =
+            OpenInteract2::URL->create_relative_to_absolute( $url );
     }
     return $self->{return_url};
 }
@@ -199,6 +225,8 @@ sub factory_error {
 
 __PACKAGE__->register_factory_type(
                     apache     => 'OpenInteract2::Response::Apache' );
+__PACKAGE__->register_factory_type(
+                    apache2    => 'OpenInteract2::Response::Apache2' );
 __PACKAGE__->register_factory_type(
                     cgi        => 'OpenInteract2::Response::CGI' );
 __PACKAGE__->register_factory_type(
@@ -233,9 +261,9 @@ OpenInteract2::Response - Information about and actions on an HTTP response
 =head1 SYNOPSIS
 
  # Normal usage
-
+ 
  use HTTP::Status qw( RC_OK );
-
+ 
  my $response = OpenInteract2::Response->get_current;
  $response->status( RC_OK );                 # default
  $response->content_type( 'text/html' )      # default
@@ -244,9 +272,9 @@ OpenInteract2::Response - Information about and actions on an HTTP response
                                     expires => '+3d',
                                     value   => 'ISDFUASDFHSDAFUE' });
  $response->cookie( 'session', $cookie );
-
+ 
  # Sends the header (including cookies) and content to client
-
+ 
  $response->send;
 
 =head1 DESCRIPTION
@@ -270,6 +298,11 @@ B<content_type( [ $content_type ] )>
 B<header( [ $name, $value ] )>
 
 B<remove_header( $name )>
+
+B<is_redirect>
+
+Returns true is the C<status> has been set to be a redirect, false if
+not.
 
 B<cookie( [ $cookie ] )>
 
@@ -362,14 +395,6 @@ probably wait to send them until C<send()> is called.
 
 =back
 
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
-
 =head1 SEE ALSO
 
 L<Class::Factory|Class::Factory>
@@ -384,7 +409,7 @@ L<OpenInteract2::Response::Standalone|OpenInteract2::Response::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website;
 
-# $Id: Website.pm,v 1.14 2003/07/16 12:22:02 lachoy Exp $
+# $Id: Website.pm,v 1.18 2004/05/22 01:58:42 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
@@ -9,7 +9,7 @@ use OpenInteract2::Config::Readonly;
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package   qw( DISTRIBUTION_EXTENSION );
 
-$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 sub setup_task {
     my ( $self ) = @_;
@@ -110,6 +110,29 @@ sub _match_system_packages {
     return \%package_match;
 }
 
+sub _get_package_installer {
+    my ( $self, $action, $repository, $package_name ) = @_;
+    my $full_action = "install SQL structure";
+    my $package = $repository->fetch_package( $package_name );
+    unless ( $package ) {
+        $self->_add_status(
+                { is_ok   => 'no',
+                  action  => $full_action,
+                  message => "Package $package_name not installed" } );
+        return ();
+    }
+    my $installer =
+        OpenInteract2::SQLInstall->new_from_package( $package );
+    unless ( $installer ) {
+        $self->_add_status(
+                { is_ok   => 'yes',
+                  action  => $full_action,
+                  message => "No SQL installer specified for $package_name" });
+        return ();
+    }
+    return $installer;
+}
+
 1;
 
 __END__
@@ -128,7 +151,7 @@ OpenInteract2::Manage::Website - Parent for website management tasks
 
  sub run_task {
      my ( $self ) = @_;
-     my $server_config = CTX->server_config;
+     my $website_dir = CTX->lookup_directory( 'website' );;
      ... # CTX is setup automatically in setup_task()
  }
 
@@ -181,7 +204,7 @@ L<OpenInteract2::Manage|OpenInteract2::Manage>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

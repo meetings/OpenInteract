@@ -1,6 +1,6 @@
 package OpenInteract2::SessionManager;
 
-# $Id: SessionManager.pm,v 1.1 2003/08/29 02:58:50 lachoy Exp $
+# $Id: SessionManager.pm,v 1.7 2004/02/18 05:25:26 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,13 +8,15 @@ use OpenInteract2::Constants qw( :log SESSION_COOKIE );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub create {
     my ( $class, $session_id ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $log ||= get_logger( LOG_SESSION );
 
-    my $session_config = CTX->server_config->{session_info};
+    my $session_config = CTX->lookup_session_config;
     my @validation_errors = $class->_validate_config( $session_config );
     if ( scalar @validation_errors ) {
         $log->error( join( "\n", @validation_errors ) );
@@ -60,13 +62,17 @@ sub create {
 
 sub is_session_valid {
     my ( $class, $session ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $log ||= get_logger( LOG_SESSION );
 
     return 1 unless ( $session->{timestamp} );
-    my $expires_in = CTX->server_config->{session_info}{expires_in};
+
+    my $session_config = CTX->lookup_session_config;
+    my $expires_in = $session_config->{expires_in};
     return 1 unless ( $expires_in > 0 );
+
     my $last_refresh = ( time - $session->{timestamp} ) / 60;
     return 1 unless ( $last_refresh > $expires_in );
+
     $log->is_info &&
         $log->info( "Session has expired. Last refresh was ",
                     "[", sprintf( '%5.2f', $last_refresh ) , "] minutes ago at ",
@@ -78,7 +84,8 @@ sub is_session_valid {
 
 sub save {
     my ( $class, $session ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $log ||= get_logger( LOG_SESSION );
+    return 1 unless ( ref $session );
 
     if ( tied %{ $session } ) {
         my %useful_session_keys = map { $_ => 1 } keys %{ $session };
@@ -100,26 +107,19 @@ sub save {
         }
     }
     elsif ( ref $session eq 'HASH' ) {
-        if ( scalar keys %{ $session } ) {
-            $log->is_info &&
-                $log->info( "Create new session with data from hashref" );
-            my $new_session = $class->_create_session;
-            if ( $new_session ) {
-                foreach my $key ( keys %{ $session } ) {
-                    $new_session->{ $key } = $session->{ $key };
-                }
-                $class->_save_session( $new_session, 1 );
+        return 1 unless ( scalar keys %{ $session } );
+        $log->is_info &&
+            $log->info( "Create new session with data from hashref" );
+        my $new_session = $class->_create_session;
+        if ( $new_session ) {
+            foreach my $key ( keys %{ $session } ) {
+                $new_session->{ $key } = $session->{ $key };
             }
-            else {
-                $log->error( "No value returned from _create_session; ",
-                             "this shouldn't happen..." );
-            }
+            $class->_save_session( $new_session, 1 );
         }
         else {
-            $log->is_info &&
-                $log->info( "No data yet set to session hashref, ",
-                            "skip save" );
-            return 1;
+            $log->error( "No value returned from _create_session; ",
+                         "this shouldn't happen..." );
         }
     }
     else {
@@ -133,7 +133,7 @@ sub save {
 
 sub _save_session {
     my ( $class, $session, $is_new ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $log ||= get_logger( LOG_SESSION );
 
     $session->{timestamp} = time;
     $log->is_debug &&
@@ -166,7 +166,7 @@ sub _save_session {
 
 sub _get_expiration {
     my ( $class, $session ) = @_;
-    my $log = get_logger( LOG_SESSION );
+    $log ||= get_logger( LOG_SESSION );
 
     my ( $expiration );
     if ( exists $session->{expiration} ) {
@@ -177,10 +177,10 @@ sub _get_expiration {
         delete $session->{expiration};
     }
     else {
-        $expiration = CTX->server_config->{session_info}{expiration};
+        $expiration = CTX->lookup_session_config->{expiration};
         $log->is_info &&
             $log->info( "Expiration for new session set to default ",
-                             "from config [$expiration]" );
+                        "from config [$expiration]" );
     }
     return $expiration;
 }
@@ -207,7 +207,7 @@ OpenInteract2::SessionManager - Implement session management for OpenInteract
  ...
  
  my $session_id = $self->cookie( SESSION_COOKIE );
- my $session_class = CTX->server_config->{session_info}{class};
+ my $session_class = CTX->lookup_session_config->{class};
  my $session = $session_class->create( $session_id );
  $request->session( $session );
  
@@ -218,7 +218,7 @@ OpenInteract2::SessionManager - Implement session management for OpenInteract
  $session->{favorite_colors}{red} += 5;
  
  # And from any template you can use the OI template plugin (see
- # OpenInteract2::ContentGenerator::TT2Plugin)
+ # OpenInteract2::TT2::Plugin)
  
  <p>The weight of your favorite colors are:
  [% FOREACH color = keys OI.session.favorite_colors %]
@@ -239,7 +239,7 @@ This handler has two public methods: C<create()> and C<save()>. Guess
 in which order they are meant to be called?
 
 This class also requires you to implement a subclass that overrides
-the _create_session method with one that returns a valid
+the C<_create_session> method with one that returns a valid
 L<Apache::Session|Apache::Session> tied hashref. OpenInteract provides
 L<OpenInteract2::SessionManager::DBI|OpenInteract2::SessionManager::DBI>
 for DBI databases,
@@ -340,7 +340,7 @@ Implement C<_validate_config()>
 
 =item *
 
-Implement C<create_session()>
+Implement C<_create_session()>
 
 =back
 
@@ -367,18 +367,18 @@ along to the proper authorities. Here's an example:
      return @errors;
  }
 
-If errors are returned from C<_validate_config> the session is never
-materialized, C<_create_session> is never called.
+If errors are returned from C<_validate_config()> the session is never
+materialized, C<_create_session()> is never called.
 
 =head2 Creating a Session
 
-Like C<_validate_config> the C<_create_session> method is given the
+Like C<_validate_config()> the C<_create_session()> method is given the
 session information from the server configuration. It's also given a
 session ID for which the implementation should retrieve the data. If
 you've written a validation routine you can assume the session
 configuration is ok.
 
-The C<_create_session> method should either throw an exception or
+The C<_create_session()> method should either throw an exception or
 return a tied hashref, nothing else. If no session ID is passed in the
 method should create a tied hashref without any data besides the
 generated session ID.
@@ -397,10 +397,6 @@ Here's a generic example:
 It's fine the C<tie> call dies -- the caller will catch the error and
 be able to move on properly.
 
-=head1 BUGS
-
-None known.
-
 =head1 SEE ALSO
 
 L<Apache::Session|Apache::Session>
@@ -408,15 +404,16 @@ L<Apache::Session|Apache::Session>
 L<OpenInteract2::Constants|OpenInteract2::Constants> where the
 C<SESSION_COOKIE> is defined.
 
-L<OpenInteract2::ContentGenerator::TT2Plugin|OpenInteract2::ContentGenerator::TT2Plugin>:
-makes the session hash information available to the template
+L<OpenInteract2::TT2::Plugin|OpenInteract2::TT2::Plugin>: makes the
+session data available to the template
 
-C<OpenInteract2::Cookie> -- routines for parsing, creating, setting
-cookie information so we can match up users with session information
+L<OpenInteract2::Request|OpenInteract2::Request> is normally the
+process that creates a session from the cookie passed to us by the
+user or calling process.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::TestLDAP;
 
-# $Id: TestLDAP.pm,v 1.9 2003/07/14 13:08:38 lachoy Exp $
+# $Id: TestLDAP.pm,v 1.10 2004/02/17 04:30:21 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Manage::Website::TestLDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::TestLDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'test_ldap';
@@ -131,7 +131,7 @@ not.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

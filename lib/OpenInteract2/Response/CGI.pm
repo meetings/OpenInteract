@@ -1,6 +1,6 @@
 package OpenInteract2::Response::CGI;
 
-# $Id: CGI.pm,v 1.13 2003/06/27 17:15:51 lachoy Exp $
+# $Id: CGI.pm,v 1.15 2004/02/18 05:25:28 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -12,7 +12,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::CGI::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::CGI::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my ( $CURRENT );
 
@@ -48,7 +50,7 @@ sub out {
 
 sub send {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
 
     $log->info( "Sending CGI response" );
 
@@ -135,7 +137,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

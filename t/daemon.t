@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: daemon.t,v 1.2 2003/08/26 11:31:05 lachoy Exp $
+# $Id: daemon.t,v 1.3 2004/02/16 20:47:21 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -10,5 +10,3 @@ use Test::More  tests => 1;
 require_ok( 'HTTP::Daemon::OpenInteract2' );
 #initialize_context();
 
-{
-}

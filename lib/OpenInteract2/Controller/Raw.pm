@@ -1,6 +1,6 @@
 package OpenInteract2::Controller::Raw;
 
-# $Id: Raw.pm,v 1.8 2003/07/01 19:03:29 lachoy Exp $
+# $Id: Raw.pm,v 1.11 2004/05/22 15:00:41 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Controller );
@@ -9,19 +9,18 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::Raw::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::Raw::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub execute {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     my $action = $self->initial_action;
     $log->is_debug &&
         $log->debug( 'Executing top-level action [', $action->name, "] ",
                      "with task [", $action->task, "]" );
 
-    # TODO: needed anymore?
-    $action->request( $self->request );
-    $action->response( $self->response );
     my $content = eval { $action->execute };
     if ( $@ ) {
         $log->error( "Caught exception generating content: $@" );
@@ -31,8 +30,9 @@ sub execute {
         $log->is_debug &&
             $log->debug( "Generated content ok" );
     }
+
     # We don't need no steenkeng content generator!
-    $self->response->content( \$content );
+    CTX->response->content( \$content );
     return $self;
 }
 
@@ -75,7 +75,7 @@ L<OpenInteract2::Controller|OpenInteract2::Controller>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

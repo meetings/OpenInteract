@@ -1,3 +1,4 @@
+httpd_cgi_solo.conf     --> conf httpd_cgi_solo.conf
 httpd_modperl.conf      --> conf httpd_modperl.conf
 httpd_modperl_solo.conf --> conf httpd_modperl_solo.conf
 httpd_static.conf       --> conf httpd_static.conf

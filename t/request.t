@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: request.t,v 1.3 2003/08/21 15:42:09 lachoy Exp $
+# $Id: request.t,v 1.4 2004/03/19 17:57:29 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -21,12 +21,12 @@ my $ctx = initialize_context();
 
 {
     my $initial_impl_type = OpenInteract2::Request->get_implementation_type;
-    is( $initial_impl_type, 'cgi',
-        'Initial implementation type set from context/initialization' );
+    is( $initial_impl_type, undef,
+        'Initial implementation type not set from context/initialization (good)' );
     OpenInteract2::Request->set_implementation_type( 'lwp' );
     is( OpenInteract2::Request->get_implementation_type, 'lwp',
         'Implementation type set' );
-    OpenInteract2::Request->set_implementation_type( $initial_impl_type );
+    OpenInteract2::Request->set_implementation_type( 'cgi' );
     my $request = OpenInteract2::Request->new;
     isa_ok( $request, 'OpenInteract2::Request::CGI',
             'New request created of correct type' );

@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::CreateSecurity;
 
-# $Id: CreateSecurity.pm,v 1.2 2003/07/16 12:22:02 lachoy Exp $
+# $Id: CreateSecurity.pm,v 1.3 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -9,7 +9,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_param_error );
 
-$OpenInteract2::Manage::Website::CreateSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::CreateSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -173,7 +173,7 @@ L<OpenInteract2::CreateSecurity|OpenInteract2::CreateSecurity> (in
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003 Chris Winters. All rights reserved.
+Copyright (C) 2003-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

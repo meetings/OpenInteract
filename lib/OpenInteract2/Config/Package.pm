@@ -1,28 +1,28 @@
 package OpenInteract2::Config::Package;
 
-# $Id: Package.pm,v 1.11 2003/07/12 15:21:39 lachoy Exp $
+# $Id: Package.pm,v 1.18 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor );
+use base qw( Class::Accessor::Fast );
 use File::Basename ();
 use File::Spec;
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_FILENAME => 'package.conf';
+
+my @REQUIRED_FIELDS = qw( name version );
+sub get_required_fields { return [ @REQUIRED_FIELDS ] }
 
 # Fields in our package/configuration. These are ordered --
 # save_config() will output to the file in this order.
 
 my @SERIAL_FIELDS = qw( name version author url
-                        spops_file action_file module
+                        spops_file action_file message_file module
                         sql_installer template_plugin
                         filter config_watcher description );
 my @OBJECT_FIELDS = qw( filename package_dir );
-
-my @REQUIRED_FIELDS = qw( name version );
-sub get_required_fields { return [ @REQUIRED_FIELDS ] }
 
 # Define the keys in 'package.conf' that can be a list, meaning you
 # can have multiple items defined:
@@ -30,8 +30,10 @@ sub get_required_fields { return [ @REQUIRED_FIELDS ] }
 #  author  Larry Wall <larry@wall.org>
 #  author  Chris Winters E<lt>chris@cwinters.comE<gt>
 
-my %LIST_FIELDS = map { $_ => 1 }
-                  qw( author module spops_file action_file config_watcher );
+# NOTE: If you add a field here you must also add it to @SERIAL_FIELDS
+
+my %LIST_FIELDS = map { $_ => 1 } qw( author module spops_file action_file
+                                      message_file config_watcher );
 
 # Define the keys in 'package.conf' that can be a hash, meaning that
 # you can have items defined as multiple key-value pairs
@@ -39,6 +41,8 @@ my %LIST_FIELDS = map { $_ => 1 }
 #
 #  template_plugin MyNew OpenInteract2::TT::Plugin::New
 #  template_plugin MyURL OpenInteract2::TT::Plugin::URL
+
+# NOTE: If you add a field here you must also add it to @SERIAL_FIELDS
 
 my %HASH_FIELDS = map { $_ => 1 } qw( template_plugin filter );
 
@@ -107,6 +111,15 @@ sub get_action_files {
     return $action_files;
 }
 
+sub get_message_files {
+    my ( $self ) = @_;
+    my $message_files = $self->message_file;
+    my $dir = $self->package_dir;
+    unless ( ref $message_files eq 'ARRAY' and scalar @{ $message_files } ) {
+        return [];
+    }
+    return $message_files;
+}
 
 sub check_required_fields {
     my ( $self, @check_fields ) = @_;
@@ -411,7 +424,8 @@ Example:
  my $files = $config->get_spops_files();
  # [ 'conf/object_one.ini', 'conf/object_two.ini' ]
 
-Returns: Arrayref of filenames
+Returns: Arrayref of filenames, not fully-qualified. If no files
+declared return an empty arrayref.
 
 B<get_action_files()>
 
@@ -425,14 +439,38 @@ Example:
 
  name        foo
  version     1.51
- spops_file  conf/action_one.ini
- spops_file  conf/action_two.ini
+ action_file  conf/action_one.ini
+ action_file  conf/action_two.ini
  ...
  $config->package_dir( '/home/me/pkg' )
- my $files = $config->get_spops_files();
+ my $files = $config->get_action_files();
  # [ 'conf/action_one.ini', 'conf/action_two.ini' ]
 
-Returns: Arrayref of filenames
+Returns: Arrayref of filenames, not fully-qualified. If no files
+declared returns an empty arrayref.
+
+B<get_message_files()>
+
+Returns all message files in this package as set in C<message_file>,
+relative to the package directory (set in C<package_dir>). This module
+does not verify that the files exist and are coherent, it just reports
+what is configured. If no entries are in C<message_file>, it returns an
+empty arrayref.
+
+Example:
+
+ name          foo
+ version       1.51
+ message_file  data/foo-en.msg
+ message_file  data/foo-en_us.msg
+ message_file  data/foo-en_uk.msg
+ ...
+ $config->package_dir( '/home/me/pkg' )
+ my $files = $config->get_message_files();
+ # [ 'data/foo-en.msg', 'data/foo-en_us.msg', 'data/foo-en_uk.msg' ]
+
+Returns: Arrayref of filenames, not fully-qualified. If no files
+declared returns an empty arrayref.
 
 B<check_required_fields( [ @check_fields ] )>
 
@@ -486,15 +524,23 @@ B<spops_file> (\@)
 
 File with SPOPS objects defined in this package. If you do not specify
 these you must store all object configuration information in a single
-file C<conf/spops.perl>. Both perl- and INI-formatted configurations
-are acceptable.
+file C<conf/spops.ini>. Both perl- and INI-formatted configurations
+are acceptable. (TODO: true?)
 
 B<action_file> (\@)
 
 File with the actions defined in this package. If you do not specify
 these you must store all action information in a single file
-C<conf/action.perl>. Both perl- and INI-formatted configurations are
-acceptable.
+C<conf/action.ini>. Both perl- and INI-formatted configurations are
+acceptable. (TODO: true?)
+
+B<message_file> (\@)
+
+File with the localized messages used in your application. If you do
+not specify these you must store your message files in a subdirectory
+C<msg/> and in files ending with C<.msg>. The format of these files is
+discussed in L<OpenInteract2::I18N|OpenInteract2::I18N> and
+L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>.
 
 B<module> (\@)
 
@@ -506,12 +552,15 @@ SQL installer class to use for this package.
 
 B<template_plugin> (\%)
 
-Template Toolkit plugins defined by this package.
+Template Toolkit plugins defined by this package. Each plugin is
+defined by a space-separated key/value pair. The template users access
+the plugin by the key, the value is used to instantiate the plugin.
 
 B<filter> (\%)
 
-Filters defined by this package. It should be in a 'name class' format
-simiilar to C<template_plugin>.
+Filters defined by this package. It should be in a space-separated
+key/value pair simiilar to C<template_plugin>, where the key defines
+the filter name and the value defines the filter class.
 
 B<config_watcher> (\@)
 
@@ -547,7 +596,7 @@ L<Class::Accessor|Class::Accessor>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

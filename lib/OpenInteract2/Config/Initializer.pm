@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Initializer;
 
-# $Id: Initializer.pm,v 1.5 2003/09/05 02:23:33 lachoy Exp $
+# $Id: Initializer.pm,v 1.11 2004/02/18 05:25:27 lachoy Exp $
 
 use base qw( Class::Observable );
 use strict;
@@ -9,7 +9,9 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Config::Initializer::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Initializer::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub new {
     my ( $class ) = @_;
@@ -18,12 +20,12 @@ sub new {
 
 sub read_observers {
     my ( $class ) = @_;
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     my @conf_watchers = ();
 
     # ...from the server
-    my $config_watcher = CTX->server_config->{config_watcher};
+    my $config_watcher = CTX->lookup_config_watcher_config;
     if ( ref $config_watcher eq 'HASH' and
          ref $config_watcher->{class} eq 'ARRAY' ) {
         push @conf_watchers, @{ $config_watcher->{class} };
@@ -53,7 +55,7 @@ sub read_observers {
 sub _spops_normalize_params {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'spops' );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Normalizing parameters for SPOPS '$config->{key}'" );
 
     my @list_params = qw( isa rules_from fulltext_field );
@@ -67,7 +69,7 @@ sub _spops_security {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'spops' );
     return unless ( $config->{is_secure} and $config->{is_secure} eq 'yes' );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Adding security to [$config->{key}: $config->{class}]" );
     unshift @{ $config->{isa} }, 'SPOPS::Secure';
 }
@@ -77,13 +79,13 @@ sub _spops_creation_security {
     return unless ( $type eq 'spops' );
     return unless ( ref $config->{creation_security} eq 'HASH' );
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Checking 'creation_security' rules for ",
                 "[$config->{key}: $config->{class}]" );
     my %create = ( u => $config->{creation_security}{user},
                    w => $config->{creation_security}{world} );
 
-    my $default_objects = CTX->server_config->{default_objects};
+    my $default_objects = CTX->lookup_default_object_id;
     my %groups = ();
     if ( my $group_levels = $config->{creation_security}{group} ) {
         my @all_group_levels = ( ref $group_levels eq 'ARRAY' )
@@ -108,7 +110,7 @@ sub _spops_creation_security {
 sub _spops_date_conversion {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'spops' );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
 
     my $DFK = 'convert_date_field';
     $config->{ $DFK } ||= [];
@@ -148,7 +150,7 @@ sub _spops_date_conversion {
 sub _spops_fulltext {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'spops' );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     if ( defined $config->{is_searchable} and $config->{is_searchable} eq 'yes' ) {
         if ( defined $config->{fulltext_field} ) {
             $log->is_debug &&
@@ -174,7 +176,7 @@ sub _spops_display_info {
     return unless ( $type eq 'spops' );
     my $display_info = $config->{display};
     return unless ( ref $display_info eq 'HASH' );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Translating correct URL for 'display' in '$config->{key}'" );
     if ( $display_info->{url} ) {
         $display_info->{url} =
@@ -207,10 +209,12 @@ sub _spops_discover_field {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'spops' );
     return unless ( _config_is_dbi( $config ) );
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Adding field discovery for '$config->{key}'" );
 
-    if ( $config->{field_discover} eq 'yes' ) {
+    # use both conditions to get around 'uninitialized' warning under -w
+
+    if ( $config->{field_discover} and $config->{field_discover} eq 'yes' ) {
         push @{ $config->{rules_from} }, 'SPOPS::Tool::DBI::DiscoverField';
     }
 }
@@ -222,7 +226,7 @@ sub _spops_set_dbi {
     my $ds_info = CTX->lookup_datasource_config( $config->{datasource} );
     my $spops_class = $ds_info->{spops};
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Setting '$spops_class' and standards in 'isa' ",
                 "for '$config->{key}'" );
 
@@ -262,7 +266,7 @@ sub _action_normalize_params {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'action' );
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Normalizing params for action '$config->{name}'" );
 
     my @list_params = qw( url_alt task_valid task_invalid );
@@ -276,7 +280,7 @@ sub _action_assign_defaults {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'action' );
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Assigning action defaults to '$config->{name}'" );
     my $global_defaults = CTX->lookup_default_action_info;
     while ( my ( $action_item, $action_value ) =
@@ -291,7 +295,7 @@ sub _action_security_level {
     return unless ( $type eq 'action' );
     return unless ( ref $config->{security} eq 'HASH' );
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Modifying verbose security for action '$config->{name}'" );
     foreach my $task ( keys %{ $config->{security} } ) {
         my $task_security = uc $config->{security}{ $task };
@@ -309,7 +313,7 @@ sub _action_cache_params {
     return unless ( $type eq 'action' );
     return unless ( ref $config->{cache_param} eq 'HASH' );
 
-    my $log = get_logger( LOG_INIT );
+    $log ||= get_logger( LOG_INIT );
     $log->info( "Modifying cache params for action '$config->{name}'" );
     foreach my $task ( keys %{ $config->{cache_param} } ) {
         if ( ref $config->{cache_param}->{ $task } ne 'ARRAY' ) {
@@ -370,13 +374,13 @@ OpenInteract2::Config::Initializer - Observable configuration initialization eve
  name    mypackage
  version 1.10
  ...
- config_watcher OpenInteract::MyInitializerSpops
- config_watcher OpenInteract::MyInitializerAction
+ config_watcher OpenInteract2::MyInitializerSpops
+ config_watcher OpenInteract2::MyInitializerAction
  
  # And the code in our package -- we'll dynamically add a rule from
  # 'My::Googlable' to a class where 'is_googlable' is set to 'yes'
  
- package OpenInteract::MyInitializerSpops;
+ package OpenInteract2::MyInitializerSpops;
  
  use strict;
  
@@ -392,7 +396,7 @@ OpenInteract2::Config::Initializer - Observable configuration initialization eve
  # Here's we'll dynamically add a filter to an action where
  # 'is_googlable' is 'yes'
  
- package OpenInteract::MyInitializerAction;
+ package OpenInteract2::MyInitializerAction;
  
  use strict;
  use OpenInteract2::Context qw( CTX );
@@ -421,13 +425,24 @@ action and SPOPS configurations looks like this:
         do basic sanity checking
         trigger event
 
+You can also catch events generated when we create the classes used
+for localization (via L<Locale::Maketext|Locale::Maketext>, although
+the pseudocode for processing these is a little different:
+
+ foreach package
+    foreach message_file from package
+        add messages to server-wide message store
+ process all messages into generated classes
+ foreach generated class
+     trigger event
+
 The event code can do whatever you like. This can be additional (but
 boring) checks on the data, such as ensuring that certain parameters
 are always arrayrefs, or always sorted in the same manner. This allows
 your implementation code to assume that everything will always be
 setup properly
 
-More interesting you can provide concise hooks in your configuration
+More interesting: you can provide concise hooks in your configuration
 that get expanded at runtime to something more complex.
 
 =head2 Built-in examples
@@ -567,6 +582,26 @@ value (if one defined). The parameters are: 'url_alt'
 
 =back
 
+=head2 Localization
+
+There are no built-in observers to catch localization events. If you
+would like to write your own, the type is 'localization' and the only
+argument is the name of the class generated:
+
+ sub my_localization_observer {
+     my ( $init_class, $type, $localization_class ) = @_;
+     return unless ( $type eq 'localization' );
+
+     print "Processing '$localization_class':\n";
+
+     # browse the keys for these localization messages
+     no strict 'refs';
+     my $this_lexicon = \%{ $localization_class . '::Lexicon' };
+     foreach my $msg_key ( keys  %{ $this_lexicon } ) {
+         print "   $msg_key: $this_lexicon->{ $msg_key }\n";
+     }
+ }
+
 =head1 METHODS
 
 You should never be using this class directly. But just in case...
@@ -579,11 +614,13 @@ B<read_observers()>
 
 Class method to read the configuration observers from the server
 configuration and ask each package for its observers. These are
-collected and added to the observer list for this class.
+collected and added to the observer list for this class -- this means
+you can create new objects at will and each will use the observers
+from the class.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package OpenInteract2::Response::LWP;
 
-# $Id: LWP.pm,v 1.15 2003/06/27 17:15:51 lachoy Exp $
+# $Id: LWP.pm,v 1.18 2004/05/22 17:26:18 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -12,7 +12,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 my @FIELDS = qw( lwp_response client );
 OpenInteract2::Response::LWP->mk_accessors( @FIELDS );
@@ -32,9 +34,14 @@ sub clear_current { $CURRENT = undef }
 
 sub send {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
 
     $log->is_info && $log->info( "Sending LWP response" );
+    if ( $self->is_redirect ) {
+        $log->is_info
+            && $log->info( "Response is redirect, already sent" );
+        return;
+    }
     $self->content_type( 'text/html' ) unless ( $self->content_type );
     $self->status( RC_OK )             unless ( $self->status );
 
@@ -75,7 +82,10 @@ sub send {
 
 sub redirect {
     my ( $self, $url ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
+    $url ||= $self->return_url;
+    $log->is_info &&
+        $log->info( "Got request for redirect to '$url'" );
 
     my $lwp_response = $self->lwp_response;
     unless ( $lwp_response ) {
@@ -85,18 +95,21 @@ sub redirect {
     else {
         $lwp_response->code( RC_FOUND );
     }
+    $self->status( RC_FOUND );
     $lwp_response->header( Location => $url );
+    $log->is_info &&
+        $log->info( "Set 'Location' header to ", $lwp_response->header( 'Location' ) );
     $self->_set_lwp_cookies;
     $log->debug( "Getting ready to send response: ", CTX->dump( $lwp_response ) );
     if ( my $client = $self->client ) {
         $client->send_response( $lwp_response );
     }
-    $log->info( "Sent redirect ok" );
+    $log->is_info && $log->info( "Sent redirect ok" );
 }
 
 sub _set_lwp_headers {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
 
     my $lwp_response = $self->lwp_response;
     $lwp_response->code( $self->status );
@@ -117,7 +130,7 @@ sub _set_lwp_headers {
 
 sub _set_lwp_cookies {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_RESPONSE );
+    $log ||= get_logger( LOG_RESPONSE );
 
     for ( @{ $self->cookie } ) {
         $self->lwp_response->push_header( 'Set-Cookie' => $_->as_string );
@@ -151,7 +164,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -179,8 +179,12 @@ doesn't provide one.
 
 =back
 
-This management task provides C<_get_source_dir_param()> which can be
-used as necessary:
+Note that most users of your task will probably call
+C<task_parameters()> instead of C<get_parameters()> as it provides
+some additional information.
+
+The parent management task provides C<_get_source_dir_param()> which
+can be used as necessary:
 
   sub get_parameters {
       my ( $self ) = @_;
@@ -463,7 +467,7 @@ the root log4perl logger to be 'debug'.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

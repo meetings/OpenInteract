@@ -82,6 +82,12 @@ applications.
 
 =item
 
+L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>
+
+Internationalization and localization issues in OpenInteract2.
+
+=item
+
 L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching>
 
 How to setup and use content caching.
@@ -168,6 +174,10 @@ L<Apache::OpenInteract2|Apache::OpenInteract2>: OpenInteract2 Content handler fo
 =item *
 
 L<Apache::OpenInteract2::HttpAuth|Apache::OpenInteract2::HttpAuth>: Use HTTP authentication to check logins against OpenInteract2 users
+
+=item *
+
+L<Apache2::OpenInteract2|Apache2::OpenInteract2>: OpenInteract2 Content handler for Apache 1.x
 
 =item *
 
@@ -287,19 +297,7 @@ L<OpenInteract2::ContentGenerator::HtmlTemplate|OpenInteract2::ContentGenerator:
 
 =item *
 
-L<OpenInteract2::ContentGenerator::TT2Context|OpenInteract2::ContentGenerator::TT2Context>: Provide a custom context for templates in OpenInteract
-
-=item *
-
-L<OpenInteract2::ContentGenerator::TT2Plugin|OpenInteract2::ContentGenerator::TT2Plugin>: Custom OpenInteract functionality in templates
-
-=item *
-
 L<OpenInteract2::ContentGenerator::TT2Process|OpenInteract2::ContentGenerator::TT2Process>: Process Template Toolkit templates in OpenInteract
-
-=item *
-
-L<OpenInteract2::ContentGenerator::TT2Provider|OpenInteract2::ContentGenerator::TT2Provider>: Retrieve templates for the Template Toolkit
 
 =item *
 
@@ -367,6 +365,10 @@ L<OpenInteract2::Exception|OpenInteract2::Exception>: Base class for exceptions 
 
 =item *
 
+L<OpenInteract2::Exception::Parameter|OpenInteract2::Exception::Parameter>: Parameter exceptions
+
+=item *
+
 L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>: Security exceptions
 
 =item *
@@ -376,6 +378,14 @@ L<OpenInteract2::File|OpenInteract2::File>: Safe filesystem operations for OpenI
 =item *
 
 L<OpenInteract2::Filter|OpenInteract2::Filter>: Initialize and manage content filters
+
+=item *
+
+L<OpenInteract2::I18N|OpenInteract2::I18N>: Base class for localized messages
+
+=item *
+
+L<OpenInteract2::I18N::Initializer|OpenInteract2::I18N::Initializer>: Read in localization messages and generate maketext classes
 
 =item *
 
@@ -463,6 +473,10 @@ L<OpenInteract2::Manage::Website::ListPackages|OpenInteract2::Manage::Website::L
 
 =item *
 
+L<OpenInteract2::Manage::Website::PackageCheckExportInstall|OpenInteract2::Manage::Website::PackageCheckExportInstall>: Check, export and install a package in one fell swoop
+
+=item *
+
 L<OpenInteract2::Manage::Website::ReindexObjects|OpenInteract2::Manage::Website::ReindexObjects>: Index objects for a particular class
 
 =item *
@@ -511,6 +525,10 @@ L<OpenInteract2::Request::Apache|OpenInteract2::Request::Apache>: Read parameter
 
 =item *
 
+L<OpenInteract2::Request::Apache2|OpenInteract2::Request::Apache2>: Read parameters, uploaded files and headers from Apache2/mod_perl2
+
+=item *
+
 L<OpenInteract2::Request::CGI|OpenInteract2::Request::CGI>: Read parameters, uploaded files and headers
 
 =item *
@@ -528,6 +546,10 @@ L<OpenInteract2::Response|OpenInteract2::Response>: Information about and action
 =item *
 
 L<OpenInteract2::Response::Apache|OpenInteract2::Response::Apache>: Response handler using Apache/mod_perl 1.x
+
+=item *
+
+L<OpenInteract2::Response::Apache2|OpenInteract2::Response::Apache2>: Response handler using Apache/mod_perl 2.x
 
 =item *
 
@@ -587,6 +609,18 @@ L<OpenInteract2::Setup|OpenInteract2::Setup>: Setup an OpenInteract2::Context ob
 
 =item *
 
+L<OpenInteract2::TT2::Context|OpenInteract2::TT2::Context>: Provide a custom context for templates in OpenInteract
+
+=item *
+
+L<OpenInteract2::TT2::Plugin|OpenInteract2::TT2::Plugin>: Custom OpenInteract functionality in templates
+
+=item *
+
+L<OpenInteract2::TT2::Provider|OpenInteract2::TT2::Provider>: Retrieve templates for the Template Toolkit
+
+=item *
+
 L<OpenInteract2::URL|OpenInteract2::URL>: Create URLs, parse URLs and generate action mappings
 
 =item *
@@ -602,7 +636,7 @@ L<OpenInteract2::Util|OpenInteract2::Util>: Package of routines that do not real
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.1 or
@@ -625,7 +659,7 @@ etc. to OpenInteract and OpenInteract2:
 intes.net (http://www.intes.net/) has funded and supported OpenInteract
 development from its inception.
 
-=item  *
+=item *
 
 Andreas Nolte E<lt>andreas.nolte@bertelsmann.deE<gt> and his team have
 contributed lots of great ideas and have been super for bouncing ideas
@@ -634,3 +668,5 @@ around.
 =item *
 
 Christian Lemburg E<lt>lemburg@aixonix.deE<gt>
+
+=back

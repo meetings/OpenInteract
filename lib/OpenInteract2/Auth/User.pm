@@ -1,19 +1,21 @@
 package OpenInteract2::Auth::User;
 
-# $Id: User.pm,v 1.16 2003/09/05 13:30:28 lachoy Exp $
+# $Id: User.pm,v 1.20 2004/02/22 04:41:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 sub get_user {
     my ( $class, $auth ) = @_;
     my $server_config = CTX->server_config;
     my ( $user, $user_id, $is_logged_in );
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     # Check to see if the user is in the session
 
@@ -96,7 +98,7 @@ sub _get_cached_user {
     my $user_refresh = CTX->lookup_session_config->{cache_user};
     return unless ( $user_refresh > 0 );
 
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     my ( $user, $user_id );
     my $session = CTX->request->session;
@@ -127,7 +129,7 @@ sub _set_cached_user {
     my $user_refresh = CTX->lookup_session_config->{cache_user};
     return unless ( $user_refresh > 0 );
 
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     my $session = CTX->request->session;
     $session->{_oi_cache}{user} = $user;
@@ -160,7 +162,7 @@ sub _fetch_user {
 
 sub _fetch_user_failed {
     my ( $class, $user_id, $error ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     $log->error( "Failed to fetch user '$user_id': $error" );
     CTX->request->session->{user_id} = undef;
     $log->error( "Since user fetch failed, setting 'user_id' in ",
@@ -173,7 +175,7 @@ sub _fetch_user_failed {
 
 sub _login_user_from_input {
     my ( $class ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
     my $login_config = CTX->lookup_login_config;
     my $login_field    = $login_config->{login_field};
     my $password_field = $login_config->{password_field};
@@ -196,8 +198,7 @@ sub _login_user_from_input {
 
     my $user = eval { CTX->lookup_object( 'user' )
                          ->fetch_by_login_name( $login_name,
-                                                { return_single => 1,
-                                                  skip_security => 1 } ) };
+                                                { skip_security => 1 } ) };
     if ( $@ ) {
       $log->error( "Error fetching user by login name: $@" );
     }
@@ -232,7 +233,7 @@ sub _login_user_from_input {
 
 sub _check_first_login {
     my ( $class, $user ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     return unless ( $user->{removal_date} );
 
@@ -255,7 +256,7 @@ sub _check_first_login {
 
 sub _remember_login {
     my ( $class, $user ) = @_;
-    my $log = get_logger( LOG_AUTH );
+    $log ||= get_logger( LOG_AUTH );
 
     my $login_config = CTX->lookup_login_config;
     if ( $login_config->{always_remember} ) {
@@ -288,7 +289,7 @@ sub _remember_login {
 
 sub _create_nologin_user {
     my ( $class ) = @_;
-    my $default_theme_id = CTX->default_object_id( 'theme' );
+    my $default_theme_id = CTX->lookup_default_object_id( 'theme' );
     return CTX->lookup_object( 'user' )
               ->new({ login_name => 'anonymous',
                       first_name => 'Anonymous',
@@ -448,7 +449,7 @@ ID. The ID of the theme should be set to 'default_objects.theme'.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

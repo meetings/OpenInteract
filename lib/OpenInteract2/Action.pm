@@ -1,9 +1,9 @@
 package OpenInteract2::Action;
 
-# $Id: Action.pm,v 1.39 2003/09/05 02:18:24 lachoy Exp $
+# $Id: Action.pm,v 1.48 2004/05/22 14:49:01 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor Class::Observable Class::Factory Exporter );
+use base qw( Class::Accessor::Fast Class::Observable Class::Factory Exporter );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log :template );
 use OpenInteract2::Context   qw( CTX );
@@ -12,7 +12,9 @@ use OpenInteract2::Util;
 use Scalar::Util             qw( blessed );
 use SPOPS::Secure            qw( :level );
 
-$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.48 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant CACHE_CLASS_KEY => 'class_cache_track';
 
@@ -27,22 +29,20 @@ use constant DEFAULT_ACTION_SECURITY => SEC_LEVEL_WRITE;
 
 # See 'PROPERTIES' section below for other properties used.
 
-my %PROPS = map { $_ => 1 }
-            qw(
-                request response controller content_generator
-                action_type class method message_name
-                task task_default task_valid task_invalid
-                security_level security_required security
-                url_alt url_none
-                template_source
-                cache_expire cache_param
-            );
+my %PROPS = map { $_ => 1 } qw(
+    controller content_generator
+    action_type class method message_name
+    task task_default task_valid task_invalid
+    security_level security_required security
+    url_alt url_none
+    template_source
+    cache_expire cache_param
+);
 
 __PACKAGE__->mk_accessors( keys %PROPS );
 
 # Used to track classes, types, methods and security info
 
-my %CLASSES_USED        = ();
 my %ACTION_TASK_METHODS = ();
 my %ACTION_SECURITY     = ();
 
@@ -60,34 +60,32 @@ sub new {
     $props ||= {};
     my ( $self );
 
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     # Pass in another action...
     if ( blessed( $item ) ) {
-        $log->is_debug &&
-            $log->debug( "Creating new action from existing action ",
-                         "named [", $item->name, "] [", ref $item, "]" );
-        $self = bless( {}, ref( $item ) );
-        $self->property_assign( $item->property );
-        $self->param_assign( $item->param );
+        $log->warn( "Please modify ", join( ' | ', caller ), " ",
+                    "to call 'clone()' instead of passing an action ",
+                    "object to 'new()'" );
+        return $item->clone( $props );
     }
 
     # ...or action info
     elsif ( ref $item eq 'HASH' ) {
         $log->is_debug &&
             $log->debug( "Creating new action from action info with name ",
-                         "[$item->{name}]" );
-        $self = $class->_create_from_config( $item, $props );
+                         "'$item->{name}'" );
+        $self = $class->_create_from_config( $item );
     }
 
     # ...or a name
     elsif ( $item ) {
         $log->is_debug &&
-            $log->debug( "Creating new action from name [$item]" );
+            $log->debug( "Creating new action from name '$item'" );
 
         # This will throw an error if the action cannot be found
         my $action_info = CTX->lookup_action_info( $item );
-        $self = $class->_create_from_config( $action_info, $props );
+        $self = $class->_create_from_config( $action_info );
     }
 
     # ...or nothing.
@@ -108,67 +106,113 @@ sub new {
     }
 
     # ...these will override any previous assignments
+
+    if ( $props->{REQUEST_URL} ) {
+        $self->_set_url( $props->{REQUEST_URL} );
+    }
+
     $self->property_assign( $props );
     $self->param_assign( $props );
 
     return $self->init();
 }
 
+# Cache for classes required (don't require them more than necessary)
+
+my %CLASSES_USED = ();
+
+# Cache for actions created from configuration. We clone an entry once
+# it is created...
+
+my %CONFIG_ACTIONS = ();
+
 sub _create_from_config {
-    my ( $class, $action_info, $props ) = @_;
-    $props ||= {};
+    my ( $class, $action_info ) = @_;
+    $log ||= get_logger( LOG_ACTION );
+
     my $name = lc $action_info->{name};
-    my $impl_class = $action_info->{class};
-    my $log = get_logger( LOG_ACTION );
 
-    if ( $impl_class ) {
-        unless ( $CLASSES_USED{ $impl_class } ) {
-            eval "require $impl_class";
-            if ( $@ ) {
-                my $msg = "Cannot include library [$impl_class]: $@";
-                $log->error( $msg );
-                oi_error $msg;
+    unless ( $CONFIG_ACTIONS{ $name } ) {
+        $log->is_debug &&
+            $log->debug( "Config action not found for '$name', creating..." );
+        my $impl_class = $action_info->{class};
+        if ( $impl_class ) {
+            unless ( $CLASSES_USED{ $impl_class } ) {
+                eval "require $impl_class";
+                if ( $@ ) {
+                    my $msg = "Cannot include library '$impl_class': $@";
+                    $log->error( $msg );
+                    oi_error $msg;
+                }
+                $CLASSES_USED{ $impl_class }++;
             }
-            $CLASSES_USED{ $impl_class }++;
         }
-    }
-    elsif ( my $action_type = $action_info->{action_type} ) {
-        $impl_class = $class->get_factory_class( $action_type );
-        $log->debug &&
-            $log->debug( "Got class [$impl_class] from action ",
-                         "type [$action_type]" );
-    }
-    unless ( $impl_class ) {
-        $log->error( "Implementation class not found for action ",
-                     "[$name] [class: $action_info->{class}] ",
-                     "[type: $action_info->{action_type}]" );
-        oi_error "Action configuration for $name has no 'class' ",
-                 "or 'action_type' defined";
-    }
-    my ( $self );
-    $self = bless( {}, $impl_class );
+        elsif ( my $action_type = $action_info->{action_type} ) {
+            $impl_class = $class->get_factory_class( $action_type );
+            $log->debug &&
+                $log->debug( "Got class '$impl_class' from action ",
+                             "type '$action_type'" );
+        }
+        unless ( $impl_class ) {
+            $log->error( "Implementation class not found for action ",
+                         "'$name' [class: $action_info->{class}' ",
+                         "[type: $action_info->{action_type}]" );
+            oi_error "Action configuration for $name has no 'class' ",
+                     "or 'action_type' defined";
+        }
+        my $self = bless( {}, $impl_class );
 
-    $self->_set_name( $name );
-    my $url = $props->{REQUEST_URL}
-# TODO: See if we can use 'url_primary' at this point...
-#              || $action_info->{url_primary}
-              || $action_info->{url}
-              || $action_info->{name};
-    $self->_set_url( $url );
-    $self->property_assign( $action_info );
-    $self->param_assign( $action_info );
-    return $self;
+        $self->_set_name( $name );
+
+        # TODO: See if we can use '$action_info->{url_primary}' at
+        # this point...
+        my $url = $action_info->{url}
+                  || $action_info->{name};
+        $self->_set_url( $url );
+
+        $self->property_assign( $action_info );
+        $self->param_assign( $action_info );
+        $log->is_debug &&
+            $log->debug( "Assigned properties and parameters from config" );
+
+        # Store for later use so we don't have to recreate (premature
+        # optimization? we'll see -- a profile toward the end of
+        # 1.99_04 showed quite a bit of time spent in this method)
+
+        $CONFIG_ACTIONS{ $name } = $self;
+    }
+    return $CONFIG_ACTIONS{ $name }->clone;
 }
 
-
 sub init { return $_[0] }
+
+sub clone {
+    my ( $self, $props ) = @_;
+    $log ||= get_logger( LOG_ACTION );
+    $log->is_debug &&
+        $log->debug( "Creating new action from existing action ",
+                     "named '", $self->name, "' '", ref( $self ), "'" );
+    my $new = bless( {}, ref( $self ) );
+    $new->_set_name( $self->name );
+    $new->property_assign( $self->property );
+    $new->param_assign( $self->param );
+    if ( $props->{REQUEST_URL} ) {
+        $self->_set_url( $props->{REQUEST_URL} );
+    }
+    $new->property_assign( $props );
+    $new->param_assign( $props );
+    return $new->init();
+}
 
 ########################################
 # RUN
 
 sub execute {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
+
+    $log->is_debug &&
+        $log->debug( "Executing action '", $self->name, "'" );
 
     $params ||= {};
 
@@ -183,6 +227,9 @@ sub execute {
     # methods will throw an exception if the action does not pass
 
     unless ( $self->task ) {
+        $log->is_debug &&
+            $log->debug( "Property 'task' not defined, calling ",
+                         "_find_task() to get task from action" );
         $self->task( $self->_find_task );
     }
 
@@ -197,6 +244,7 @@ sub execute {
         $log->debug( "Task security checked, continuing" );
 
     # Check cache and return if found
+
     my $cached_content = $self->_check_cache;
     if ( $cached_content ) { return $cached_content }
     $log->is_debug &&
@@ -240,22 +288,31 @@ sub forward {
 
 sub _find_task {
     my ( $self ) = @_;
+    $log ||= get_logger( LOG_ACTION );
 
     # NOTE: a defined 'method' in the action will ALWAYS override a
     # task
 
     if ( my $method = $self->method ) {
+        $log->is_debug &&
+            $log->debug( "Found task '$method' in property 'method'" );
         return $self->task( $method );
     }
-    if ( $self->task ) {
+
+    if ( my $task = $self->task ) {
+        $log->is_debug &&
+            $log->debug( "Found task '$task' in property 'task'" );
         return $self->task;
     }
 
     my $default_task = $self->task_default;
     if ( $default_task ) {
+        $log->is_debug &&
+            $log->debug( "Found task '$default_task' in property ",
+                         "'task_default'" );
         return $self->task( $default_task );
     }
-    oi_error "Cannot find task to execute for [", $self->name, "]";
+    oi_error "Cannot find task to execute for '", $self->name, "'";
 }
 
 
@@ -265,7 +322,7 @@ sub _find_task {
 sub _check_task_validity {
     my ( $self ) = @_;
     my $check_task = lc $self->task;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     unless ( $check_task ) {
         my $msg = "No task defined, cannot check validity";
@@ -302,7 +359,7 @@ sub _check_task_validity {
 sub _find_task_method {
     my ( $self ) = @_;
     my $task = $self->task;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     if ( my $method = $ACTION_TASK_METHODS{ $self->name }->{ $task } ) {
         $log->is_debug &&
@@ -334,7 +391,7 @@ sub _find_task_method {
 
 sub _check_security {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     unless ( $self->security_level ) {
         $self->security_level( $self->_find_security_level );
@@ -349,7 +406,7 @@ sub _check_security {
                  "security requirements configured";
     }
 
-    my $task  = $self->task;
+    my $task = $self->task;
     my $required_level = $action_security->{ $task } ||
                          $action_security->{DEFAULT} ||
                          $action_security->{default};
@@ -358,7 +415,7 @@ sub _check_security {
     unless ( defined $required_level ) {
         $log->is_info &&
             $log->info( "Assigned security level WRITE to task ",
-                        "[$task] since security requirement not found" );
+                        "'$task' since security requirement not found" );
         $required_level = SEC_LEVEL_WRITE;
     }
 
@@ -366,8 +423,8 @@ sub _check_security {
 
     my $action_level = $self->security_level;
     if ( $required_level > $action_level ) {
-        my $msg = join( '', "Security check for [", $self->name, "] ",
-                            "[$task] failed" );
+        my $msg = sprintf( "Security check for '%s' '%s' failed",
+                           $self->name, $task );
         $log->error( "$msg [required: $required_level] ",
                      "[found: $action_level]" );
         oi_security_error $msg,
@@ -381,19 +438,19 @@ sub _check_security {
 
 sub _find_security_level {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     unless ( $self->is_secure ) {
         $log->is_debug &&
-            $log->debug( "Action ", $self->name, " not secured, ",
-                         "assigning default level." );
+            $log->debug( sprintf( "Action '%s' not secured assigning " .
+                                  "default level.", $self->name ) );
         return DEFAULT_ACTION_SECURITY;
     }
 
     # TODO: Dependency on object_id '0' sucks
 
     my $found_level = eval {
-        CTX->check_security({ class     => ref $self,
+        CTX->check_security({ class     => ref( $self ),
                               object_id => '0' })
     };
     if ( $@ ) {
@@ -412,7 +469,7 @@ sub _find_security_level {
 
 sub generate_content {
     my ( $self, $content_params, $source, $template_params ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     $log->is_debug &&
         $log->debug( "Generating content for [", $self->name, "]" );
@@ -441,7 +498,13 @@ sub generate_content {
             $log->is_debug &&
                 $log->debug( "Found template source from action ",
                              "[$task_template_source] config" );
-            $source = { name => $task_template_source };
+            my ( $msg_key ) = $task_template_source =~ /^msg:(.*)$/;
+            if ( $msg_key ) {
+                $source = { message_key => $msg_key };
+            }
+            else {
+                $source = { name => $task_template_source };
+            }
         }
         else {
             my $msg = "No template source specified in config, " .
@@ -452,13 +515,18 @@ sub generate_content {
     }
 
     my $generator = CTX->content_generator( $self->content_generator );
-    my $content = $generator->execute( $template_params,
-                                       $content_params,
-                                       $source );
+    my $content = $generator->generate( $template_params,
+                                        $content_params,
+                                        $source );
 
     return $content;
 }
 
+
+sub _msg {
+    my ( $self, $key, @args ) = @_;
+    return CTX->request->language_handle->maketext( $key, @args );
+}
 
 ########################################
 # CACHING
@@ -474,7 +542,7 @@ sub initialize_cache_params { return undef }
 
 sub clear_cache {
     my ( $self  ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $cache = CTX->cache;
     return unless ( $cache );
@@ -564,7 +632,7 @@ sub _get_cache_default_param {
 
 sub _set_cached_content {
     my ( $self, $content, $expiration ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $cache = CTX->cache;
     return unless ( $cache );
@@ -633,6 +701,7 @@ sub is_secure {
         $setting = 'no' unless ( $setting eq 'yes' );
         $self->{is_secure} = $setting;
     }
+    $self->{is_secure} ||= 'no';
     return ( $self->{is_secure} eq 'yes' ) ? 1 : 0;
 }
 
@@ -643,15 +712,25 @@ sub is_secure {
 sub property_assign {
     my ( $self, $props ) = @_;
     while ( my ( $field, $value ) = each %{ $props } ) {
+
+        # This isn't defined in $PROPS
         if ( $field eq 'is_secure' ) {
             $self->is_secure( $value );
         }
-        next unless ( $PROPS{ $field } );
-        next unless ( defined $value ); # TODO: Set empty values?
-        if ( $field eq 'cache_expire' ) {
+
+        # ...neither is this
+       elsif ( $field eq 'name' ) {
+            $self->name( $value );
+        }
+
+        # ...this is, but we do something special
+        elsif ( $field eq 'cache_expire' ) {
             $self->_property_assign_cache( $value );
         }
-        else {
+
+        # ...everything else with a defined value (use property_clear
+        # to set to undef)
+        elsif ( $PROPS{ $field } and defined $value ) {
             $self->$field( $value );
         }
     }
@@ -679,7 +758,7 @@ sub property {
         $self->{ $prop } = $value if ( $value );
         return $self->{ $prop };
     }
-    return { map { $_ => $self->{ $_ } } keys %PROPS };
+    return { map { $_ => $self->{ $_ } } ( keys %PROPS, 'is_secure', 'name' ) };
 }
 
 
@@ -801,7 +880,7 @@ sub create_url {
 
 sub get_dispatch_urls {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     $log->is_debug &&
         $log->debug( "Find dispatch URLs for [", $self->name, "]" );
@@ -1010,7 +1089,7 @@ to have been created when this is called you can grab a database
 handle and slurp all the lookup entries from a table into a lexical
 data structure.
 
-Here's an example:
+Here is an example:
 
  use Log::Log4perl            qw( get_logger );
  use OpenInteract2::Context   qw( CTX );
@@ -1024,7 +1103,7 @@ Here's an example:
  
  sub init_at_startup {
      my ( $class ) = @_;
-     my $log = get_logger( LOG_APP );
+     $log ||= get_logger( LOG_APP );
      my $publisher_list = eval {
          CTX->lookup_object( 'publisher' )->fetch_group()
      };
@@ -1260,11 +1339,11 @@ into a handler as the second argument. For instance:
 
 All actions are B<observable>. This means that any number of classes,
 objects or subroutines can register themselves with a type of action
-and be activated when that action publishes a notification. It's a
+and be activated when that action publishes a notification. It is a
 great way to decouple an object from other functions that want to
-operate on that object's results. The observed object (in this case,
-the action) doesn't know how many observers there are, or even if any
-exist at all.
+operate on the results of that object. The observed object (in this
+case, the action) does not know how many observers there are, or even
+if any exist at all.
 
 =head2 Observable Scenario
 
@@ -1309,6 +1388,9 @@ And the action would notify all observers like this:
      my ( $self ) = @_;
      # ... check registration ...
      if ( $registration_ok ) {
+
+         # This notifies all observers of the 'register-confirm' event
+
          $self->notify_observers( 'register-confirm' );
          return $self->generate_content(
                         {}, { name => 'base_user::newuser_confirm_ok' } );
@@ -1327,8 +1409,8 @@ B<filter>
 Filters can register themselves as observers and get passed a
 reference to content. A filter can transform the content in any manner
 it requires. The observation is posted just before the content is
-cached, so if the action's content is cacheable any modifications will
-become part of the cache.
+cached, so if the content is cacheable any modifications will become
+part of the cache.
 
 Here's an example:
 
@@ -1363,7 +1445,7 @@ The general configuration to declare a filter is:
 
 The observation types are 'class', 'object' and 'sub' (see
 L<Class::Observable|Class::Observable> for what these mean and how
-they're setup), so you could have:
+they are setup), so you could have:
 
  [filters foo_obj]
  object = OpenInteract2::FooFilter
@@ -1510,8 +1592,8 @@ responds to and creates a mapping so the URL can be quickly looked up.
 
 One other thing to note about that context method: it also embeds the
 B<primary> URL for each action in the information stored in the action
-table. Since the information is stored in a key that's not a property
-or parameter the action itself doesn't care about this. But it's
+table. Since the information is stored in a key that is not a property
+or parameter the action itself does not care about this. But it is
 useful to note because when you generate URLs based on an action the
 B<first> URL is used, as discussed in the examples above.
 
@@ -1552,13 +1634,13 @@ because the default always puts the lowercased entry first.
 
 =head1 GENERATING CONTENT FOR ACTION
 
-Actions B<always> return content. That content might be what's
-expected, it might be an error message, or it might be the result of
+Actions B<always> return content. That content might be what you
+expect, it might be an error message, or it might be the result of
 another action. Normally the content is generated by passing data to
 some sort of template processor along with the template to use. The
 template processor passes the data to the template and returns the
-result. But there's nothing that says you can't just manually return a
-string :-)
+result. But there is nothing that says you cannot just manually return
+a string :-)
 
 The template processor is known as a 'content generator', since it
 does not need to use templates at all. OpenInteract maintains a list
@@ -1571,7 +1653,7 @@ Generally, your handler can just call C<generate_content()>:
 
  sub show {
      my ( $self ) = @_;
-     my $request = $self->request;
+     my $request = CTX->request;
      my $news_id = $request->param( 'news_id' );
      my $news_class = CTX->lookup_object( 'news' );
      my $news = $news_class->fetch( $news_id )
@@ -1694,7 +1776,7 @@ B<message_name> ($)
 
 Name used to find messages from the
 L<OpenInteract2::Request|OpenInteract2::Request> object. Normally you
-don't need to specify this and the action name is used. But if you
+do not need to specify this and the action name is used. But if you
 have multiple actions pointing to the same code this can be useful
 
 Example:
@@ -1816,6 +1898,22 @@ content generated by separate processes:
  /foo/mytask/
  /fooprime/mytask/
 
+You can also specify a message key in place of the template name by
+using the 'msg:' prefix before the message key:
+
+ [foo template_source]
+ mytask = msg:foo.template
+
+This will find the proper template for the current user language,
+looking in each message file for the key C<foo.template> and using the
+value there:
+
+ mymsg_en.msg
+ foo.template = foo::mytask_template_english
+
+ mymsg_es.msg
+ foo.template = foo::mytask_template_spanish
+
 B<is_secure> (bool)
 
 Whether to check security for this action. True is indicated by 'yes',
@@ -1935,11 +2033,9 @@ C<param()> below.)
 
 =item 2.
 
-If given C<$action> we do a simulated clone: create an empty action
-object using the same class as C<$action> and fill it with the
-properties and parameters from C<$action>. Then we call C<init()> on
-the new object and return it. (TODO: is init() redundant with a
-clone-type operation?)
+If given C<$action> we call C<clone> on it which creates an entirely
+new action. Then we call C<init()> on the new object and return
+it. (TODO: is init() redundant with a clone-type operation?)
 
 Any values provided in C<\%properties> will override the properties
 from the C<$action>. Likewise, any parameters from C<\%properties>
@@ -1976,7 +2072,7 @@ Examples:
  my $new_action =
      OpenInteract2::Action->new( $action );
 
- # ...and this doesn't affect $action at all
+ # ...and this does not affect $action at all
  
  $new_action->task( 'list' );
  
@@ -2007,7 +2103,7 @@ B<init()>
 This method allows action subclasses to perform any additional
 initialization required. Note that before this method is called from
 C<new()> all of the properties and parameters from C<new()> have been
-set into the object whether you've created it using a name or by
+set into the object whether you have created it using a name or by
 cloning another action.
 
 If you define this you B<must> call C<SUPER::init()> so that all
@@ -2031,6 +2127,14 @@ Example:
      }
      return $self->SUPER::init();
  }
+
+B<clone()>
+
+For now this is pretty simplistic: create an empty action object using
+the same class as then given object (call it C<$action>) and fill it
+with the properties and parameters from C<$action>.
+
+Returns: new action object of the same class as C<$action>
 
 B<create_url( \%params )>
 
@@ -2106,7 +2210,7 @@ B<execute( \%vars )>
 
 Generate content for this action and task. If the task has an error it
 can generate error content and C<die> with it; it can also just C<die>
-with an error message, but that's not very helpful to your users.
+with an error message, but that is not very helpful to your users.
 
 The C<\%vars> argument will set properties and parameters (via
 C<property_assign()> and C<param_assign()>) before generating the
@@ -2147,7 +2251,7 @@ one you don't want your 'latest' listing to miss the entry you just
 added. So you clear out the old cache entries and let them get rebuilt
 on demand.
 
-Since we don't want to create a crazy dependency graph of data that's
+Since we don't want to create a crazy dependency graph of data that is
 eventually going to expire anyway, we just remove all cache entries
 generated by this class.
 
@@ -2159,13 +2263,13 @@ B<generate_content( \%content_params, [ \%template_source ], [ \%template_params
 
 This is used to generate content for an action.
 
-The information in C<\%template_source> is only optional if you've
+The information in C<\%template_source> is only optional if you have
 specified the source in your action configuration. See the docs for
 property B<template_source> for more information.
 
-Also, note that any view messages you've added via C<view_messages()>
-or C<add_view_message()> will be passed to the template in the key
-C<action_messages>.
+Also, note that any view messages you have added via
+C<view_messages()> or C<add_view_message()> will be passed to the
+template in the key C<action_messages>.
 
 TODO: fill in more: how to id content
 
@@ -2246,7 +2350,7 @@ B<param_add( $key, @values )>
 
 Adds (rather than replaces) the values C<@value> to the parameter
 C<$key>. If there is a value already set for C<$key>, or if you pass
-multiple values, it's turned into an array reference and C<@values>
+multiple values, it is turned into an array reference and C<@values>
 C<push>ed onto the end. If there is no value already set and you only
 pass a single value it acts like the call to C<param( $key, $value )>.
 
@@ -2299,9 +2403,9 @@ deposited in the request (see C<action_messages()> in
 L<OpenInteract2::Request|OpenInteract2::Request>) and picked up at
 action instantiation.
 
-Note that these get put in the template's content variable hashref
-under the key C<action_messages> as long as the content is generated
-using C<generate_content()>.
+Note that these get put in the template content variable hashref under
+the key C<action_messages> as long as the content is generated using
+C<generate_content()>.
 
 Returns: hashref of view errors associated with this action; may be an
 empty hashref.
@@ -2312,8 +2416,14 @@ Assign the view messgate C<$msg_name> as C<$msg> in this action.
 
 =head2 Internal Object Execution Methods
 
-You should only need to know about these methods if you're creating
+You should only need to know about these methods if you are creating
 your own action.
+
+B<_msg( $key, @args )>
+
+Shortcut to creating a localized message. Under the hood this calls:
+
+ CTX->request->language_handle->maketext( $key, @args );
 
 B<_find_task()>
 
@@ -2381,7 +2491,7 @@ an exception.
 
 You are currently not allowed to have a task of the same name as one
 of the action properties. If you try to execute a task by this name
-you'll get a message in the error log to this effect.
+you will get a message in the error log to this effect.
 
 Note that we cache the returned code reference, so if you do something
 funky with the symbol table or the C<@ISA> for your class after a
@@ -2407,8 +2517,8 @@ action property C<security_level>.
 
 =item *
 
-If the action isn't secured we short-circuit operations and return the
-security level.
+If the action is not secured we short-circuit operations and return
+the security level.
 
 =item *
 
@@ -2474,7 +2584,7 @@ L<Class::Observable|Class::Observable>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

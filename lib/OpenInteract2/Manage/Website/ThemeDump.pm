@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ThemeDump;
 
-# $Id: ThemeDump.pm,v 1.7 2003/07/14 13:08:38 lachoy Exp $
+# $Id: ThemeDump.pm,v 1.8 2004/02/17 04:30:21 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use Data::Dumper;
 use OpenInteract2::Context qw( CTX );
 
 
-$OpenInteract2::Manage::Website::ThemeDump::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ThemeDump::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'dump_theme';
@@ -145,7 +145,7 @@ Set to the filename used for the dump; empty if the action failed.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -43,10 +43,33 @@ just the highlights...)
 
 =head2 Database
 
-Instead of converting schemas from OI 1.x, it's recommended you
-install OI 2.x to a separate database and use standard SQL tools to
-migrate the data. Hopefully every package will have a document
-C<DATA_CONVERSION> that will help with this process.
+Every package should be able to migrate itself from OI 1.x to OI
+2.x. If there is no change in the schema then it's very easy for the
+package author to hook this up in the
+L<OpenInteract2::SQLInstall|OpenInteract2::SQLInstall> subclass.
+
+When you're the one doing the converting you'll need to setup a
+datasource in your server configuration C<conf/server.ini> for your
+old installation:
+
+ [datasource old_ds]
+ type          = DBI
+ spops         = SPOPS::DBI::Pg
+ driver_name   = Pg
+ dsn           = dbname=oi_old
+ username      = oi
+ password      = oi
+ db_owner      =
+ sql_install   =
+ long_read_len = 65536
+ long_trunc_ok = 0
+
+When you migrate data for a package you'll need to refer to this old
+datasource by name:
+
+ oi2_manage migrate_data --package=foo --old_datasource=old_ds
+
+There's more for package authors on migrating package data below.
 
 =head1 PACKAGES
 
@@ -128,7 +151,8 @@ file. It's too difficult to edit and when generated isn't formatted
 for humans to read. Instead we're using the INI file format for both
 the action configuration and the SPOPS configurations.
 
-Two scripts are included with OI2 to help with this task:
+Two scripts are included with the OI2 source distribution to help with
+this task:
 
 =over 4
 
@@ -141,6 +165,9 @@ C<script/translate_action_to_ini.pl>
 C<script/translate_spops_to_ini.pl>
 
 =back
+
+Note that they're not installed anyplace special when you do a C<make
+install> or C<./Build install>.
 
 Both are just wrappers around a class found under
 C<OpenInteract2::Conversion>. They work on STDIN and STDOUT:
@@ -167,9 +194,10 @@ C<OpenInteract2::Foo>.
 Finally, in the packages shipped with OpenInteract2 we've kept all the
 action configuration entries in a single file (C<action.ini>) but
 moved the configuration for each SPOPS object into its own file (e.g.,
-C<spops_news.ini>, C<spops_news_section.ini>). You can keep all your
-SPOPS configurations in a single file, but they're probably easier to
-edit if they're in multiple files.
+C<spops_news.ini>, C<spops_news_section.ini>). There's nothing wrong
+with keeping all your SPOPS configurations in a single file, but
+they're probably easier to edit if they're in multiple files. It's up
+to you.
 
 B<NOTE>: Each SPOPS configuration file should begin with C<spops> so
 the OI2 startup procedure can find it. You may also list your SPOPS
@@ -250,9 +278,7 @@ These should remain the same.
 
 =head2 Template (template/)
 
-=head2 Libraries (OpenInteract/)
 
-=head2 Handlers (OpenInteract/Handler)
 
 =head2 Examples (eg/)
 
@@ -265,11 +291,37 @@ No changes.
 =head2 Standalone scripts (script/)
 
 No changes, besides needing to rewrite them to use the new OI2
-features.
+features. You should also look into making these management tasks so
+you can hook into the C<oi2_manage> framework. It takes care of a lot
+for you.
+
+=head1 PACKAGE DATA
+
+=head2 Description
+
+Once your structures have been re-created you'll want to fill them
+with your existing data. The
+L<OpenInteract2::SQLInstall|OpenInteract2::SQLInstall> framework has
+hooks for you to use to do this. It's also got complete documentation
+on how to declare the migration parameters to make the whole process
+fairly simple. You can also look at the core OpenInteract packages for
+examples on how this is done.
+
+=head1 PACKAGE MODULES
+
+This is where you'll likely spend the bulk of your conversion time. 
+
+=head2 Request vs. Context
+
+=head2 Logging
+
+=head2 Libraries (OpenInteract/)
+
+=head2 Handlers (OpenInteract/Handler)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

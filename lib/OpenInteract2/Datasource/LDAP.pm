@@ -1,6 +1,6 @@
 package OpenInteract2::Datasource::LDAP;
 
-# $Id: LDAP.pm,v 1.6 2003/06/25 16:47:53 lachoy Exp $
+# $Id: LDAP.pm,v 1.8 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -9,7 +9,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+
+my ( $log );
 
 use constant LDAP_PORT    => 389;
 use constant LDAP_DEBUG   => 0;
@@ -18,7 +20,7 @@ use constant LDAP_VERSION => 2;
 
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     unless ( ref $ds_info ) {
         $log->error( "No data given to create LDAP [$ds_name] handle" );
         oi_error "Cannot create connection without datasource info!";
@@ -71,7 +73,7 @@ sub connect {
 
 sub bind {
     my ( $class, $ldap, $ds_info ) = @_;
-    my $log = get_logger( LOG_DS );
+    $log ||= get_logger( LOG_DS );
     my %bind_params = ();
     if ( $ds_info->{sasl} and $ds_info->{bind_dn} ) {
         eval { require Authen::SASL };
@@ -249,7 +251,7 @@ L<Net::LDAP|Net::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

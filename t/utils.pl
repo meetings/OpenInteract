@@ -1,10 +1,10 @@
-# $Id: utils.pl,v 1.23 2003/09/05 14:03:52 lachoy Exp $
+# $Id: utils.pl,v 1.51 2004/05/22 17:40:04 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
 use File::Basename           qw( basename );
 use File::Path               qw();
-use File::Spec;
+use File::Spec::Functions    qw( :ALL );
 use IO::File;
 use Log::Log4perl            qw( :levels );
 use OpenInteract2::Context   qw( CTX );
@@ -43,20 +43,22 @@ sub main::barf {
 
 sub main::get_package_versions {
     return (
-         base            => '2.05',
-         base_box        => '2.05',
-         base_error      => '2.06',
-         base_group      => '2.05',
-         base_page       => '2.12',
-         base_security   => '2.07',
-         base_template   => '3.05',
-         base_theme      => '2.05',
-         base_user       => '2.08',
-         full_text       => '2.06',
-         lookup          => '2.02',
-         news            => '2.07',
-         object_activity => '2.07',
-         system_doc      => '2.04',
+         base            => '2.10',
+         base_box        => '2.11',
+         base_error      => '2.10',
+         base_group      => '2.11',
+         base_page       => '2.21',
+         base_security   => '2.13',
+         base_template   => '3.11',
+         base_theme      => '2.09',
+         base_user       => '2.27',
+         comments        => '1.10',
+         full_text       => '2.09',
+         lookup          => '2.04',
+         news            => '2.13',
+         object_activity => '2.11',
+         system_doc      => '2.05',
+         whats_new       => '2.04',
    );
 }
 
@@ -80,7 +82,7 @@ sub main::compare_urls {
 # Returns a FULL path to the current directory
 
 sub main::get_current_dir {
-    return File::Spec->rel2abs( File::Spec->curdir );
+    return rel2abs( curdir );
 }
 
 # Get the base testing directory - assume we're either in the
@@ -89,43 +91,43 @@ sub main::get_current_dir {
 sub main::get_test_dir {
     return $TEST_DIR if ( $TEST_DIR );
     my $cwd = get_current_dir();
-    my $test_dir = ( $cwd =~ m|\bt$| ) ? $cwd : File::Spec->catdir( $cwd, 't' );
+    my $test_dir = ( $cwd =~ m|\bt$| ) ? $cwd : catdir( $cwd, 't' );
     return $TEST_DIR = $test_dir;
 }
 
 # Directory with all of our files to use for tests
 
 sub main::get_use_dir {
-    return File::Spec->catdir( get_test_dir(), 'use' );
+    return catdir( get_test_dir(), 'use' );
 }
 
 sub main::get_tmp_dir {
-    return File::Spec->catdir( get_test_dir(), '_tmp' );
+    return catdir( get_test_dir(), '_tmp' );
 }
 
 # Get the base website directory for testing
 
 sub main::get_test_site_dir {
-    return File::Spec->catdir( get_tmp_dir(), 'site' );
+    return catdir( get_tmp_dir(), 'site' );
 }
 
 sub main::get_test_site_db_file {
-    File::Spec->catfile( get_tmp_dir(), 'oi2test.db' );
+    catfile( get_tmp_dir(), 'oi2test.db' );
 }
 
 # Get the base directory for our test package
 
 sub main::get_test_package_dir {
-    return File::Spec->catdir( get_test_dir(), 'test_pkg' );
+    return catdir( get_test_dir(), 'test_pkg' );
 }
 
 # This should be the parent of the test directory...
 
 sub main::get_source_dir {
     my $test_dir = get_test_dir();
-    my @dirs = File::Spec->splitdir( $test_dir );
+    my @dirs = splitdir( $test_dir );
     pop @dirs;
-    return File::Spec->catdir( @dirs );
+    return catdir( @dirs );
 }
 
 
@@ -156,7 +158,7 @@ sub main::get_test_file {
         $filename = [ $filename ];
     }
     $type ||= 'content';
-    my $full_filename = File::Spec->catfile( get_test_dir(),
+    my $full_filename = catfile( get_test_dir(),
                                              @{ $filename } );
     if ( $type eq 'name' ) {
         return $full_filename;
@@ -187,11 +189,17 @@ sub main::install_website {
 
     eval {
         require SPOPS::DBI::SQLite;
-        require Apache::Session::SQLite;
-        require OpenInteract2::SessionManager::SQLite;
     };
     if ( $@ ) {
-        die "Failed to require SQLite files: $@";
+        die "Failed to require SQLite module: $@";
+    }
+
+    eval {
+        require Apache::Session::File;
+        require OpenInteract2::SessionManager::File;
+    };
+    if ( $@ ) {
+        die "Failed to require file session modules: $@";
     }
 
     if ( -d $website_dir and $is_recent ) {
@@ -257,23 +265,31 @@ sub _write_website_check_file {
 }
 
 sub _get_website_check_file {
-    return File::Spec->catfile( get_tmp_dir(), '_site_time' );
+    return catfile( get_tmp_dir(), '_site_time' );
 }
 
 # Write out SQLite information so that the Context gets read in
-# properly (SPOPS classes need this); also use it for sessions
+# properly (SPOPS classes need this); use file-based sessions and
+# write the appropriate directories
 
 sub _modify_server_config {
-    my $config_file = File::Spec->catfile( get_test_site_dir(),
-                                           'conf', 'server.ini' );
+    my $site_dir = get_test_site_dir();
+    my $config_file = catfile( $site_dir, 'conf', 'server.ini' );
     my $db_file = get_test_site_db_file();
     my $ini = OpenInteract2::Config::Ini->new({ filename => $config_file });
     $ini->{datasource}{main}{spops}       = 'SPOPS::DBI::SQLite';
     $ini->{datasource}{main}{driver_name} = 'SQLite';
     $ini->{datasource}{main}{dsn}         = "dbname=$db_file";
-    $ini->{session_info}{class}           = 'OpenInteract2::SessionManager::SQLite';
-    $ini->{session_info}{impl_class}      = 'Apache::Session::SQLite';
-    $ini->{session_info}{datasource}      = 'main';
+    $ini->{session_info}{class}           = 'OpenInteract2::SessionManager::File';
+    $ini->{session_info}{impl_class}      = 'Apache::Session::File';
+
+    my $session_dir = catdir( $site_dir, 'cache', 'session' );
+    File::Path::mkpath( $session_dir );
+    $ini->{session_info}{params}{Directory} = $session_dir;
+    my $lock_dir = catdir( $site_dir, 'cache', 'session_lock' );
+    File::Path::mkpath( $lock_dir );
+    $ini->{session_info}{params}{LockDirectory} = $lock_dir;
+
     $ini->write_file;
 }
 
@@ -340,13 +356,13 @@ sub last_file {
 
 sub _get_dirs {
     my ( $dir ) = @_;
-    return grep { -d File::Spec->catdir( $dir, $_ ) }
+    return grep { -d catdir( $dir, $_ ) }
            _get_entries_in_dir( $dir );
 }
 
 sub _get_files {
     my ( $dir ) = @_;
-    return grep { -f File::Spec->catfile( $dir, $_ ) }
+    return grep { -f catfile( $dir, $_ ) }
                 _get_entries_in_dir( $dir );
 }
 

@@ -1,20 +1,22 @@
 package OpenInteract2::Context;
 
-# $Id: Context.pm,v 1.45 2003/09/05 02:20:11 lachoy Exp $
+# $Id: Context.pm,v 1.56 2004/03/19 03:04:23 lachoy Exp $
 
 use strict;
-use base                     qw( Exporter Class::Accessor );
+use base                     qw( Exporter Class::Accessor::Fast );
 use Data::Dumper             qw( Dumper );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
-use OpenInteract2::Log;
+use OpenInteract2::Log       qw( uchk );
 
-$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.45 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.56 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_TEMP_LIB_DIR => 'templib';
 
-sub version { return '1.99_03' }
+my ( $log_spops, $log_act );
+
+sub version { return '1.99_04' }
 
 # Exportable deployment URL call -- main, images, static
 
@@ -76,7 +78,7 @@ sub create {
         };
         if ( $@ ) {
             oi_error "Cannot create base config object using website ",
-                     "directory [$item->{website_dir}]: $@";
+                     "directory '$item->{website_dir}': $@";
         }
         $website_dir = $item->{website_dir};
     }
@@ -90,17 +92,17 @@ sub create {
         OpenInteract2::Log->init_screen;
     }
 
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
 
     if ( $base_config ) {
         $CTX->base_config( $base_config );
-        $log->is_debug && $log->debug( "Assigned base config ok" );
+        $log_init->is_debug && $log_init->debug( "Assigned base config ok" );
         eval { $CTX->setup( $params ) };
         if ( $@ ) {
-            $log->error( "Setup failed to run: $@" );
+            $log_init->error( "Setup failed to run: $@" );
         }
         else {
-            $log->is_info && $log->info( "Setup ran ok" );
+            $log_init->is_info && $log_init->info( "Setup ran ok" );
         }
     }
     return $CTX;
@@ -119,7 +121,7 @@ sub instance {
 sub setup {
     my ( $self, $params ) = @_;
     $params ||= {};
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
 
     my %skip = ();
     if ( $params->{skip} ) {
@@ -132,7 +134,7 @@ sub setup {
     my $base_config = $self->base_config;
     unless ( $base_config and
              ref( $base_config ) eq 'OpenInteract2::Config::Base' ) {
-        $log->error( "Cannot run setup() without base_config defined" );
+        $log_init->error( "Cannot run setup() without base_config defined" );
         oi_error "Cannot run setup() on context without a valid base ",
                  "configuration object set";
     }
@@ -140,17 +142,17 @@ sub setup {
     my $setup = OpenInteract2::Setup->new;
     my $server_config = $setup->read_server_config;
     $self->server_config( $server_config );
-    $log->is_info && $log->info( "Assigned server config ok" );
+    $log_init->is_info && $log_init->info( "Assigned server config ok" );
 
     # Assign constants from server config to the context.
 
     $self->assign_deploy_url;
     $self->assign_deploy_image_url;
     $self->assign_deploy_static_url;
-    $self->assign_request_type;
-    $self->assign_response_type;
-    $log->is_info &&
-        $log->info( "Assigned constants from server config ok" );
+    #$self->assign_request_type;
+    #$self->assign_response_type;
+    $log_init->is_info &&
+        $log_init->info( "Assigned constants from server config ok" );
 
     if ( $skip{ 'initialize repository' } ) {
         $skip{ 'initialize temp lib' }++;
@@ -165,8 +167,8 @@ sub setup {
             my $packages = $setup->read_packages;
             $self->packages( $packages );
         }
-        $log->is_info &&
-            $log->info( "Opened repository and read package definitions ok" );
+        $log_init->is_info &&
+            $log_init->info( "Opened repository and read package definitions ok" );
     }
 
 
@@ -178,14 +180,14 @@ sub setup {
         my $ds_manager_class = $server_config->{datasource_config}{manager};
         eval "require $ds_manager_class";
         $self->datasource_manager( $ds_manager_class );
-        $log->is_info && $log->info( "Assigned datasource manager ok" );
+        $log_init->is_info && $log_init->info( "Assigned datasource manager ok" );
         $setup->check_datasources();
     }
 
     unless ( $skip{ 'initialize observer' } ) {
         $setup->initialize_observers;
-        $log->is_info &&
-            $log->info( "Initialized observers ok" );
+        $log_init->is_info &&
+            $log_init->info( "Initialized observers ok" );
     }
 
     if ( $skip{ 'initialize action' } ) {
@@ -193,31 +195,36 @@ sub setup {
     }
     else {
         my $action_table = $setup->read_action_table;
-        $log->is_info && $log->info( "Read action table ok" );
+        $log_init->is_info && $log_init->info( "Read action table ok" );
         my $action_classes = $setup->require_action_classes( $action_table );
         $setup->initialize_action_classes( $action_classes );
         $setup->register_action_types;
-        $log->is_info && $log->info( "Required action classes ok" );
+        $log_init->is_info && $log_init->info( "Required action classes ok" );
         $self->action_table( $action_table );
-        $log->is_info && $log->info( "Assigned action table ok" );
+        $log_init->is_info && $log_init->info( "Assigned action table ok" );
     }
 
     unless ( $skip{ 'initialize spops' } ) {
         my $spops_config = $setup->read_spops_config;
-        $log->is_info && $log->info( "Read SPOPS configurations ok" );
+        $log_init->is_info && $log_init->info( "Read SPOPS configurations ok" );
         unless ( $skip{ 'activate spops' } ) {
             $setup->activate_spops_classes( $spops_config );
-            $log->is_info && $log->info( "Activated SPOPS classes ok" );
+            $log_init->is_info && $log_init->info( "Activated SPOPS classes ok" );
         }
         $self->spops_config( $spops_config );
-        $log->is_info && $log->info( "Assigned SPOPS table ok" );
+        $log_init->is_info && $log_init->info( "Assigned SPOPS table ok" );
+    }
+
+    unless ( $skip{ 'initialize messages' } ) {
+        $setup->read_localized_messages;
+        $log_init->is_info && $log_init->info( "Read localized messages ok" );
     }
 
     # Not optional...
 
     my $system_classes = $setup->read_system_classes;
-    $log->is_info &&
-        $log->info( "Required system classes ok: ",
+    $log_init->is_info &&
+        $log_init->info( "Required system classes ok: ",
                     join( ', ', @{ $system_classes } ) );
 
     unless ( $skip{ 'initialize session' } ) {
@@ -228,26 +235,26 @@ sub setup {
         my $cache = $setup->create_cache;
         if ( $cache ) {
             $self->cache( $cache );
-            $log->is_info && $log->info( "Created cache ok" );
+            $log_init->is_info && $log_init->info( "Created cache ok" );
         }
         else {
-            $log->is_info &&
-                $log->info( "Cache not configured for use, ok" );
+            $log_init->is_info &&
+                $log_init->info( "Cache not configured for use, ok" );
         }
     }
 
     unless ( $skip{ 'initialize generator' } ) {
         $setup->initialize_content_generator;
-        $log->is_info && $log->info( "Initialized content generators ok" );
+        $log_init->is_info && $log_init->info( "Initialized content generators ok" );
     }
 
     unless ( $skip{ 'initialze controller' } ) {
         $setup->initialize_controller;
-        $log->is_info &&
-            $log->info( "Initialized controller and default actions ok" );
+        $log_init->is_info &&
+            $log_init->info( "Initialized controller and default actions ok" );
     }
 
-    $log->is_debug && $log->info( "Initialized context ok" );
+    $log_init->is_debug && $log_init->info( "Initialized context ok" );
     return $self;
 }
 
@@ -265,7 +272,7 @@ sub setup {
 
 sub assign_deploy_url {
     my ( $self, $url ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under};
     $url = $self->_clean_deploy_url( $url );
     if ( $url and $url !~ m|^/| ) {
@@ -275,31 +282,31 @@ sub assign_deploy_url {
     }
     $DEPLOY_URL = $url;
     $self->server_config->{context_info}{deployed_under} = $url;
-    $log->is_info && $log->info( "Assigned deployment URL [$url]" );
+    $log_init->is_info && $log_init->info( "Assigned deployment URL '$url'" );
     return $DEPLOY_URL;
 }
 
 sub assign_deploy_image_url {
     my ( $self, $url ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under_image};
     $url = $self->_clean_deploy_url( $url );
     $DEPLOY_IMAGE_URL = $url;
     $self->server_config->{context_info}{deployed_under_image} = $url;
-    $log->is_info &&
-        $log->info( "Assigned image deployment URL [$url]" );
+    $log_init->is_info &&
+        $log_init->info( "Assigned image deployment URL '$url'" );
     return $DEPLOY_IMAGE_URL;
 }
 
 sub assign_deploy_static_url {
     my ( $self, $url ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
     $url ||= $self->server_config->{context_info}{deployed_under_static};
     $url = $self->_clean_deploy_url( $url );
     $DEPLOY_STATIC_URL = $url;
     $self->server_config->{context_info}{deployed_under_static} = $url;
-    $log->is_info &&
-        $log->info( "Assigned static deployment URL [$url]" );
+    $log_init->is_info &&
+        $log_init->info( "Assigned static deployment URL '$url'" );
     return $DEPLOY_STATIC_URL;
 }
 
@@ -316,23 +323,23 @@ sub _clean_deploy_url {
 
 sub assign_request_type {
     my ( $self, $type ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
     $type ||= $self->server_config->{context_info}{request};
     $self->server_config->{context_info}{request} = $type;
     OpenInteract2::Request->set_implementation_type( $type );
-    $log->is_info &&
-        $log->info( "Assigned request type [$type]" );
+    $log_init->is_info &&
+        $log_init->info( "Assigned request type '$type'" );
 }
 
 
 sub assign_response_type {
     my ( $self, $type ) = @_;
-    my $log = get_logger( LOG_INIT );
+    my $log_init = get_logger( LOG_INIT );
     $type ||= $self->server_config->{context_info}{response};
     $self->server_config->{context_info}{response} = $type;
     OpenInteract2::Response->set_implementation_type( $type );
-    $log->is_info &&
-        $log->info( "Assigned response type [$type]" );
+    $log_init->is_info &&
+        $log_init->info( "Assigned response type '$type'" );
 }
 
 
@@ -341,29 +348,30 @@ sub assign_response_type {
 
 sub lookup_action_name {
     my ( $self, $action_url ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     unless ( $action_url ) {
         oi_error "Cannot lookup action without action name without URL";
     }
-    $log->is_debug &&
-        $log->debug( "Try to find action name for URL [$action_url]" );
+    $log_act->is_debug &&
+        $log_act->debug( "Try to find action name for URL '$action_url'" );
     my $server_config = $self->server_config;
     my $action_name = $server_config->{action_url}{ $action_url };
-    $log->is_debug &&
-        $log->debug( "Found name [$action_name] for URL [$action_url]" );
+    $log_act->is_debug &&
+        $log_act->debug( "Found name '$action_name' for URL '$action_url'" );
     return $action_name;
 }
 
 sub lookup_action_info {
     my ( $self, $action_name ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     unless ( $action_name ) {
-        $log->error( "No action name given to lookup info" );
+        $log_act->error( "No action name given to lookup info; called ",
+                         "from: ", join( ' | ', caller ) );
         oi_error "Cannot lookup action without action name";
     }
 
-    $log->is_debug &&
-        $log->debug( "Try to find action info for [$action_name]" );
+    $log_act->is_debug &&
+        $log_act->debug( "Try to find action info for '$action_name'" );
     my $server_config = $self->server_config;
     my $action_info = $server_config->{action}{ lc $action_name };
 
@@ -371,13 +379,14 @@ sub lookup_action_info {
     # we know best.
 
     unless ( $action_info ) {
-        $log->error( "Action [$action_name] not found in action table" );
-        oi_error "Action [$action_name] not found in action table";
+        $log_act->error( "Action '$action_name' not found in action table" );
+        oi_error "Action '$action_name' not found in action table";
     }
 
-    $log->is_debug && $log->debug( "Action [$action_name] is ",
-                           "[Class: $action_info->{class}] ",
-                           "[Template: $action_info->{template}] " );
+    $log_act->is_debug &&
+        $log_act->debug( uchk( "Action '%s' is [Class: %s] [Template: %s] ",
+                               $action_name, $action_info->{class},
+                               $action_info->{template} ) );
 
     # Allow as many redirects as we need
 
@@ -385,12 +394,12 @@ sub lookup_action_info {
     while ( my $action_redir = $action_info->{redir} ) {
         $action_info = $server_config->{action}{ lc $action_redir };
         unless ( $action_info ) {
-            $log->warn( "Failed redirect from [$current_name] to ",
-                        "[$action_redir]: no action defined " );
+            $log_act->warn( "Failed redirect from '$current_name' to ",
+                            "'$action_redir': no action defined " );
             return undef;
         }
-        $log->is_debug &&
-            $log->debug( "Redirect to [$action_redir]" );
+        $log_act->is_debug &&
+            $log_act->debug( "Redirect to '$action_redir'" );
         $current_name = $action_redir;
     }
     return $action_info;
@@ -399,11 +408,11 @@ sub lookup_action_info {
 
 sub lookup_action {
     my ( $self, $action_name, $props ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     my $action_info = $self->lookup_action_info( $action_name );
     unless ( $action_info ) {
-        $log->error( "No action found for [$action_name]" );
-        oi_error "No action defined for [$action_name]";
+        $log_act->error( "No action found for '$action_name'" );
+        oi_error "No action defined for '$action_name'";
     }
     return OpenInteract2::Action->new( $action_info, $props );
 }
@@ -411,11 +420,11 @@ sub lookup_action {
 
 sub lookup_action_none {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     my $action_info = $self->server_config->{action_info}{none};
     unless ( $action_info ) {
-        $log->error( "Please define the server configuration entry ",
-                     "under 'action_info.none'" );
+        $log_act->error( "Please define the server configuration entry ",
+                         "under 'action_info.none'" );
         oi_error "The 'none' item under 'action_info' is not defined. ",
                  "Please check your server configuration.";
     }
@@ -428,11 +437,11 @@ sub lookup_action_none {
 
 sub lookup_action_not_found {
     my ( $self ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     my $action_info = $self->server_config->{action_info}{not_found};
     unless ( $action_info ) {
-        $log->error( "Please define the server configuration entry ",
-                     "under 'action_info.not_found'" );
+        $log_act->error( "Please define the server configuration entry ",
+                         "under 'action_info.not_found'" );
         oi_error "The 'not_found' item under 'action_info' is not ",
                  "defined. Please check your server configuration.";
     }
@@ -454,20 +463,27 @@ sub lookup_default_action_info {
 
 sub lookup_object {
     my ( $self, $object_name ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log_spops ||= get_logger( LOG_SPOPS );
     unless ( $object_name ) {
-        $log->error( "Must lookup object class using name" );
+        $log_spops->error( "Must lookup object class using name" );
         oi_error "Cannot lookup object class without object name";
     }
     my $spops_config = $self->spops_config;
     unless ( $spops_config->{ lc $object_name } ) {
-        my $msg = "No object class found for [$object_name]";
-        $log->error( $msg );
+        my $msg = "No object class found for '$object_name'";
+        $log_spops->error( $msg );
         oi_error $msg;
     }
-    my $object_class = $spops_config->{ lc $object_name }{class};
-    $log->is_debug &&
-        $log->debug( "Found class [$object_class] for [$object_name]" );
+    my $use_name = lc $object_name;
+
+    # 'alias_class' is defined in the common case when we want to
+    # generate the persistence class ('class') and then subclass it
+    # for our customizations ('alias_class')
+
+    my $object_class = $spops_config->{ $use_name }{alias_class}
+                       || $spops_config->{ $use_name }{class};
+    $log_spops->is_debug &&
+        $log_spops->debug( "Found class '$object_class' for '$object_name'" );
     return $object_class;
 }
 
@@ -475,7 +491,7 @@ sub lookup_object {
 ########################################
 # CONTROLLER LOOKUP
 
-sub lookup_controller {
+sub lookup_controller_config {
     my ( $self, $name ) = @_;
     if ( $name ) {
         return $self->server_config->{controller}{ $name };
@@ -486,7 +502,7 @@ sub lookup_controller {
 ########################################
 # CONTENT GENERATOR LOOKUP
 
-sub lookup_content_generator {
+sub lookup_content_generator_config {
     my ( $self, $name ) = @_;
     if ( $name ) {
         return $self->server_config->{content_generator}{ $name };
@@ -518,7 +534,7 @@ sub add_filter {
 }
 
 ########################################
-# DIRECTORY LOOKUP
+# DIRECTORY/FILE LOOKUPS
 
 sub lookup_directory {
     my ( $self, $dir_name ) = @_;
@@ -550,25 +566,46 @@ sub lookup_override_spops_filename {
 }
 
 ########################################
-# SESSION CONFIG LOOKUP
+# LOOKUPS, OTHER
 
 sub lookup_session_config {
     my ( $self ) = @_;
     return $self->server_config->{session_info};
 }
 
-########################################
-# LOGIN CONFIG LOOKUP
-
 sub lookup_login_config {
     my ( $self ) = @_;
     return $self->server_config->{login};
 }
 
+sub lookup_mail_config {
+    my ( $self ) = @_;
+    return $self->server_config->{mail};
+}
+
+sub lookup_language_config {
+    my ( $self ) = @_;
+    return $self->server_config->{language};
+}
+
+sub lookup_cache_config {
+    my ( $self ) = @_;
+    return $self->server_config->{cache};
+}
+
+sub lookup_config_watcher_config {
+    my ( $self ) = @_;
+    return $self->server_config->{config_watcher};
+}
+
+sub lookup_redirect_config {
+    my ( $self ) = @_;
+    return $self->server_config->{redirect};
+}
+
 ########################################
 # CLASS LOOKUP
 
-# TODO: Could this closure be a potential memory leak? Test!
 
 sub lookup_class {
     my ( $self, $name ) = @_;
@@ -585,15 +622,15 @@ sub lookup_class {
 
 sub action_table {
     my ( $self, $table ) = @_;
-    my $log = get_logger( LOG_ACTION );
+    $log_act ||= get_logger( LOG_ACTION );
     if ( $table ) {
-        $log->is_info &&
-            $log->info( "Assigning new action table" );
+        $log_act->is_info &&
+            $log_act->info( "Assigning new action table" );
         $self->server_config->{action} = $table;
         my %url_to_name = ();
         while ( my ( $name, $info ) = each %{ $table } ) {
-            $log->is_debug &&
-                $log->debug( "Finding URL(s) for action [$name]" );
+            $log_act->is_debug &&
+                $log_act->debug( "Finding URL(s) for action '$name'" );
             my $action = OpenInteract2::Action->new( $info );
             my $respond_urls = $action->get_dispatch_urls;
             $url_to_name{ $_ } = $name for ( @{ $respond_urls } );
@@ -608,10 +645,10 @@ sub action_table {
 
 sub spops_config {
     my ( $self, $table ) = @_;
-    my $log = get_logger( LOG_SPOPS );
+    $log_spops ||= get_logger( LOG_SPOPS );
     if ( $table ) {
-        $log->is_info &&
-            $log->info( "Assigning new SPOPS configuration" );
+        $log_spops->is_info &&
+            $log_spops->info( "Assigning new SPOPS configuration" );
         $self->server_config->{SPOPS} = $table;
     }
     return $self->server_config->{SPOPS};
@@ -625,6 +662,14 @@ sub lookup_datasource_config {
         return $self->server_config->{datasource}{ $name };
     }
     return $self->server_config->{datasource};
+}
+
+sub lookup_datasource_type_config {
+    my ( $self, $type ) = @_;
+    if ( $type ) {
+        return $self->server_config->{datasource_type}{ $type };
+    }
+    return $self->server_config->{datasource_type};
 }
 
 sub lookup_system_datasource_name {
@@ -642,12 +687,20 @@ sub lookup_default_ldap_datasource_name {
     return $self->server_config->{datasource_config}{ldap};
 }
 
-sub default_object_id {
+sub lookup_default_object_id {
     my ( $self, $name ) = @_;
     if ( $name ) {
         return $self->server_config->{default_objects}{ $name };
     }
     return $self->server_config->{default_objects};
+}
+
+sub lookup_id_config {
+    my ( $self, $definition ) = @_;
+    if ( $definition ) {
+        return $self->{server_config}{id}{ $definition };
+    }
+    return $self->{server_config}{id};
 }
 
 
@@ -670,21 +723,6 @@ sub content_generator {
     return OpenInteract2::ContentGenerator->instance( $name );
 }
 
-# Use a routine rather than letting Class::Accesor to do this because
-# we'll probably allow for multiple templates, and multiple types of
-# templates, to be stored
-
-sub template {
-    my ( $self, $template ) = @_;
-    my $log = get_logger( LOG_TEMPLATE );
-    if ( $template ) {
-        $log->is_info &&
-            $log->info( "Assigning new template object" );
-        $self->{template} = $template;
-    }
-    return $self->{template};
-}
-
 sub cleanup_request {
     my ( $self ) = @_;
     $self->set( $_, undef )  for ( @REQUEST_FIELDS );
@@ -700,7 +738,7 @@ sub cleanup_request {
 
 sub check_security {
     my ( $self, $params ) = @_;
-    my $log = get_logger( LOG_SECURITY );
+    my $log_sec = get_logger( LOG_SECURITY );
 
     # TODO: make static at startup...
     my $security_class = $self->lookup_object( 'security' );
@@ -712,14 +750,14 @@ sub check_security {
                           group                 => $params->{group} );
     my $request = $self->request;
     if ( $request and $request->auth_is_logged_in ) {
-        $log->is_debug &&
-            $log->debug( "Assigning user/group from login" );
+        $log_sec->is_debug &&
+            $log_sec->debug( "Assigning user/group from login" );
         $security_info{user}  ||= $request->auth_user;
         $security_info{group} ||= $request->auth_group;
     }
-    $log->is_debug &&
-        $log->debug( "Checking security for [$params->{class}] ",
-                     "[$params->{object_id}] with [$security_class]" );
+    $log_sec->is_debug &&
+        $log_sec->debug( "Checking security for '$params->{class}' ",
+                         "'$params->{object_id}' with '$security_class'" );
     return SPOPS::Secure->check_security( \%security_info );
 }
 
@@ -758,8 +796,11 @@ OpenInteract2::Context - Provides the environment for a server
  # is to import it
  my $ctx = OpenInteract2::Context->instance;
  
- # Get the information for the 'TT" content generator
- my $generator_info = CTX->content_generator( 'TT' );
+ # Get the information (\%) for the 'TT' content generator
+ my $generator_info = CTX->lookup_content_generator_config( 'TT' );
+
+ # Get the 'TT' content generator object
+ my $generator = CTX->content_generator( 'TT' );
  
  # Grab the server configuration
  my $conf = CTX->server_config;
@@ -772,9 +813,6 @@ OpenInteract2::Context - Provides the environment for a server
  
  # Get the default system datasource
  my $db = CTX->datasource;
- 
- # Get the template object (XXX: Future -- may be named like datasource...)
- my $template = CTX->template;
  
  # Find an object class
  my $news_class = CTX->lookup_object( 'news' );
@@ -973,6 +1011,11 @@ spops')
 
 =item *
 
+Read in the localized messages from all packages. (Setup:
+C<read_localized_messages()>). (Skip: 'initialize messages')
+
+=item *
+
 Create the cache. If it is not configured this is a no-op. (Setup:
 C<create_cache()>) (Skip: 'initialize cache')
 
@@ -1160,6 +1203,12 @@ B<lookup_datasource_config( [ $name ] )>
 Returns the datasource configuration hashref for C<$name>. If C<$name>
 not provided returns the full datasource configuration hashref.
 
+B<lookup_datasource_type_config( [ $type ] )>
+
+Returns the datasource type configuration hashref for C<$type>. If
+C<$type> not provided returns the full datasource type configuration
+hashref.
+
 B<lookup_system_datasource_name()>
 
 Returns the datasource name in 'datasource_config.system'.
@@ -1192,7 +1241,7 @@ context's filter registry as the last argument.
 
 =head2 Object Methods: Controller
 
-B<lookup_controller( [ $controller_name ] )>
+B<lookup_controller_config( [ $controller_name ] )>
 
 Returns a hashref of information about C<$controller_name>. If
 C<$controller_name> not given returns a hashref with the controller
@@ -1201,26 +1250,31 @@ just a class and content generator type, but we may add more...
 
 =head2 Object Methods: Content Generator
 
-B<lookup_content_generator( [ $generator_name ] )>
+B<lookup_content_generator_config( [ $generator_name ] )>
 
-Returns a hashref of information about C<$generator_name>. If
-C<$generator_name> not given returns a hashref with the generator
-names as keys and the associated info as values. This is typically
-just a class and method, but we may add more...
+Returns the data (a hashref) associated with C<$generator_name>. If
+you want the object associated with C<$generator_name> use
+C<content_generator()>, below. If you do not provide
+C<$generator_name> returns a hashref of all content generator
+information, keys as the generator names and values as the data
+associated with them.
 
 B<content_generator( $name )>
 
 Returns information necessary to call the content generator named by
 C<$name>. A 'content generator' is simply a class which can marry some
 sort of template with some sort of data to produce content. The
-generator that comes with OpenInteract is the Template Toolkit, but
-there is no reason you cannot use another templating system or an
-entirely different technology, like C<SOAP>.
+generator that is used most prominently in OpenInteract is built
+around the Template Toolkit, but it also includes implementations for
+other templating systems (L<HTML::Template> and L<Text::Template>),
+and there is no reason you cannot use an entirely different
+technology, like C<SOAP>.
 
-Returns: a
-L<OpenInteract2::ContentGenerator|OpenInteract2::ContentGenerator>
-object. Generally you'd only call C<execute()> on it with the
-appropriate parameters to get the generated content.
+Returns: an object with a parent of
+L<OpenInteract2::ContentGenerator|OpenInteract2::ContentGenerator>.
+Generally you'd only call C<generate()> on it with the appropriate
+parameters to get the generated content -- these are initialized in
+C<setup()>.
 
 =head2 Object Methods: Deployment Context
 
@@ -1320,9 +1374,9 @@ manipulate the page template objects you'd use:
  my $template = $template_class->fetch( ... );
 
 I<NOTE>: This replaces the aliasing feature found in early betas of
-OI2 and in OI 1.x. The aliasing feature would create methods for each
-name found in the server configuration key C<server_alias> so you'd
-previously have:
+OI2 and in all versions of OI 1.x. The aliasing feature would create
+methods for each name found in the server configuration key
+C<server_alias> so you'd previously have:
 
  # Server configuration
  [system_alias]
@@ -1383,21 +1437,30 @@ B<lookup_login_config()>
 
 Returns 'login' section of server configuration (hashref).
 
-B<template( [ $template ] )>
+B<lookup_mail_config()>
 
-Get/set method for the global template object.
+Returns 'email' section of server configuration (hashref).
 
-XXX: we might modify this to keep multiple template objects and have
-them be available by name. Then you could mix-and-match templates as
-you wish, using L<Template|Template Toolkit> for most of your site but
-L<HTML::Template|HTML::Template> for a self-contained piece of it.
-
-Returns: Currently available template object
-
-B<default_object_id( [ $name ] )>
+B<lookup_default_object_id( [ $name ] )>
 
 Returns the default object ID mapped to C<$name>. If C<$name> not
 given returns a hashref of all default object IDs.
+
+B<lookup_id_config( [ $definition ] )>
+
+Returns the ID configuration to report what types of IDs basic OI
+objects are using. Normally we only care about 'user' and 'group', and
+we want to find out the 'type' or 'size'. So C<$definition> will be
+one of 'user_type', 'user_size', 'group_type' and 'group_size'. If
+C<$definition> is not given returns a hashref of all definitions.
+
+B<lookup_config_watcher_config()>
+
+Looks up the configuration watcher configuration.
+
+B<lookup_redirect_config()>
+
+Looks up the redirect configuration.
 
 =head1 PROPERTIES
 
@@ -1426,12 +1489,6 @@ L<OpenInteract2::Cache|OpenInteract2::Cache>. This allows you to store
 and retrieve data rapidly. This will be defined (if configured) after
 the context is initialized via C<setup()>.
 
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
 =head1 SEE ALSO
 
 L<OpenInteract2::Action|OpenInteract2::Action>
@@ -1444,7 +1501,7 @@ L<OpenInteract2::URL|OpenInteract2::URL>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

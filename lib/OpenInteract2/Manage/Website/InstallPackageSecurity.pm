@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::InstallPackageSecurity;
 
-# $Id: InstallPackageSecurity.pm,v 1.6 2003/07/14 13:08:38 lachoy Exp $
+# $Id: InstallPackageSecurity.pm,v 1.8 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::SQLInstall;
 
-$OpenInteract2::Manage::Website::InstallPackageSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::InstallPackageSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'install_sql_security';
@@ -31,24 +31,10 @@ sub run_task {
 
 PACKAGE:
     foreach my $package_name ( @{ $self->param( 'package' ) } ) {
-        my $package = $repository->fetch_package( $package_name );
-        unless ( $package ) {
-            $self->_add_status(
-                { is_ok   => 'no',
-                  action  => 'install security',
-                  message => "Package $package_name not installed" } );
-            next PACKAGE;
-        }
-        my $action = "install security: " . $package->name;
-        my $installer =
-            OpenInteract2::SQLInstall->new_from_package( $package );
-        unless ( $installer ) {
-            $self->_add_status(
-                { is_ok   => 'yes',
-                  action  => $action,
-                  message => "No SQL installer specified for $package_name" });
-            next PACKAGE;
-        }
+        my $action = 'install security';
+        my $installer = $self->_get_package_installer(
+                $action, $repository, $package_name );
+        next PACKAGE unless ( $installer );
         $installer->install_security;
         my @install_status = $installer->get_status;
         for ( @install_status ) {
@@ -114,7 +100,7 @@ Name of package this action spawmed from.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonDisplay;
 
-# $Id: CommonDisplay.pm,v 1.8 2003/07/11 21:01:40 lachoy Exp $
+# $Id: CommonDisplay.pm,v 1.11 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -8,11 +8,13 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
+my ( $log );
+
 sub display {
     my ( $self ) = @_;
     $self->_display_init_param;
 
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $fail_task = $self->param( 'c_display_fail_task' );
     my $object = eval { $self->_common_fetch_object };
@@ -95,6 +97,15 @@ OpenInteract2::Action::CommonDisplay - Task to display an object
  package OpenInteract2::Action::MyAction;
  
  use base qw( OpenInteract2::Action::CommonDisplay );
+ 
+ # Relevant configuration entries in your action.ini
+ 
+ [myaction]
+ ...
+ c_object_type                = myobject
+ c_display_template           = mypkg::detail
+ c_display_fail_task          = mypkg::display_error
+ c_display_active_field       = is_active
 
 =head1 SUPPORTED TASKS
 
@@ -163,7 +174,7 @@ ID value used to fetch the object.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonUpdate;
 
-# $Id: CommonUpdate.pm,v 1.12 2003/08/30 21:47:36 lachoy Exp $
+# $Id: CommonUpdate.pm,v 1.15 2004/02/18 05:25:27 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -9,10 +9,12 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
 
+my ( $log );
+
 sub display_form {
     my ( $self ) = @_;
     $self->_update_init_param;
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
 
     my $fail_task = $self->param( 'c_display_form_fail_task' );
     my $object_class = $self->param( 'c_object_class' );
@@ -43,7 +45,7 @@ sub update {
     my ( $self ) = @_;
     $self->_update_init_param;
 
-    my $log = get_logger( LOG_ACTION );
+    $log ||= get_logger( LOG_ACTION );
     CTX->response->return_url( $self->param( 'c_update_return_url' ) );
     my $fail_task = $self->param( 'c_update_fail_task' );
     my $object = eval { $self->_common_fetch_object };
@@ -144,11 +146,33 @@ OpenInteract2::Action::CommonUpdate - Task to update an object
 
 =head1 SYNOPSIS
 
- # Just subclass and the task 'update' is implemented
- 
+ # Just subclass and the tasks 'display_form' and 'update' are
+ # implemented
+  
  package OpenInteract2::Action::MyAction;
  
  use base qw( OpenInteract2::Action::CommonUpdate );
+ 
+ # Relevant configuration entries in your action.ini
+ 
+ [myaction]
+ ...
+ c_object_type                   = myobject
+ c_display_form_template         = mypkg::myform
+ c_display_form_fail_task        = cannot_display_form
+ c_update_fail_task              = display_form
+ c_update_security_fail_task     = display_form
+ c_update_task                   = display
+ c_update_return_url             = /index.html
+ c_update_fields                 = field_one
+ c_update_fields                 = field_two
+ c_update_fields                 = field_three
+ c_update_fields_toggled         = field_yes_no
+ c_update_fields_date            = field_date
+ c_update_fields_date_format     = %Y-%m-%d
+ c_update_fields_datetime        = field_date
+ c_update_fields_datetime_format = %Y-%m-%d %H:%M
+
 
 =head1 SUPPORTED TASKS
 
@@ -319,6 +343,10 @@ What I should set the 'return URL' to. This is used for links like
 back to a particular location. You don't want to come back to the
 '.../update/' URL.
 
+Note that this will be normalized to the deployment context at
+runtime. So if you specify '/foo/bar/' and your application is
+deployed under '/Deploy', the final URL will be '/Deploy/foo/bar/'.
+
 Default: the URL formed by the default task for the current action.
 
 =head2 Object fields to assign
@@ -392,7 +420,7 @@ record's data.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003 Chris Winters. All rights reserved.
+Copyright (c) 2003-2004 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

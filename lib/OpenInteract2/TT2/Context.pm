@@ -1,12 +1,12 @@
-package OpenInteract2::ContentGenerator::TT2Context;
+package OpenInteract2::TT2::Context;
 
-# $Id: TT2Context.pm,v 1.2 2003/06/11 02:43:30 lachoy Exp $
+# $Id: Context.pm,v 1.2 2004/02/17 04:30:22 lachoy Exp $
 
 use strict;
 use base qw( Template::Context );
 use Template::Constants qw( STATUS_ERROR ERROR_FILE );
 
-$OpenInteract2::ContentGenerator::TT2Context::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Context::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 # Overriding Template::Context so we can get around the issue of the
 # template name 'x::y' being interpreted as a directive to have a
@@ -62,13 +62,13 @@ __END__
 
 =head1 NAME
 
-OpenInteract2::ContentGenerator::TT2Context - Provide a custom context for templates in OpenInteract
+OpenInteract2::TT2::Context - Provide a custom context for templates in OpenInteract
 
 =head1 SYNOPSIS
 
     # In OpenInteract2::ContentGenerator::TT2Process->initialize()
 
-    $Template::Config::CONTEXT = 'OpenInteract2::ContentGenerator::TT2Context';
+    $Template::Config::CONTEXT = 'OpenInteract2::TT2::Context';
     my $template = Template->new( ... );
     my ( $output );
     $template->process( 'package::template', \%params, \$output );
@@ -101,7 +101,7 @@ L<Template::Context|Template::Context>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+Copyright (c) 2001-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

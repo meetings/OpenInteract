@@ -1,9 +1,10 @@
 package OpenInteract2::Manage::Website::Create;
 
-# $Id: Create.pm,v 1.16 2003/07/16 12:22:02 lachoy Exp $
+# $Id: Create.pm,v 1.21 2004/05/22 04:21:36 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
+use File::Spec::Functions    qw( catdir );
 use File::Path               qw( rmtree );
 use OpenInteract2::Config::Readonly;
 use OpenInteract2::Context   qw( CTX );
@@ -12,7 +13,7 @@ use OpenInteract2::Manage    qw( SYSTEM_PACKAGES );
 use OpenInteract2::Package;
 use OpenInteract2::Repository;
 
-$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 # think about merging this with info from OI2::Manage::Website::SetDirectoryPermissions
 
@@ -27,6 +28,7 @@ my @WEBSITE_SUBDIR = (
    [ 0777, 'html', 'images' ],
    [ 0777, 'logs' ],
    [ 0777, 'mail' ],
+   [ 0777, 'msg' ],
    [ 0777, 'overflow' ],
    [ 0777, 'pkg' ],
    [ 0777, 'template' ],
@@ -113,6 +115,8 @@ sub run_task {
     $self->notify_observers(
         progress => 'CGI interface copied' );
 
+    $self->_copy_messages( $website_dir, $source_dir );
+
     $self->_copy_server_conf( $website_dir, $source_dir );
 
     $self->_copy_apache_conf( $website_dir, $source_dir );
@@ -152,7 +156,7 @@ sub _create_directories {
     }
     foreach my $sub_dir_info ( @WEBSITE_SUBDIR ) {
         my ( $perm, @subdirs ) = @{ $sub_dir_info };
-        my $full_subdir = File::Spec->catdir( $website_dir, @subdirs );
+        my $full_subdir = catdir( $website_dir, @subdirs );
         eval { mkdir( $full_subdir, $perm ) || die $! };
         if ( $@ ) {
             oi_error "Cannot create subdirectory in [$full_subdir]: $@";
@@ -166,9 +170,8 @@ sub _create_directories {
 
 sub _copy_widgets {
     my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_widget_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                             'website',
-                                                             'template' );
+    my $source_widget_dir =
+        catdir( $source_dir, 'sample', 'website', 'template' );
     my $transferred = OpenInteract2::Config::TransferSample
                          ->new( $source_widget_dir )
                          ->run( $website_dir );
@@ -180,11 +183,24 @@ sub _copy_widgets {
     }
 }
 
+sub _copy_messages {
+    my ( $self, $website_dir, $source_dir ) = @_;
+    my $source_msg_dir = catdir( $source_dir, 'sample', 'website', 'msg' );
+    my %vars = ( website_dir => $website_dir );
+    my $transferred = OpenInteract2::Config::TransferSample
+                         ->new( $source_msg_dir )
+                         ->run( $website_dir, \%vars );
+    foreach my $copied ( @{ $transferred } ) {
+        $self->_add_status( { is_ok    => 'yes',
+                              action   => 'copy localized messages',
+                              message  => 'Copied file from sample site',
+                              filename => $copied } );
+    }
+}
+
 sub _copy_server_conf {
     my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_conf_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                           'website',
-                                                           'conf' );
+    my $source_conf_dir = catdir( $source_dir, 'sample', 'website', 'conf' );
     my %vars = ( website_dir => $website_dir );
     my $transferred = OpenInteract2::Config::TransferSample
                          ->new( $source_conf_dir )
@@ -199,9 +215,7 @@ sub _copy_server_conf {
 
 sub _copy_cgi {
     my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_cgi_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                          'website',
-                                                          'cgi-bin' );
+    my $source_cgi_dir = catdir( $source_dir, 'sample', 'website', 'cgi-bin' );
     my %vars = ( website_dir => $website_dir );
     my $transferred = OpenInteract2::Config::TransferSample
                          ->new( $source_cgi_dir )
@@ -211,30 +225,41 @@ sub _copy_cgi {
                               action  => 'copy CGI',
                               message => 'Copied file from sample site',
                               filename => $copied } );
+        # OIN-10: hack just to ensure we get the right perms
+        if ( $copied =~ /cgi$/ ) {
+            chmod( 0755, $copied );
+        }
     }
 }
 
 
 sub _copy_apache_conf {
     my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_apache_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                             'apache' );
+    $self->_copy_webserver_conf( $website_dir, $source_dir,
+                                 'apache', 'apache 1.x' );
+    $self->_copy_webserver_conf( $website_dir, $source_dir,
+                                 'apache2', 'apache 2.x' );
+}
+
+sub _copy_webserver_conf {
+    my ( $self, $website_dir, $source_dir, $type, $desc ) = @_;
+    my $source_apache_dir = catdir( $source_dir, 'sample', $type );
     my %vars = ( website_dir => $website_dir );
     my $transferred = OpenInteract2::Config::TransferSample
                          ->new( $source_apache_dir )
                          ->run( $website_dir, \%vars );
     foreach my $copied ( @{ $transferred } ) {
         $self->_add_status( { is_ok   => 'yes',
-                              action  => 'copy apache 1.x config',
+                              action  => "copy $desc config",
                               message => 'Copied file from sample site',
                               filename => $copied } );
     }
+
 }
 
 sub _copy_daemon_conf {
     my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_daemon_dir = File::Spec->catdir( $source_dir, 'sample',
-                                                             'daemon' );
+    my $source_daemon_dir = catdir( $source_dir, 'sample', 'daemon' );
     my %vars = ( website_dir => $website_dir );
     my $transferred = OpenInteract2::Config::TransferSample
                          ->new( $source_daemon_dir )
@@ -252,14 +277,16 @@ sub _copy_daemon_conf {
 sub _set_nowrite_files {
     my ( $self, $website_dir ) = @_;
     my $action = 'set nowrite file';
-    my $html_dir    = File::Spec->catdir( $website_dir, 'html' );
+    my $html_dir = catdir( $website_dir, 'html' );
     my $html_message = join( '', 'If a file is listed here it will not be ',
                                  'updated when the package to which it ',
                                  'belongs is updated.' );
-    eval { OpenInteract2::Config::Readonly->write_config(
-                                   $html_dir,
-                                   { file    => [ 'index.html' ],
-                                     comment => $html_message } ) };
+    eval {
+        OpenInteract2::Config::Readonly->write_config(
+            $html_dir,
+            { file    => [ 'index.html', 'main.css' ],
+              comment => $html_message } )
+        };
     if ( $@ ) {
         $self->_add_status( { is_ok    => 'no',
                               action   => $action,
@@ -273,7 +300,7 @@ sub _set_nowrite_files {
                               message  => 'Read-only file created ok' } );
     }
 
-    my $tmpl_dir = File::Spec->catdir( $website_dir, 'template' );
+    my $tmpl_dir = catdir( $website_dir, 'template' );
     my $tmpl_status = { action   => $action,
                         filename => $tmpl_dir };
     my $tmpl_message = join( '', 'These are templates that will not be ',
@@ -371,7 +398,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

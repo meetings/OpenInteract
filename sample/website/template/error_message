@@ -19,7 +19,7 @@
                                   bgcolor      = error_bgcolor ) -%]
 
 <tr><td align="center">
-   <font color="[% error_font_color %]" size="+1"><b>Error</b></font>
+   <font color="[% error_font_color %]" size="+1"><b>[% MSG( 'error_msg.title' ) %]</b></font>
 </td></tr>
 <tr><td>
    [% FOREACH error = error_msg -%]

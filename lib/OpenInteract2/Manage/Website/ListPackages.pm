@@ -1,12 +1,12 @@
 package OpenInteract2::Manage::Website::ListPackages;
 
-# $Id: ListPackages.pm,v 1.8 2003/08/08 02:18:18 lachoy Exp $
+# $Id: ListPackages.pm,v 1.9 2004/02/17 04:30:20 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 
-$OpenInteract2::Manage::Website::ListPackages::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ListPackages::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'list_packages';
@@ -93,7 +93,7 @@ Full path to package
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+Copyright (c) 2002-2004 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
