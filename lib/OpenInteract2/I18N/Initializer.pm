@@ -1,6 +1,6 @@
 package OpenInteract2::I18N::Initializer;
 
-# $Id: Initializer.pm,v 1.8 2004/09/26 01:45:51 lachoy Exp $
+# $Id: Initializer.pm,v 1.14 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use File::Spec::Functions;
@@ -12,7 +12,7 @@ use Template;
 
 my ( $TEMPLATE, $BASE_CLASS );
 
-$OpenInteract2::I18N::Initializer::VERSION   = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::I18N::Initializer::VERSION   = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -21,11 +21,37 @@ sub new {
     return bless( { _files => [] }, $class );
 }
 
+# This may be really naive, but it should work for po/mo/msg files
+# should match:  en | en-US | en_US
+
+sub is_valid_message_file {
+    my ( $class, $filename ) = @_;
+    $log ||= get_logger( LOG_OI );
+    my ( $lang ) = $filename =~ m/\b(\w\w|\w\w\-\w+|\w\w_\w+)\.\w+$/;
+    $log->is_debug &&
+        $log->debug( "Pulled language '$lang' from file '$filename'" );
+    return $lang;
+}
+
+
 sub add_message_files {
     my ( $self, @files ) = @_;
-    return unless ( scalar @files );
+    return $self->{_files} unless ( scalar @files );
     $log ||= get_logger( LOG_INIT );
-    $log->info( "Adding message files: ", join( ', ', @files ) );
+
+    # ensure all files have an identifiable language
+    foreach my $msg_file ( @files ) {
+        my $lang = $self->is_valid_message_file( $msg_file );
+        unless ( $lang ) {
+            $log->error( "File '$msg_file' does not have identifiable language" );
+            oi_error "Cannot identify language from message file ",
+                     "'$msg_file'. It must end with a language code ",
+                     "before the file extension. For example: ",
+                     "'myapp-en.msg', 'MyReallyBigApp-es-MX.dat'";
+        }
+    }
+    $log->is_debug &&
+        $log->debug( "Adding message files: ", join( ', ', @files ) );
     push @{ $self->{_files} }, @files;
     return $self->{_files};
 }
@@ -36,10 +62,12 @@ sub locate_global_message_files {
     my $msg_dir = CTX->lookup_directory( 'msg' );
     opendir( MSGDIR, $msg_dir )
         || oi_error "Cannot read from global message directory '$msg_dir': $!";
-    my @msg_files = grep /\.msg$/, readdir( MSGDIR );
+    my @msg_files = grep /\.(msg|mo|po)$/, readdir( MSGDIR );
     closedir( MSGDIR );
     my @full_msg_files = map { catfile( $msg_dir, $_ ) } @msg_files ;
-    $log->info( "Found global message files: ", join( ', ', @full_msg_files ) );
+    $log->is_debug &&
+        $log->debug( "Found global message files: ",
+                     join( ', ', @full_msg_files ) );
     $self->add_message_files( @full_msg_files );
     return \@full_msg_files;
 }
@@ -47,90 +75,108 @@ sub locate_global_message_files {
 sub run {
     my ( $self ) = @_;
     $log ||= get_logger( LOG_INIT );
-
-    my %lang_msg = ();
-    my %key_from = ();
-
-    # Some initialization...
-
-    $TEMPLATE ||= Template->new();
-    $BASE_CLASS = join( '', <DATA> );
-
-MSGFILE:
-    foreach my $msg_file ( @{ $self->{_files} } ) {
-        $log->is_info &&
-            $log->info( "Reading messages from file '$msg_file'" );
-
-        # This may throw an exception, let it bubble up...
-        my $messages = $self->_read_messages( $msg_file );
-
-        # This may be really naive...
-        #                               en | en-US   | en_US
-        my ( $lang ) = $msg_file =~ m/\b(\w\w|\w\w\-\w+|\w\w_\w+)\.\w+$/;
-        $log->is_debug &&
-            $log->debug( "Using language '$lang' for file '$msg_file'" );
-        unless ( $lang ) {
-            oi_error "Cannot identify language from message file ",
-                     "'$msg_file'. It must end with a language code ",
-                     "before the file extension. For example: ",
-                     "'myapp-en.msg', 'MyReallyBigApp-es-MX.dat'";
-        }
-        $lang_msg{ $lang } ||= {};
-        foreach my $msg_key ( keys %{ $messages } ) {
-            if ( $lang_msg{ $lang }->{ $msg_key } ) {
-                $log->error( "DUPLICATE MESSAGE KEY FOUND. Key '$msg_key' ",
-                             "from '$msg_file' was already found in message ",
-                             "file '$key_from{ $msg_key }' read in earlier. ",
-                             "Existing key will not be overwritten which ",
-                             "may cause odd application behavior." );
-            }
-            else {
-                $lang_msg{ $lang }->{ $msg_key } = $messages->{ $msg_key };
-                $key_from{ $msg_key } = $msg_file;
-            }
-        }
+    unless ( ref $self->{_files} eq 'ARRAY' and @{ $self->{_files} } ) {
+        $log->warn( "Asked to generate localization classes but no ",
+                    "localization message files assigned; weird..." );
+        return [];
     }
 
-    # Now all messages are read in, generate the classes
+    $self->_check_for_gettext_files();
+
+    # %all_messages is:
+    #   ->lang->lang_key         = msg
+    #   ->lang->SOURCE->lang_key = file with key
+    # ...see _assign_file_messages() for where it gets filled
+
+    my %all_messages = ();
+    foreach my $msg_file ( @{ $self->{_files} } ) {
+        $log->is_debug &&
+            $log->debug( "Reading messages from file '$msg_file'" );
+        my %file_messages = ();
+        if ( $msg_file =~ /\.msg$/ ) {
+            %file_messages = $self->_read_msg_file( $msg_file );
+        }
+        elsif ( $msg_file =~ /\.(mo|po)$/ ) {
+            %file_messages = $self->_read_gettext_file( $msg_file );
+        }
+        $self->_assign_file_messages( $msg_file, \%all_messages, \%file_messages );
+    }
+
+    # ...message key sources aren't needed anymore so delete
+
+    while ( my ( $lang, $lang_msg ) = each %all_messages ) {
+        delete $lang_msg->{SOURCE};
+    }
+
+    # Now all messages are read in and merged, generate the classes
 
     my @generated_classes = ();
-    foreach my $lang ( keys %lang_msg ) {
+    foreach my $lang ( keys %all_messages ) {
         my $generated_class =
-            $self->_generate_language_class( $lang, $lang_msg{ $lang } );
+            $self->_generate_language_class( $lang, $all_messages{ $lang } );
         push @generated_classes, $generated_class;
     }
     return \@generated_classes;
 }
 
+
 ########################################
 # private methods below here
 
-sub _read_messages {
+sub _check_for_gettext_files {
+    my ( $self ) = @_;
+    my $has_gettext = grep /\.(mo|po)$/, @{ $self->{_files} };
+    if ( $has_gettext ) {
+        eval "require Locale::Maketext::Lexicon::Gettext";
+        if ( $@ ) {
+            oi_error "Locale::Maketext::Lexicon is required to parse mo/po ",
+                     "localization files. Please install it.";
+        }
+        $log->is_info &&
+            $log->info( "Required Locale::Maketext::Lexicon::Gettext ok" );
+    }
+}
+
+# merge messages from a file into all messages
+
+sub _assign_file_messages {
+    my ( $self, $file, $all_messages, $file_messages ) = @_;
+    my $lang = $self->is_valid_message_file( $file );
+    while ( my ( $key, $value ) = each %{ $file_messages } ) {
+        if ( $all_messages->{ $lang }{ $key } ) {
+            my $source = $all_messages->{ $lang }{SOURCE}{ $key };
+            $log->warn(
+                "DUPLICATE MESSAGE KEY FOUND. Key '$key' from ",
+                "'$file' was already found in message file ",
+                "'$source' read in earlier. Existing key WILL NOT BE ",
+                "OVERWRITTEN, which may cause odd application behavior." );
+        }
+        else {
+            $all_messages->{ $lang }{ $key }         = $value;
+            $all_messages->{ $lang }{SOURCE}{ $key } = $file;
+        }
+    }
+}
+
+sub _read_msg_file {
     my ( $self, $msg_file ) = @_;
-    $log ||= get_logger( LOG_INIT );
-
-    $log->is_debug &&
-        $log->debug( "Reading messages from file '$msg_file'" );
-    open( MSG, '<', $msg_file )
-        || oi_error "Cannot read messages from '$msg_file': $!";
-
     my %messages = ();
     my ( $current_key, $current_msg, $readmore );
+    open( MSG, '<', $msg_file )
+        || oi_error "Cannot read messages from '$msg_file': $!";
     while ( <MSG> ) {
         chomp;
 
         # Skip comments and blanks unless we're in a readmore block
-
         next if ( ! $readmore and /^\s*\#/ );
         next if ( ! $readmore and /^\s*$/ );
 
         my $line = $_;
         my $this_readmore = $line =~ s|\\\s*$||;
+
+        # lop off spaces at the beginning of continued lines so
+        # they're more easily distinguished
         if ( $readmore ) {
-
-            # lop off spaces at the beginning of continued lines so
-            # they're more easily distinguished
-
             $line =~ s/^\s+//;
             $current_msg .= $line;
         }
@@ -150,11 +196,27 @@ sub _read_messages {
         $readmore = $this_readmore;
     }
     close( MSG );
-    $log->is_debug &&
-        $log->debug( "Set '$current_key' = '$current_msg'" );
+    $log->is_debug && $log->debug( "Set '$current_key' = '$current_msg'" );
     $messages{ $current_key } = $current_msg;
-    return \%messages;
+    return %messages;
 }
+
+
+sub _read_gettext_file {
+    my ( $self, $gettext_file ) = @_;
+    open( GETTEXT, '<', $gettext_file )
+        || oi_error "Failed to open gettext file: $!";
+    my $msg = Locale::Maketext::Lexicon::Gettext->parse( <GETTEXT> );
+    close( GETTEXT );
+    if ( $log->is_debug ) {
+        $log->debug( "Read following messages from '$gettext_file': " );
+        while ( my ( $key, $value ) = each %{ $msg } ) {
+            $log->debug( "  '$key' = '$value'" );
+        }
+    }
+    return %{ $msg }
+}
+
 
 sub _generate_language_class {
     my ( $self, $lang, $messages ) = @_;
@@ -166,6 +228,9 @@ sub _generate_language_class {
 
     my @base_class_pieces = ( 'OpenInteract2', 'I18N' );
     my @lang_class_pieces = @base_class_pieces;
+
+    # 'en' is always the default language no matter what your
+    # website's default language is
 
     unless ( $lang eq 'en' ) {
         push @base_class_pieces, 'en';
@@ -192,26 +257,28 @@ sub _generate_language_class {
         $log->debug( "Trying to generate class '$lang_class' for language ",
                      "'$lang' with base class '$base_class'" );
     my ( $gen_class );
+
+    $TEMPLATE   ||= Template->new();
+    $BASE_CLASS ||= $self->_get_lang_template();
+
     $TEMPLATE->process( \$BASE_CLASS, \%params, \$gen_class )
         || oi_error "Failed to process maketext subclass template: ",
                     $TEMPLATE->error();
     $log->is_debug &&
-        $log->debug( "Processed template okay. Now eval'ing class with ",
-                     "these contents: ", $gen_class );
+        $log->debug( "Class generated ok; now eval'ing class with\n",
+                     $gen_class );
     eval $gen_class;
     if ( $@ ) {
         $log->error( "Failed to evaluate generated class\n$gen_class\n$@" );
         oi_error "Failed to evaluate generated class '$lang_class': $@";
     }
     $log->is_debug &&
-        $log->debug( "Evaluated class okay" );
+        $log->debug( "Evaluated class $lang_class ok" );
     return $lang_class;
 }
 
-1;
-
-
-__DATA__
+sub _get_lang_template {
+    return <<'TEMPLATE';
 package [% lang_class %];
 
 use strict;
@@ -223,10 +290,15 @@ use vars qw( %Lexicon );
 sub get_oi2_lang { return '[% lang %]' }
 
 %Lexicon = (
-[% FOREACH msg_key = messages.keys %]
+[% FOREACH msg_key = messages.keys -%]
   '[% msg_key %]' => qq{[% messages.$msg_key %]},
-[% END %]
+[% END -%]
 );
+
+1;
+
+TEMPLATE
+}
 
 1;
 
@@ -252,11 +324,64 @@ subclasses for use with L<Locale::Maketext|Locale::Maketext>. Those
 classes are fairly simple and generally only contain a package
 variable L<%Lexicon> which C<L::M> uses to work its magic.
 
+The message files may be in one of three formats:
+
+=over 4
+
+=item *
+
+B<.msg> - Custom key/value pair format with interpolated variables
+indicated by C<[_1]> , C<[_2]>, etc. as supported by
+L<Locale::Maketext>. End-of-line continuations ('\') are also
+supported -- see L<OpenInteract2::Manual::I18N> for formatting
+details.
+
+=item *
+
+B<.po> - Plaintext format used by gettext. This format is documented
+elsewhere (see L<SEE ALSO>) and parsed by L<Locale::Maketext::Lexicon>.
+
+=item *
+
+B<.mo> - Compiled gettext files. This format is documented elsewhere
+(see L<SEE ALSO>) and parsed by L<Locale::Maketext::Lexicon>.
+
+=back
+
+Message files can also be mixed and matched, even within a package. So
+if you've got one translator who likes to use gettext tools you can
+include them alongside people who are fine with the OI2 message
+format.
+
 =head1 CLASS METHODS
 
 B<new()>
 
 Return a new object. Any parameters are ignored.
+
+B<is_valid_message_file( $filename )>
+
+If C<$filename> is a valid message file this returns the language from
+the filename, otherwise it returns false.
+
+The language must be the last distinct set of characters before the
+file extension. (Distinct in the '\b' regex sense.) The following are
+ok:
+
+  myapp-en.msg
+  myotherapp-en_MX.po
+  messages_en-HK.mo
+
+The following are not:
+
+ english-messages.msg
+ messages-en-part2.po
+ messagesen.mo
+
+Currently we assume the base language identifier is two characters
+(e.g., 'en', 'jp', 'ru') and the extension (e.g., 'US', 'CA', 'MX')
+can by any number of characters. This may be wildly naive and may
+change.
 
 =head1 OBJECT METHODS
 
@@ -265,23 +390,25 @@ B<add_message_files( @fully_qualified_files )>
 Adds all files in C<@fully_qualified_files> to its internal list of
 files to process. It does not process these files until C<run()>.
 
+If any file in C<@fully_qualified_files> does not have a valid
+language we throw an exception.
+
 B<locate_global_message_files()>
 
 Finds all message files (that is, files ending in '.msg') in the
-global message directory as reported by the
-L<OpenInteract2::Context|OpenInteract2::Context> and adds them to the
-initializer. Normally only called by
-L<OpenInteract2::Setup|OpenInteract2::Setup>.
+global message directory as reported by the L<OpenInteract2::Context>
+and adds them to the initializer. Normally only called by
+L<OpenInteract2::Setup::ReadLocalizedMessages>.
 
 Returns: arrayref of fully-qualified files added
 
 B<run()>
 
 Reads messages from all files added via C<add_message_files()> and
-generates language-specific subclasses for all messages found. (Once
+generates language-specific subclasses for all messages found. Once
 the subclasses are created the system does not know from where the
 messages come since all messages are flattened into a per-language
-data structure.) So the following:
+data structure. So the following:
 
  file: msg-en.msg
  keys:
@@ -289,13 +416,13 @@ data structure.) So the following:
    foo.intro
    foo.label.main
 
- file: other_msg-en.msg
+ file: other_msg-en.mo
  keys:
    baz.title
    baz.intro
    baz.conclusion
 
- file: another_msg-en.msg
+ file: another_msg-en.po
    bar.title
    bar.intro
    bar.error.notfound
@@ -323,19 +450,8 @@ Cannot open or read from one of the message files.
 
 =item *
 
-Cannot discern a language from the given filename. The language must
-be the last distinct set of characters before the file extension. The
-following are ok:
-
-  myapp-en.msg
-  myotherapp-en-MX.dat
-  messages_en-HK.msg
-
-The following are not:
-
- english-messages.msg
- messages-en-part2.msg
- messagesen.msg
+If you have any gettext files (mo/po extension) and do not have
+L<Locale::Maketext::Lexicon>.
 
 =item *
 
@@ -349,24 +465,30 @@ Cannot evaluate the generated class.
 
 Note that a duplicate key (that is, a key defined in multiple message
 files) will not generate an exception. Instead it will generate a
-logging message with an 'error' level.
+logging message with an 'warn' level.
 
-See more about the format used for the message files in
-L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>.
+See more about the format used for the custom message files in
+L<OpenInteract2::Manual::I18N>.
 
 Returns: arrayref of the names of the classes generated.
 
 =head1 SEE ALSO
 
-L<OpenInteract2::I18N|OpenInteract2::I18N>
+L<Locale::Maketext>
 
-L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>
+L<Locale::Maketext::Lexicon>
 
-L<Locale::Maketext|Locale::Maketext>
+gettext: L<http://www.gnu.org/software/gettext/>
+
+L<OpenInteract2::I18N>
+
+L<OpenInteract2::Manual::I18N>
+
+L<OpenInteract2::Setup::ReadLocalizedMessages>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
@@ -374,3 +496,4 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters E<lt>chris@cwinters.comE<gt>
+

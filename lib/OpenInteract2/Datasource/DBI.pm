@@ -1,6 +1,6 @@
 package OpenInteract2::Datasource::DBI;
 
-# $Id: DBI.pm,v 1.14 2004/10/17 20:07:18 lachoy Exp $
+# $Id: DBI.pm,v 1.17 2005/03/17 14:58:01 sjn Exp $
 
 use strict;
 use DBI                      qw();
@@ -9,7 +9,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -29,7 +29,9 @@ sub connect {
                     'Continuing...' );
     }
 
-    unless ( $ds_info->{driver_name} ) {
+    my $full = $class->resolve_datasource_info( $ds_name, $ds_info );
+
+    unless ( $full->{driver_name} ) {
         $log->error( "Required configuration key undefined ",
                      "'datasource.$ds_name.driver_name'" );
         oi_error "Value for 'driver_name' must be defined in ",
@@ -39,12 +41,12 @@ sub connect {
     # Make the connection -- let the 'die' trickle up to our caller if
     # it happens
 
-    my $dsn      = "DBI:$ds_info->{driver_name}:$ds_info->{dsn}";
-    my $username = $ds_info->{username};
-    my $password = $ds_info->{password};
+    my $dsn      = join( ':', 'DBI', $full->{driver_name}, $full->{dsn} );
+    my $username = $full->{username};
+    my $password = $full->{password};
 
     if ( $log->is_debug ) {
-        my %dumpable = %{ $ds_info };
+        my %dumpable = %{ $full };
         $dumpable{password} = '*' x length $password;
         $log->debug( "Trying to connect to DBI with: ",
                      CTX->dump( \%dumpable ) );
@@ -55,23 +57,23 @@ sub connect {
                              PrintError => 0 } );
     unless ( $db ) {
         oi_datasource_error
-                    "Error connecting to DBI database '$ds_name': $DBI::errstr",
-                    { datasource_name => $ds_name,
-                      datasource_type => 'DBI',
-                      connect_params  => "$dsn , $username , $password" };
+            "Error connecting to DBI database '$ds_name': $DBI::errstr",
+            { datasource_name => $ds_name,
+              datasource_type => 'DBI',
+              connect_params  => "$dsn , $username , $password" };
     }
 
-    # We don't set this until here so we can control the format of the
-    # error...
+    # We don't set these until here (esp RaiseError) so we can control
+    # the format of the error...
 
     $db->{RaiseError}  = 1;
     $db->{PrintError}  = 0;
     $db->{ChopBlanks}  = 1;
     $db->{AutoCommit}  = 1;
-    $db->{LongReadLen} = $ds_info->{long_read_len} || DEFAULT_READ_LEN;
-    $db->{LongTruncOk} = $ds_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
+    $db->{LongReadLen} = $full->{long_read_len} || DEFAULT_READ_LEN;
+    $db->{LongTruncOk} = $full->{long_trunc_ok} || DEFAULT_TRUNC_OK;
 
-    my $trace_level = $ds_info->{trace_level} || '0';
+    my $trace_level = $full->{trace_level} || '0';
     $db->trace( $trace_level );
 
     $log->is_debug &&
@@ -92,6 +94,46 @@ sub disconnect {
     oi_error $@ if ( $@ );
 }
 
+# OIN-54: resolve user-friendly configuration items
+
+my %DBI_INFO = (
+    pg     => [ 'SPOPS::DBI::Pg',     'Pg' ],
+    mysql  => [ 'SPOPS::DBI::MySQL',  'mysql' ],
+    sqlite => [ 'SPOPS::DBI::SQLite', 'SQLite' ],
+    oracle => [ 'SPOPS::DBI::Oracle', 'Oracle' ],
+    asany  => [ 'SPOPS::DBI::Sybase', 'ASAny' ],
+    mssql  => [ 'SPOPS::DBI::Sybase', 'Sybase' ],
+    sybase => [ 'SPOPS::DBI::Sybase', 'Sybase' ],
+);
+
+sub resolve_datasource_info {
+    my ( $self, $name, $ds_info ) = @_;
+
+    # backwards compatibility - if 'spops' key exists just return as-is
+    if ( $ds_info->{spops} ) {
+        return { %{ $ds_info } };
+    }
+
+    my @copy_properties = qw(
+        type dsn username password long_read_len long_trunc_ok trace_level
+    );
+    my %info = map { $_ => $ds_info->{ $_ } } @copy_properties;
+
+    my $dbi_type = lc $ds_info->{dbi_type};
+    if ( $dbi_type ) {
+        unless ( $DBI_INFO{ $dbi_type } ) {
+            oi_error "DBI datasource configuration '$name' has an invalid ",
+                     "'dbi_type' of '$dbi_type'; allowed values: ",
+                     join( ', ', sort keys %DBI_INFO );
+        }
+        my $dbi_info = $DBI_INFO{ $dbi_type };
+        $info{spops}       = $dbi_info->[0];
+        $info{driver_name} = ( 'yes' eq lc $ds_info->{use_odbc} )
+                               ? 'ODBC' : $dbi_info->[1];
+    }
+    return \%info;
+}
+
 1;
 
 __END__
@@ -102,17 +144,25 @@ OpenInteract2::Datasource::DBI - Create DBI database handles
 
 =head1 SYNOPSIS
 
- # Define the parameters for a database handle 'main'
-
+ # Define the parameters for a database handle 'main' using PostgreSQL
+ 
  [datasource main]
  type          = DBI
- db_owner      =
+ dbi_type      = Pg
+ dsn           = dbname=urkelweb
  username      = webuser
  password      = urkelnut
- dsn           = dbname=urkelweb
- driver_name   = Pg
- long_read_len = 65536
- long_trunc_ok = 0
+ 
+ # Define a handle 'win32' that uses Microsoft SQL Server and connects
+ # with ODBC
+ 
+ [datasource win32]
+ type          = DBI
+ dbi_type      = MSSQL
+ use_odbc      = yes
+ dsn           = MyDSN
+ username      = webuser
+ password      = urkelnut
  
  # Request the datasource 'main' from the context object (which in
  # turn requests it from the OpenInteract2::DatasourceManager object,
@@ -148,11 +198,12 @@ Returns: A DBI database handle with the following parameters set:
  PrintError:  0
  ChopBlanks:  1
  AutoCommit:  1 (for now...)
- LongReadLen: 32768 (or as set in \%datasource_info)
- LongTruncOk: 0 (or as set in \%datasource_info)
+ LongReadLen: 32768 (or from 'long_read_len' of \%datasource_info)
+ LongTruncOk: 0     (or from 'long_trunc_ok' of \%datasource_info)
 
 The parameter C<\%datasource_info> defines how we connect to the
-database.
+database and is pulled from your 'datasource.$name' server
+configuration.
 
 =over 4
 
@@ -165,12 +216,15 @@ connect to this database. Examples:
 
  Full DBI DSN:     DBI:mysql:webdb
  OpenInteract DSN: webdb
-
+ 
  Full DBI DSN:     DBI:Pg:dbname=web
  OpenInteract DSN: dbname=web
-
+ 
  Full DBI DSN:     DBI:Sybase:server=SYBASE;database=web
  OpenInteract DSN: server=SYBASE;database=web
+ 
+ Full DBI DSN:     DBI:ODBC:MyDSN
+ OpenInteract DSN: MyDSN
 
 So the OpenInteract DSN string only includes the database-specific items
 for DBI, the third entry in the colon-separated string. This third
@@ -180,10 +234,10 @@ DBD driver for what to do.
 
 =item *
 
-B<driver_name> ($)
+B<dbi_type> ($)
 
-What DBD driver is used to connect to your database?  (Examples:
-'Pg', 'Sybase', 'mysql', 'Oracle')
+What database type are you using?  Available values are: 'MySQL',
+'Pg', 'Sybase', 'ASAny', 'Oracle', 'SQLite' and 'MSSQL'.
 
 =item *
 
@@ -200,10 +254,9 @@ to this database?
 
 =item *
 
-B<db_owner> ($) (optional)
+B<use_odbc> (yes/no; default no)
 
-Who owns this database? Only use if your database uses the database
-owner to differentiate different tables.
+Whether to use ODBC as a DBI driver.
 
 =item *
 
@@ -243,6 +296,29 @@ Any errors encountered will throw an exception, usually of the
 L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
 variety.
 
+B<resolve_datasource_info( $name, \%datasource_info )>
+
+Internal method used to resolve some shortcuts we allow for
+usability. This will look at the 'dbi_type' and add keys to the
+datasource information:
+
+=over 4
+
+=item B<spops>
+
+Lists the SPOPS class to use.
+
+=item B<driver_name>
+
+Lists the DBI driver name to use -- this is what you'd use in the
+second ':' place in the DBI C<connect()> call.
+
+=back
+
+Returns a new hashref of information. For backwards compatibility, if
+we see the key C<spops> in C<\%datasource_info> we just return a new
+hashref with the same data.
+
 =head1 SEE ALSO
 
 L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
@@ -255,7 +331,7 @@ PerlEx - http://www.activestate.com/Products/PerlEx/
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

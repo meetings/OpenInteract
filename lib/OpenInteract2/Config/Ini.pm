@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Ini;
 
-# $Id: Ini.pm,v 1.18 2004/11/27 20:33:55 lachoy Exp $
+# $Id: Ini.pm,v 1.21 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use File::Basename           qw( dirname );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -18,15 +18,26 @@ my ( $log );
 # CLASS METHODS
 
 # Stuff in metadata (_m):
-#   sections (\@): all full sections, in the order they were read
-#   comments (\%): key is full section name, value is comment scalar
-#   filename ($):  file read from
-#   directory ($): directory file read from
+#   filename  ($):  file read from
+#   directory ($):  directory file read from
+#   sections  (\@): all full sections, in the order they were read
+#   comments  (\%): key is full section name, value is comment scalar
+#   order     (\@): order of sections read/assigned
+#   order_map (\%): to determine if section exists
+#   global    (\@): keys in the 'Global' section
 
 sub new {
     my ( $pkg, $params ) = @_;
     my $class = ref $pkg || $pkg;
-    my $self = bless( {}, $class );
+    my $self = bless( {
+        filename  => '',
+        directory => '',
+        sections  => [],
+        comments  => {},
+        order     => [],
+        order_map => {},
+        global    => [],
+    }, $class );
     if ( $self->{_m}{filename} = $params->{filename} ) {
         $self->{_m}{directory} = $params->{directory} || dirname( $params->{filename} );
         $self->_translate_ini( OpenInteract2::Config->read_file( $params->{filename} ) );
@@ -175,8 +186,8 @@ sub _translate_ini {
 
         if ( /^\s*\#/ ) {
             push @comments, $_;
-            $multiline_param = undef;
-            $multiline_value = undef;
+            $multiline_param = '';
+            $multiline_value = '';
             $in_multiline = 0;
             next;
         }
@@ -192,15 +203,16 @@ sub _translate_ini {
         my ( $param, $value );
 
         my $this_multiline = $_ =~ s|\\$||;
+        my $add_value = $_ || '';
         if ( $in_multiline and $this_multiline ) {
-            $multiline_value .= "$_\n";
+            $multiline_value .= "$add_value\n";
             next;
         }
         elsif ( $in_multiline ) {
             $param = $multiline_param;
-            $value = $multiline_value . $_;
-            $multiline_param = undef;
-            $multiline_value = undef;
+            $value = $multiline_value . $add_value;
+            $multiline_param = '';
+            $multiline_value = '';
             $in_multiline = 0;
         }
 
@@ -221,7 +233,7 @@ sub _translate_ini {
             ( $param, $value ) = /^\s*([^=]+?)\s*=\s*(.*)\s*$/;
             if ( $this_multiline ) {
                 $multiline_param = $param;
-                $multiline_value = $value;
+                $multiline_value = $value || '';
                 $in_multiline = 1;
                 next;
             }
@@ -230,8 +242,9 @@ sub _translate_ini {
         if ( $log->is_debug ) {
             my $show_section = ( $sub_section )
                                  ? "$section.$sub_section" : $section;
-            $log->debug( "Line $line_number: $show_section.$param ",
-                         "= '$value'" );
+            my $show_param = $param || '';
+            my $show_value = $value || '';
+            $log->debug( "Line $line_number: $show_section.$show_param = '$show_value'" );
         }
         $self->_read_item( $section, $sub_section, $param, $value );
     }
@@ -317,6 +330,7 @@ sub _read_item {
 
 sub _set_value {
     my ( $self, $set_in, $param, $value ) = @_;
+    return unless ( $param );
     my $existing = $set_in->{ $param };
     my @values = ( ref $value ) ? @{ $value } : ( $value );
     if ( $existing and ref $existing eq 'ARRAY' ) {
@@ -326,7 +340,7 @@ sub _set_value {
         $set_in->{ $param } = [ $existing, @values ];
     }
     elsif ( scalar @values > 1 ) {
-        $set_in->{ $param } = \@values;
+        $set_in->{ $param } = [ @values ];
     }
     else {
         $set_in->{ $param } = $values[0];
@@ -336,6 +350,16 @@ sub _set_value {
 ########################################
 # OUTPUT
 ########################################
+
+# to STDOUT
+sub output {
+    my ( $self ) = @_;
+    foreach my $key ( @{ $self->{_m}{global} } ) {
+        $self->{Global}{ $key } = $self->{ $key };
+    }
+    print $self->_output_header();
+    print $self->_output_all_sections();
+}
 
 sub write_file {
     my ( $self, $filename ) = @_;
@@ -360,17 +384,8 @@ sub write_file {
                      "$original_filename)" );
     open( OUT, '>', $filename )
           || die "Cannot write configuration to [$filename]: $!";
-    print OUT "# Written by ", ref $self, " at ", scalar localtime, "\n";
-    foreach my $full_section ( $self->sections ) {
-        my ( $section, $sub_section ) = split /\s+/, $full_section;
-        my $comments = $self->get_comments( $section, $sub_section );
-        if ( $comments ) {
-            print OUT "$comments\n";
-        }
-        print OUT "[$full_section]\n",
-                  $self->_output_section( $section, $sub_section ),
-                  "\n\n";
-    }
+    print OUT $self->_output_header();
+    print OUT $self->_output_all_sections();
     close( OUT );
     if ( $original_filename ) {
         unlink( $original_filename );
@@ -380,6 +395,26 @@ sub write_file {
     return $filename;
 }
 
+sub _output_header {
+    my ( $self ) = @_;
+    return "# Written by ", ref $self, " at ", scalar localtime, "\n";
+}
+
+sub _output_all_sections {
+    my ( $self ) = @_;
+    my $out = '';
+    foreach my $full_section ( $self->sections ) {
+        my ( $section, $sub_section ) = split /\s+/, $full_section;
+        my $comments = $self->get_comments( $section, $sub_section );
+        if ( $comments ) {
+            $out .= "$comments\n";
+        }
+        $out .= join( "\n", "[$full_section]",
+                            $self->_output_section( $section, $sub_section ),
+                            '' );
+    }
+    return $out;
+}
 
 sub _output_section {
     my ( $self, $section, $sub_section ) = @_;
@@ -404,7 +439,11 @@ sub _output_section {
 }
 
 
-sub _show_item { return join( ' = ', $_[1], $_[2] ) }
+sub _show_item {
+    my $l = $_[1] || '';
+    my $r = $_[2] || '';
+    return join( ' = ', $l, $r );
+}
 
 1;
 
@@ -812,7 +851,7 @@ L<Config::IniFiles|Config::IniFiles>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

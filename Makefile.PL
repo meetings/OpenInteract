@@ -11,6 +11,9 @@ my %opts = (
     'NO_META'       => 1,
     'ABSTRACT'      => 'Pure-perl extensible application server',
     'PREREQ_PM'     => {
+      # TODO: update this to include 'without()' functionality
+      # when Adam publishes it.
+      'Algorithm::Dependency'      => 1.03,
       'Apache::Session'            => 1.50,
       'Archive::Zip'               => 0,
       'Cache::FileCache'           => 0,
@@ -27,7 +30,6 @@ my %opts = (
       'Digest::MD5'                => 0,
       'Email::Valid'               => 0.12,
       'Exception::Class'           => 1.10,
-      'File::DirSync'              => 1.11,
       'File::MMagic'               => 0,
       'Getopt::Long'               => 2.32,
       'HTML::Entities'             => 1.13,

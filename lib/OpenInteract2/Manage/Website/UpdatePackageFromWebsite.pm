@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::UpdatePackageFromWebsite;
 
-# $Id: UpdatePackageFromWebsite.pm,v 1.2 2004/06/13 18:19:54 lachoy Exp $
+# $Id: UpdatePackageFromWebsite.pm,v 1.5 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use File::Spec::Functions  qw( catfile );
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Config::PackageChanges;
 
-$OpenInteract2::Manage::Website::UpdatePackageFromWebsite::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::UpdatePackageFromWebsite::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 my $ACTION = 'update development package';
 
@@ -100,32 +100,16 @@ sub _is_valid_website_package {
 
 sub _sync_dirs {
     my ( $self ) = @_;
-
     my $package = $self->param( 'package_object' );
-    my $site_package_dir = $package->directory;
-
-    my $dirsync = File::DirSync->new({
-        src       => $site_package_dir,
-        dst       => $self->param( 'package_dir' ),
-        verbose   => 0,
-        nocache   => 0,
-        localmode => 0,
-    });
-    $dirsync->ignore( 'CVS' );
-    $dirsync->ignore( '.svn' );
-    $dirsync->dirsync();
-    $self->_add_status(
-        $self->_create_sync_status( $dirsync, $site_package_dir )
-    );
-    return 1;
+    my $source_dir = $package->directory;
+    my $status = $package->copy_contents_to( $self->param( 'package_dir' ) );
+    $self->_set_copy_file_status( $status );
 }
 
 sub _write_new_changelog {
     my ( $self ) = @_;
     my $action = 'write changelog';
-
     my $package = $self->param( 'package_object' );
-
     my $changes = OpenInteract2::Config::PackageChanges->new({
         package => $package,
     });
@@ -241,7 +225,7 @@ Message with files skipped
 
 =head1 COPYRIGHT
 
-Copyright (C) 2004 Chris Winters. All rights reserved.
+Copyright (C) 2004-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

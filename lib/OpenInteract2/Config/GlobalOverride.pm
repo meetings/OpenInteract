@@ -1,6 +1,6 @@
 package OpenInteract2::Config::GlobalOverride;
 
-# $Id: GlobalOverride.pm,v 1.10 2004/11/09 13:54:09 sjn Exp $
+# $Id: GlobalOverride.pm,v 1.11 2005/03/17 14:58:00 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use OpenInteract2::Config;
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::GlobalOverride::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -462,7 +462,7 @@ B<apply_rules( $config )>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

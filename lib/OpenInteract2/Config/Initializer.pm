@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Initializer;
 
-# $Id: Initializer.pm,v 1.20 2004/11/30 03:12:11 lachoy Exp $
+# $Id: Initializer.pm,v 1.24 2005/03/18 04:09:50 lachoy Exp $
 
 use base qw( Class::Observable );
 use strict;
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::URL;
 
-$OpenInteract2::Config::Initializer::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Initializer::VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -177,37 +177,6 @@ sub _spops_fulltext {
     }
 }
 
-# NOTE: This requires that the action table is already read in. The
-# process defined in OI2::Context/Setup ensures this, but if you're
-# doing initialization some other way: YOU'VE BEEN WARNED.
-
-sub _spops_display_info {
-    my ( $init, $type, $config ) = @_;
-    return unless ( $type eq 'spops' );
-    my $display_info = $config->{display};
-    return unless ( ref $display_info eq 'HASH' );
-    $log ||= get_logger( LOG_INIT );
-    $log->info( "Translating correct URL for 'display' in '$config->{key}'" );
-    my $u = OpenInteract2::URL->new();
-    if ( $display_info->{url} ) {
-        $display_info->{url} =
-            $u->create( $display_info->{url} );
-    }
-    elsif ( $display_info->{ACTION} ) {
-        $display_info->{url} =
-            $u->create_from_action( $display_info->{ACTION},
-                                    $display_info->{TASK} );
-        delete $display_info->{TASK};
-        if ( $display_info->{TASK_EDIT} ) {
-            $display_info->{url_edit} = $u->create_from_action(
-                $display_info->{ACTION}, $display_info->{TASK_EDIT} );
-            delete $display_info->{TASK_EDIT};
-        }
-        delete $display_info->{ACTION};
-    }
-}
-
-
 # Changes:
 # [user has_a]
 # My::User = updater: updated_by; poster: posted_by
@@ -304,7 +273,6 @@ __PACKAGE__->add_observer( \&_spops_security );
 __PACKAGE__->add_observer( \&_spops_creation_security );
 __PACKAGE__->add_observer( \&_spops_date_conversion );
 __PACKAGE__->add_observer( \&_spops_fulltext );
-__PACKAGE__->add_observer( \&_spops_display_info );
 __PACKAGE__->add_observer( \&_spops_set_hasa );
 __PACKAGE__->add_observer( \&_spops_set_dbi );
 __PACKAGE__->add_observer( \&_spops_discover_field );
@@ -346,20 +314,30 @@ sub _action_assign_defaults {
 sub _action_security_level {
     my ( $init, $type, $config ) = @_;
     return unless ( $type eq 'action' );
-    return unless ( ref $config->{security} eq 'HASH' );
+    return unless ( $config->{security} );
 
     $log ||= get_logger( LOG_INIT );
     $log->info( "Modifying verbose security for action '$config->{name}'" );
-    foreach my $task ( keys %{ $config->{security} } ) {
-        my $task_security = uc $config->{security}{ $task };
-        if ( $task_security =~ /^(NONE|SUMMARY|READ|WRITE)$/i ) {
-            $task_security =
-                OpenInteract2::Util->verbose_to_level( uc $task_security );
+
+    if ( ref $config->{security} eq 'HASH' ) {
+        foreach my $task ( keys %{ $config->{security} } ) {
+            my $verbose = uc $config->{security}{ $task };
+            $config->{security}{ $task } = _translate_security_to_level( $verbose );
         }
-        $config->{security}{ $task } = int( $task_security );
+    }
+    else {
+        my $verbose = uc $config->{security};
+        $config->{security} = _translate_security_to_level( $verbose );
     }
 }
 
+sub _translate_security_to_level {
+    my ( $verbose ) = @_;
+    if ( $verbose =~ /^(NONE|SUMMARY|READ|WRITE)$/i ) {
+        $verbose = OpenInteract2::Util->verbose_to_level( uc $verbose );
+    }
+    return int( $verbose );
+}
 
 sub _action_cache_params {
     my ( $init, $type, $config ) = @_;
@@ -582,12 +560,6 @@ Configurations with 'is_searchable' set get
 L<OpenInteract2::FullText|OpenInteract2::FullText> added to 'isa' as
 long as at least one field is listed in 'fulltext_field'.
 
-=item B<Display Munging>
-
-Configurations defining 'display' with 'ACTION' and 'TASK' keys get a
-'url' key with the properly rewritten URL; those with both 'ACTION'
-and 'TASK_EDIT' keys get a 'url_edit' key as well.
-
 =item B<Field Discovery>
 
 Configurations with 'field_discover' set to 'yes' get
@@ -667,7 +639,8 @@ configuration does not already have data defined.
 
 In the action configuration you can use verbose descriptions of
 security levels like 'READ' and 'WRITE'. These get translated to the
-codes exported by L<SPOPS::Secure|SPOPS::Secure>.
+codes exported by L<SPOPS::Secure|SPOPS::Secure> via the
+C<verbose_to_level()> method in L<OpenInteract2::Util>.
 
 =item B<Caching Parameters>
 
@@ -721,7 +694,7 @@ from the class.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

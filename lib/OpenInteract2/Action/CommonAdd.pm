@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonAdd;
 
-# $Id: CommonAdd.pm,v 1.21 2004/12/05 08:52:55 lachoy Exp $
+# $Id: CommonAdd.pm,v 1.25 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -8,6 +8,8 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
+
+$OpenInteract2::Action::CommonAdd::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -54,36 +56,52 @@ sub add {
     # MY_EDIT_FIELDS_DATE, MY_EDIT_FIELDS_TOGGLED, ...)
 
     $self->_common_assign_properties(
-        $object,
-        { standard        => scalar $self->param( 'c_add_fields' ),
-          toggled         => scalar $self->param( 'c_add_fields_toggled' ),
-          date            => scalar $self->param( 'c_add_fields_date' ),
-          datetime        => scalar $self->param( 'c_add_fields_datetime' ),
-          date_format     => scalar $self->param( 'c_add_date_format' ),
-          datetime_format => scalar $self->param( 'c_add_datetime_format' ), } );
+        $object, { 
+            standard        => scalar $self->param( 'c_add_fields' ),
+            toggled         => scalar $self->param( 'c_add_fields_toggled' ),
+            boolean         => scalar $self->param( 'c_add_fields_boolean' ),
+            date            => scalar $self->param( 'c_add_fields_date' ),
+            datetime        => scalar $self->param( 'c_add_fields_datetime' ),
+            date_format     => scalar $self->param( 'c_add_date_format' ),
+            datetime_format => scalar $self->param( 'c_add_datetime_format' ),
+        } );
 
     # If after customizing/inspecting the object you want to bail and
     # go somewhere else, die with content
 
     my %save_options = ();
     $self->_add_customize( $object, \%save_options );
+    $log->is_debug &&
+        $log->debug( "_add_customize() ran ok; notifying of 'pre add'" );
 
     $self->notify_observers( 'pre add', $object, \%save_options );
+    $log->is_debug &&
+        $log->debug( "notification ok; saving object..." );
+
     eval { $object->save( \%save_options ) };
     if ( $@ ) {
-        $log->error( "Failed to create object: $@" );
+        $log->warn( "Failed to create object: $@" );
         $self->add_error_key( 'action.error.create', $@ );
         my $fail_task = $self->param( 'c_add_fail_task' );
         return $self->execute({ task => $fail_task });
     }
+    $log->is_debug && $log->debug( "object saved ok" );
+
     $self->param( c_object => $object );
     $self->param( c_id => scalar $object->id );
+
     my $title = "'" . $object->object_description->{title} . "'" || 'Object';
     $self->add_status_key( 'action.status.create', $title );
-    $self->_add_post_action;
+    $log->is_debug && $log->debug( "generated status messge ok" );
+
+    $self->_add_post_action( $object );
+    $log->is_debug && $log->debug( "_add_post_action() ran ok" );
+
     $self->notify_observers( 'post add', $object );
+    $log->is_debug && $log->debug( "'post add' notification ok" );
 
     my $success_task = $self->param( 'c_add_task' );
+    $log->is_debug && $log->debug( "get task '$success_task' content" );
     return $self->execute({ task => $success_task });
 }
 
@@ -143,6 +161,7 @@ OpenInteract2::Action::CommonAdd - Tasks to display empty form and create an obj
  c_add_fields                 = author
  c_add_fields                 = publisher
  c_add_fields_toggled         = has_nyt_review
+ c_add_fields_boolean         = flagged_by_accounting
  c_add_fields_date            = publish_date
  c_add_fields_date_format     = %Y-%m-%d
  c_add_fields_datetime        = last_edit_time
@@ -263,12 +282,11 @@ Here is an example of a validation check:
      }
  }
 
-B<_add_post_action>
+B<_add_post_action( $object )>
 
-This method is called after the object has been successfully created
--- you will find the object in the C<c_object> action parameter. You
-can perform any action you like in this method. Similar to
-C<_add_customize()>, if you throw a C<die> with content it will be
+This method is called after the C<$object> has been successfully
+created. You can perform any action you like in this method. Similar
+to C<_add_customize()>, if you throw a C<die> with content it will be
 displayed to the user rather than moving to the configured
 C<c_add_task>.
 
@@ -348,6 +366,14 @@ List the fields you want assigned in a toggled fashion -- if any value
 is specified, we set it to 'yes'; otherwise we set it to 'no'. (See
 L<OpenInteract2::Request/param_toggled>.)
 
+B<c_add_fields_boolean> ($ or \@)
+
+List the fields you want assigned in a boolean fashion -- if any value
+is specified, we set it to '1'; otherwise we set it to '0'. (See
+L<OpenInteract2::Request/param_boolean>.) Use this instead of
+C<c_add_fields_toggled> when your field maps to a SQL BIT or BOOLEAN
+datatype.
+
 B<c_add_fields_date> ($ or \@)
 
 List the date fields you want assigned. You can have the date read
@@ -395,7 +421,7 @@ been validated.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

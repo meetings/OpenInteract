@@ -1,12 +1,12 @@
 package OpenInteract2::Conversion::ActionConfig;
 
-# $Id: ActionConfig.pm,v 1.5 2004/02/17 04:30:14 lachoy Exp $
+# $Id: ActionConfig.pm,v 1.6 2005/03/17 14:58:01 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Conversion::IniConfig );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Conversion::ActionConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Conversion::ActionConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my @ORDER = qw( class method security template package title weight
                 is_lookup object_key order field_list label_list size_list
@@ -85,7 +85,7 @@ L<OpenInteract2::Conversion::IniConfig|OpenInteract2::Conversion::IniConfig>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

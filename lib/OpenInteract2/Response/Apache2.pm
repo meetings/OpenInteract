@@ -1,6 +1,6 @@
 package OpenInteract2::Response::Apache2;
 
-# $Id: Apache2.pm,v 1.6 2004/10/03 00:15:24 lachoy Exp $
+# $Id: Apache2.pm,v 1.7 2005/03/17 14:58:05 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -11,7 +11,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::Apache2::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Apache2::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -137,7 +137,7 @@ Sends an HTTP redirect using the L<Apache::RequestRec|Apache::RequestRec> object
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

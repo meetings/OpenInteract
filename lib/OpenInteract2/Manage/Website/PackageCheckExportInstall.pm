@@ -1,16 +1,17 @@
 package OpenInteract2::Manage::Website::PackageCheckExportInstall;
 
-# $Id: PackageCheckExportInstall.pm,v 1.3 2004/06/13 18:19:54 lachoy Exp $
+# $Id: PackageCheckExportInstall.pm,v 1.8 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use Cwd                      qw( cwd );
+use File::Spec::Functions    qw( catfile );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::Website::PackageCheckExportInstall::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::PackageCheckExportInstall::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'package_all';
@@ -36,13 +37,18 @@ sub get_parameters {
 sub validate_param {
     my ( $self, $param_name, $param_value ) = @_;
     if ( $param_name eq 'package_dir' ) {
-        my $package_conf_file = File::Spec->catfile( $param_value, 'package.conf' );
-        unless ( -f $package_conf_file ) {
+        my $package_ini_file = catfile( $param_value, 'package.ini' );
+        unless ( -f $package_ini_file ) {
             return "Directory does not appear to be a package";
         }
     }
     return $self->SUPER::validate_param( $param_name, $param_value );
 }
+
+# no-op, but don't remove otherwise the 'check_package' task will
+# check the wrong files because our parent uses this to create the
+# context -- see OIN-147 for sample error
+sub setup_task {}
 
 sub run_task {
     my ( $self ) = @_;
@@ -75,11 +81,11 @@ sub run_task {
 
 sub _run_subtask {
     my ( $self, $task_name, %extra_params ) = @_;
-    my $subtask = OpenInteract2::Manage->new(
-        $task_name, { package_dir => $self->param( 'package_dir' ),
-                      website_dir => $self->param( 'website_dir' ),
-                      %extra_params }
-    );
+    my $subtask = OpenInteract2::Manage->new( $task_name, {
+        package_dir => $self->param( 'package_dir' ),
+        website_dir => $self->param( 'website_dir' ),
+        %extra_params
+    });
     eval { $subtask->execute() };
     if ( $@ ) {
         $self->_fail( $task_name, "Caught error: $@" );
@@ -149,7 +155,7 @@ Each status hashref contains only standard information.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003-2004 Chris Winters. All rights reserved.
+Copyright (C) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

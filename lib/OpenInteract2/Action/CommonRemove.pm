@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonRemove;
 
-# $Id: CommonRemove.pm,v 1.18 2004/12/05 08:52:55 lachoy Exp $
+# $Id: CommonRemove.pm,v 1.21 2005/03/18 04:09:49 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -8,6 +8,8 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
+
+$OpenInteract2::Action::CommonRemove::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -50,7 +52,7 @@ sub remove {
     eval { $object->remove };
     if ( $@ ) {
         $self->add_error_key( 'action.error.remove', $@ );
-        $log->error( "Failed to remove ", $self->param( 'c_object_class' ),
+        $log->warn( "Failed to remove ", $self->param( 'c_object_class' ),
                      "with ID" , $object->id, ": $@" );
         return $self->execute({ task => $fail_task });
     }
@@ -231,7 +233,7 @@ cases except if the requested object is not found.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

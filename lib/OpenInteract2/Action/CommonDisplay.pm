@@ -1,12 +1,14 @@
 package OpenInteract2::Action::CommonDisplay;
 
-# $Id: CommonDisplay.pm,v 1.15 2004/12/05 08:52:55 lachoy Exp $
+# $Id: CommonDisplay.pm,v 1.17 2005/03/18 04:09:49 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
+
+$OpenInteract2::Action::CommonDisplay::VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -177,7 +179,7 @@ ID value used to fetch the object.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

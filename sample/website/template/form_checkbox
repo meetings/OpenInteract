@@ -1,3 +1,0 @@
-[%- is_checked = ( value == picked ) ? 'CHECKED' : '' -%] 
-<input type="checkbox" name="[% name %]"
-       value="[% value %]" [% is_checked %]> [% field_label %]

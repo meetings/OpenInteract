@@ -1,11 +1,11 @@
 # -*-perl-*-
 
-# $Id: exception.t,v 1.8 2004/06/10 22:47:26 lachoy Exp $
+# $Id: exception.t,v 1.9 2005/02/28 01:02:07 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 65;
+use Test::More  tests => 82;
 
 BEGIN {
     use_ok( 'OpenInteract2::Exception',
@@ -270,6 +270,76 @@ BEGIN {
         '$@ stringified' );
 }
 
+# Test the parameter exception with multiple failures for one field
+
+{
+    my $p_message = 'Parameters failed to validate';
+    my $p_length_fail = 'Must be at least 5 characters';
+    my $p_chars_fail  = 'Must not have any unseemly characters';
+    my $all_errors = [ $p_length_fail, $p_chars_fail ];
+    my %p_fail    = ( username => $all_errors );
+    eval {
+        OpenInteract2::Exception::Parameter->throw(
+                         $p_message, { parameter_fail => \%p_fail } )
+    };
+    my $p = $@;
+
+    is( ref $p, 'OpenInteract2::Exception::Parameter',
+        'Parameter object creation' );
+    is( $p->message(), $p_message,
+        'Parameter message creation' );
+    ok( $p->package(),
+        'Parameter package set' );
+    ok( $p->line(),
+        'Parameter line number set' );
+
+    my $failures = $p->parameter_fail;
+    is( ref $failures, 'HASH',
+        'Failed parameters is hash' );
+    is_deeply( $failures->{username}, $all_errors,
+        'Both failures for parameter username set' );
+
+    is( ref( $p->trace() ), 'Devel::StackTrace',
+        'Trace set' );
+    is( "$p", "One or more parameters were not valid: username: $p_length_fail; $p_chars_fail",
+        '$@ stringified' );
+}
+
+# Test the parameter exception with multiple fields failing
+
+{
+    my $p_message = 'Parameters failed to validate';
+    my $p_length_fail = 'Must be at least 5 characters';
+    my $p_chars_fail  = 'Must not have any unseemly characters';
+    my %p_fail    = ( username => $p_length_fail, password => $p_chars_fail );
+    eval {
+        OpenInteract2::Exception::Parameter->throw(
+                         $p_message, { parameter_fail => \%p_fail } )
+    };
+    my $p = $@;
+
+    is( ref $p, 'OpenInteract2::Exception::Parameter',
+        'Parameter object creation' );
+    is( $p->message(), $p_message,
+        'Parameter message creation' );
+    ok( $p->package(),
+        'Parameter package set' );
+    ok( $p->line(),
+        'Parameter line number set' );
+
+    my $failures = $p->parameter_fail;
+    is( ref $failures, 'HASH',
+        'Failed parameters is hash' );
+    is( $failures->{username}, $p_length_fail,
+        'Failure for parameter username set' );
+    is( $failures->{password}, $p_chars_fail,
+        'Failure for parameter password set' );
+
+    is( ref( $p->trace() ), 'Devel::StackTrace',
+        'Trace set' );
+    is( "$p", "One or more parameters were not valid: password: $p_chars_fail ;; username: $p_length_fail",
+        '$@ stringified' );
+}
 
 # shortcut
 

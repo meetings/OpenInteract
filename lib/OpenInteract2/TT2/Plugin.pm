@@ -1,6 +1,6 @@
 package OpenInteract2::TT2::Plugin;
 
-# $Id: Plugin.pm,v 1.16 2004/11/25 03:58:57 lachoy Exp $
+# $Id: Plugin.pm,v 1.19 2005/03/17 14:58:05 sjn Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -15,7 +15,7 @@ use OpenInteract2::URL;
 use SPOPS::Secure              qw( :level :scope );
 use SPOPS::Utility;
 
-$OpenInteract2::TT2::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -103,13 +103,13 @@ sub action_execute {
 
 sub msg {
     my ( $self, $key, @params ) = @_;
-    my $lh = CTX->request->language_handle;
-    unless ( $lh ) {
+    my $h = $self->msg_handle();
+    unless ( $h ) {
         $log ||= get_logger( LOG_TEMPLATE );
         $log->error( "No language handle available from the request object!" );
         return "msg $key n/a";
     }
-    return $lh->maketext( $key, @params );
+    return $h->maketext( $key, @params );
 }
 
 sub msg_handle {
@@ -221,7 +221,7 @@ sub date_format {
     my ( $self, $date_string, $format, $params ) = @_;
     return undef unless ( $date_string );
     $log ||= get_logger( LOG_TEMPLATE );
-    my $date = _create_date_object( $date_string );
+    my $date = _create_date_object( $date_string, $format );
     unless ( $date ) {
         $log->error( "Cannot parse '$date_string' into valid date" );
         return undef;
@@ -247,6 +247,23 @@ sub date_into_object {
 
 ########################################
 # STRING FORMATTING
+
+sub as_boolean {
+    my ( $self, $value ) = @_;
+    return $value =~ /^(t|true|y|yes|1)$/i
+}
+
+sub as_boolean_label {
+    my ( $self, $value, $positive, $negative ) = @_;
+    my $result = $self->as_boolean( $value );
+    if ( $result ) {
+        $positive ||= $self->msg( 'global.label.yes' );
+    }
+    else {
+        $negative ||= $self->msg( 'global.label.no' );
+    }
+    return $result ? $positive : $negative;
+}
 
 # Limit $str to $len characters
 
@@ -692,6 +709,14 @@ OpenInteract2::TT2::Plugin - Custom OpenInteract functionality in templates
                                       year_value   = d.year, blank = 1,
                                       field_prefix = 'updated_on' ) -%]
  
+ [% INCLUDE form_checkbox( name        = 'is_in_print',
+                           value       = 'TRUE',
+                           is_checked  = OI.as_boolean( book.is_in_print ) ) -%]
+ 
+ Is in print? [% OI.as_boolean_label( book.is_in_print ) %]
+ 
+ Is in print? [% OI.as_boolean_label( book.is_in_print, 'You betcha', 'No way' ) %]
+ 
  [% OI.limit_string( object.description, 30 ) %]
  
  var person_last_name = '[% OI.javascript_quote( person.last_name ) %]';
@@ -1035,6 +1060,18 @@ L<DateTime::Format::Strptime|DateTime::Format::Strptime>):
   %Y      year (4 digits)
   %z      timezone in ISO 8601 format (+0500, -0400, etc.)
   %Z      timezone brief (PST, EST, etc.)
+
+B<as_boolean( $value )>
+
+Returns 1 if C<$value> any one of the following, in any case: 't',
+'true', 'y', 'yes', or '1'. Otherwise returns 0.
+
+B<as_boolean_label( $value, [ $yes_label ], [ $no_label ] )>
+
+If C<$value> is a value that evaluates to 1 from C<$as_boolean()> we
+return C<$yes_label> if specified, or the localized version of
+'global.label.yes'; if it evaluates to '0' we return C<$no_label> if
+specified, or the localized version of 'global.label.no'.
 
 B<limit_string( $string, $length )>
 
@@ -1490,7 +1527,7 @@ L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

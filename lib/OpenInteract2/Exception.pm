@@ -1,11 +1,11 @@
 package OpenInteract2::Exception;
 
-# $Id: Exception.pm,v 1.11 2004/02/17 04:30:13 lachoy Exp $
+# $Id: Exception.pm,v 1.12 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use Carp qw( carp );
 
-$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Exception::VERSION   = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 # Declare some of our exceptions
 
@@ -223,7 +223,7 @@ L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,11 +1,11 @@
 package OpenInteract2::Constants;
 
-# $Id: Constants.pm,v 1.9 2004/02/17 04:30:13 lachoy Exp $
+# $Id: Constants.pm,v 1.11 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
 
-$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Constants::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 # TODO: Are these used?
 
@@ -48,9 +48,9 @@ my @LOG_CATEGORY = qw(
     LOG_SECURITY LOG_SPOPS LOG_TEMPLATE LOG_TRANSLATE
 );
 
-use constant BASE_CONF_DIR  => 'conf';
-use constant BASE_CONF_FILE => 'base.conf';
-my @FILE = qw( BASE_CONF_DIR BASE_CONF_FILE );
+use constant BOOTSTRAP_CONF_DIR  => 'conf';
+use constant BOOTSTRAP_CONF_FILE => 'bootstrap.ini';
+my @FILE = qw( BOOTSTRAP_CONF_DIR BOOTSTRAP_CONF_FILE );
 
 use constant ACTION_KEY     => 'ACTION';
 use constant REQUEST_KEY    => 'REQUEST';
@@ -158,11 +158,11 @@ turn off logging.
 
 These are default filenames and directories for various items in OI2:
 
-B<BASE_CONF_DIR>: This is the default directory under the website where
-you can find the base configuration. This is normally 'conf'.
+B<BOOTSTRAP_CONF_DIR>: This is the default directory under the website where
+you can find the bootstrap configuration. This is normally 'conf'.
 
-B<BASE_CONF_FILE>: This is the default filename for the base
-configuration. It is normally 'base.conf'.
+B<BOOTSTRAP_CONF_FILE>: This is the default filename for the
+bootstrap configuration. It is normally 'bootstrap.ini'.
 
 =head2 Template Keys
 
@@ -183,7 +183,7 @@ None, just exported constants.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Config::IniFile;
 
-# $Id: IniFile.pm,v 1.8 2004/09/26 23:53:33 lachoy Exp $
+# $Id: IniFile.pm,v 1.9 2005/03/17 14:58:00 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Config );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 use constant META_KEY => '_INI';
 
@@ -148,7 +148,7 @@ L<OpenInteract2::Config|OpenInteract2::Config>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

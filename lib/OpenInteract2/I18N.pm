@@ -1,18 +1,15 @@
 package OpenInteract2::I18N;
 
-# $Id: I18N.pm,v 1.7 2004/06/06 04:42:25 lachoy Exp $
+# $Id: I18N.pm,v 1.9 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( Locale::Maketext );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( LOG_TRANSLATE );
 
-$OpenInteract2::I18N::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::I18N::VERSION   = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
-
-# This is the Locale::Maketext project file. Add any customizations here...
-
 
 # Override so we can add the message key to the output as required
 # TODO: This may be a performance bottleneck...
@@ -76,7 +73,7 @@ L<Locale::Maketext|Locale::Maketext>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

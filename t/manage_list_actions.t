@@ -1,11 +1,11 @@
 # -*-perl-*-
 
-# $Id: manage_list_actions.t,v 1.7 2004/06/06 06:36:03 lachoy Exp $
+# $Id: manage_list_actions.t,v 1.10 2005/03/04 20:34:06 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 49;
+use Test::More  tests => 50;
 
 require_ok( 'OpenInteract2::Manage' );
 
@@ -24,10 +24,10 @@ my @status = eval { $task->execute };
 ok( ! $@, 'Task executed ok' ) || diag "Error: $@";
 
 my @names = qw(
-    admin_tools_box boxes comment comment_recent content_type
-    edit_document_box error error_filter file_index forgotpassword
+    admin_tools_box boxes comment comment_admin comment_recent content_type
+    edit_document_box error_browser file_index forgotpassword
     group latest_news login_box logout lookups new new_comment_form
-    news news_section news_tools_box newuser
+    news news_archive_monthly news_section news_tools_box newuser
     object_modify_box objectactivity package page pagedirectory
     pagescan powered_by_box search search_box security show_comment_by_object
     show_comment_summary simple_index sitesearch systemdoc template

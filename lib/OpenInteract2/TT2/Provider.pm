@@ -1,6 +1,6 @@
 package OpenInteract2::TT2::Provider;
 
-# $Id: Provider.pm,v 1.5 2004/10/02 22:59:00 lachoy Exp $
+# $Id: Provider.pm,v 1.6 2005/03/18 04:09:51 lachoy Exp $
 
 use strict;
 use base qw( Template::Provider );
@@ -10,7 +10,7 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::TT2::Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -421,7 +421,7 @@ Slashcode L<http://www.slashcode.com/|http://www.slashcode.com/>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

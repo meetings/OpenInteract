@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ListActions;
 
-# $Id: ListActions.pm,v 1.11 2004/06/13 18:19:54 lachoy Exp $
+# $Id: ListActions.pm,v 1.12 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Action;
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'list_actions';
@@ -111,7 +111,7 @@ Template used for action
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

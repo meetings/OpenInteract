@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::InstallPackageSql;
 
-# $Id: InstallPackageSql.pm,v 1.11 2004/06/13 18:19:54 lachoy Exp $
+# $Id: InstallPackageSql.pm,v 1.16 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::InstallPackageSql::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'install_sql';
@@ -24,12 +24,17 @@ sub get_parameters {
     return {
         website_dir => $self->_get_website_dir_param,
         package     => $self->_get_package_param,
+        file        => {
+            description    => 'Process only the listed structure file(s); if unspecified all are processed',
+            is_required    => 'no',
+            is_multivalued => 'yes',
+        },
     };
 }
 
 sub setup_task {
     my ( $self ) = @_;
-    $self->_setup_context( { skip => 'activate spops' } );
+    $self->_setup_context( { skip => 'initialize spops' } );
 }
 
 sub run_task {
@@ -44,13 +49,13 @@ sub run_task {
         $struct->execute;
         $self->_add_status( $struct->get_status );
 
-        # Re-reads the SPOPS config now that the tables are created...
-
-        my $setup = OpenInteract2::Setup->new;
-        $setup->activate_spops_classes( CTX->spops_config );
+        # Reads and initializes the SPOPS objects now that the tables
+        # are created...
+        OpenInteract2::Setup->run_setup_for( 'initialize spops' );
 
         $data->execute;
         $self->_add_status( $data->get_status );
+
         $security->execute;
         $self->_add_status( $security->get_status );
     };
@@ -122,7 +127,7 @@ Name of package this action spawmed from.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003-2004 Chris Winters. All rights reserved.
+Copyright (C) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

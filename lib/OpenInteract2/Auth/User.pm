@@ -1,13 +1,13 @@
 package OpenInteract2::Auth::User;
 
-# $Id: User.pm,v 1.21 2004/10/05 03:05:09 lachoy Exp $
+# $Id: User.pm,v 1.22 2005/03/17 14:57:59 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -450,7 +450,7 @@ ID. The ID of the theme should be set to 'default_objects.theme'.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,13 +1,13 @@
 package OpenInteract2::Upload;
 
-# $Id: Upload.pm,v 1.5 2004/02/18 05:25:26 lachoy Exp $
+# $Id: Upload.pm,v 1.6 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::File;
 
-$OpenInteract2::Upload::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Upload::VERSION  = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( name filehandle content_type size tmp_name );
 OpenInteract2::Upload->mk_accessors( @FIELDS );
@@ -201,7 +201,7 @@ L<CGI|CGI>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,16 +1,21 @@
 package OpenInteract2::Config::Package;
 
-# $Id: Package.pm,v 1.19 2004/09/26 16:06:30 lachoy Exp $
+# $Id: Package.pm,v 1.24 2005/03/17 14:58:00 sjn Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
-use File::Basename ();
-use File::Spec;
+use OpenInteract2::Config::Ini;
+use File::Basename           qw( dirname );
+use File::Spec::Functions    qw( catfile rel2abs );
+use Log::Log4perl            qw( get_logger );
+use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
-use constant DEFAULT_FILENAME => 'package.conf';
+my ( $log );
+
+use constant DEFAULT_FILENAME => 'package.ini';
 
 my @REQUIRED_FIELDS = qw( name version );
 sub get_required_fields { return [ @REQUIRED_FIELDS ] }
@@ -24,23 +29,22 @@ my @SERIAL_FIELDS = qw( name version author url
                         observer config_watcher description );
 my @OBJECT_FIELDS = qw( filename package_dir );
 
-# Define the keys in 'package.conf' that can be a list, meaning you
+# Define the keys in 'package.ini' that can be a list, meaning you
 # can have multiple items defined:
 #
-#  author  Larry Wall <larry@wall.org>
-#  author  Chris Winters E<lt>chris@cwinters.comE<gt>
+#  author = Larry Wall <larry@wall.org>
+#  author = Chris Winters E<lt>chris@cwinters.comE<gt>
 
 # NOTE: If you add a field here you must also add it to @SERIAL_FIELDS
 
 my %LIST_FIELDS = map { $_ => 1 } qw( author module spops_file action_file
                                       message_file config_watcher );
 
-# Define the keys in 'package.conf' that can be a hash, meaning that
-# you can have items defined as multiple key-value pairs
-# (space-separated):
+# Define the keys in 'package.ini' that should be a hash
 #
-#  template_plugin MyNew OpenInteract2::TT::Plugin::New
-#  template_plugin MyURL OpenInteract2::TT::Plugin::URL
+#  [package template_plugin]
+#  MyNew = OpenInteract2::TT::Plugin::New
+#  MyURL = OpenInteract2::TT::Plugin::URL
 
 # NOTE: If you add a field here you must also add it to @SERIAL_FIELDS
 
@@ -54,19 +58,28 @@ OpenInteract2::Config::Package->mk_accessors( @FIELDS );
 
 sub new {
     my ( $class, $params ) = @_;
+    $log ||= get_logger( LOG_OI );
     my $self = bless( {}, $class );
     my $filename  = $params->{filename};
     my $directory = $params->{package_dir} || $params->{directory};
     if ( ! $filename and $directory ) {
         $filename = $self->create_filename( $directory );
+        $log->is_debug &&
+            $log->debug( "Will read package config from '$filename' ",
+                         "given directory '$directory'" );
     }
     if ( $filename and -f $filename ) {
-        my $new_params = $class->_read_config( $filename );
+        my $new_params = $class->_read_config( file => $filename );
         $params->{ $_ } = $new_params->{ $_ } for ( keys %{ $new_params } );
         $self->filename( $filename );
-        $self->package_dir( File::Spec->rel2abs( File::Basename::dirname( $filename ) ) );
+        $self->package_dir( rel2abs( dirname( $filename ) ) );
     }
-    return $self->init( $params );
+    elsif ( $params->{content} ) {
+        my $new_params = $class->_read_config( content => $params->{content} );
+        $params->{ $_ } = $new_params->{ $_ } for ( keys %{ $new_params } );
+
+    }
+    return $self->_initialize( $params );
 }
 
 sub create_filename {
@@ -74,14 +87,14 @@ sub create_filename {
     unless ( $dir ) {
         oi_error "Must pass in directory to create package config filename";
     }
-    return File::Spec->catfile( $dir, DEFAULT_FILENAME );
+    return catfile( $dir, DEFAULT_FILENAME );
 }
 
 
 ########################################
 # OBJECT METHODS
 
-sub init {
+sub _initialize {
     my ( $self, $params ) = @_;
     for ( @FIELDS ) {
         next unless ( $params->{ $_ } );
@@ -90,6 +103,39 @@ sub init {
     return $self;
 }
 
+
+sub author_names {
+    my ( $self ) = @_;
+    my ( $names, $emails ) = $self->_parse_authors;
+    return @{ $names };
+}
+
+sub author_emails {
+    my ( $self ) = @_;
+    my ( $names, $emails ) = $self->_parse_authors;
+    return @{ $emails };
+}
+
+sub _parse_authors {
+    my ( $self ) = @_;
+    my $authors = $self->author;
+    return ( [], [] ) unless ( ref $authors );
+    my @names  = ();
+    my @emails = ();
+    foreach my $author ( @{ $authors } ) {
+        my ( $name, $d1, $email, $d2 ) = $author =~ /^([\w\s]+)(\(|<)\s*(.*)\s*(\)|>)\s*$/;
+        # ...they didn't put an email in
+        unless ( $name ) {
+            $name  = $author;
+            $email = '';
+        }
+        $name =~ s/^\s+//;
+        $name =~ s/\s+$//;
+        push @names, $name;
+        push @emails, $email;
+    }
+    return ( \@names, \@emails );
+}
 
 sub get_spops_files {
     my ( $self ) = @_;
@@ -160,109 +206,57 @@ sub save_config {
     my ( $self ) = @_;
 
     unless ( $self->filename() ) {
-        oi_error "Save failed: set filename first";
+        oi_error "Package configuration save failed: set filename first";
     }
-
     $self->check_required_fields;
-    eval { open( CONF, '> ' . $self->filename ) || die $! };
-    if ( $@ ) {
-        oi_error "Cannot open [", $self->filename, "] for writing: $@";
-    }
-    foreach my $field ( @SERIAL_FIELDS ) {
-        if ( $LIST_FIELDS{ $field } ) {
-            my $values = $self->$field() || [];
-            foreach my $value ( @{ $values } ) {
-                print CONF $self->_line_single_value( $field, $value );
-            }
 
-        }
-        elsif ( $HASH_FIELDS{ $field } ) {
-            my $h = $self->$field() || {};
-            while ( my ( $key, $value ) = each %{ $h } ) {
-                print CONF $self->_line_keyed_value( $field, $key, $value );
+    my $ini = OpenInteract2::Config::Ini->new();
+    foreach my $field ( @SERIAL_FIELDS ) {
+        if ( $HASH_FIELDS{ $field } ) {
+            my $values = $self->$field() || {};
+            for ( keys %{ $values } ) {
+                $ini->set( 'package', $field, $_, $values->{ $_ } );
             }
-        }
-        elsif ( $field eq 'description' ) {
-            print CONF "$field\n", $self->description, "\n";
         }
         else {
-            print CONF $self->_line_single_value( $field, $self->$field() );
+            $ini->set( 'package', $field, $self->$field() );
         }
     }
-    close( CONF );
+    $ini->write_file( $self->filename() );
+
     return $self->filename;
 }
 
-
-# Read in the configuration, returning a hashref of data. Fields in
-# %LIST_FIELDS are read into an arrayref (even if only one exists);
-# fields in %HASH_FIELDS are read into a hashref
-
 sub _read_config {
-    my ( $class, $filename )  = @_;
-    unless ( -f $filename ) {
-        die "Package configuration file [$filename] does not exist.\n";
-    }
-    eval { open( CONF, '<', $filename ) || die $! };
-    if ( $@ ) {
-        oi_error "Cannot open package configuration [$filename]: $@";
-    }
-
-    my %config = ();
-    while ( <CONF> ) {
-        next if ( /^\s*\#/ );
-        next if ( /^\s*$/ );
-        chomp;
-        s/\r//g;
-        s/^\s+//;
-        s/\s+$//;
-        my ( $field, $value ) = split /\s+/, $_, 2;
-        last if ( $field eq 'description' );
-
-        # If there are multiple values possible, make a list
-
-        if ( $LIST_FIELDS{ $field } and $value ) {
-            push @{ $config{ $field } }, $value;
+    my ( $class, $type, $value )  = @_;
+    my %ini_conf = ();
+    if ( $type eq 'file' ) {
+        unless ( -f $value ) {
+            oi_error "Package configuration file '$value' does not exist.";
         }
-
-        # Otherwise, if it's a key -> key -> value set; add to list
-
-        elsif ( $HASH_FIELDS{ $field } and $value ) {
-            my ( $sub_key, $sub_value ) = split /\s+/, $value, 2;
-            $config{ $field }->{ $sub_key } = $sub_value;
+        $ini_conf{filename} = $value;
+    }
+    elsif ( $type eq 'content' ) {
+        unless ( $value ) {
+            oi_error "No content to use for package configuration";
         }
+        $ini_conf{content} = $value;
+    }
 
-        # If not all that, then simple key -> value
-
+    my $ini = OpenInteract2::Config::Ini->new( \%ini_conf );
+    return {} unless ( $ini->{package} );
+    my %params = ();
+    while ( my ( $key, $value ) = each %{ $ini->{package} } ) {
+        if ( $LIST_FIELDS{ $key } ) {
+            $params{ $key } = ( ref $value eq 'ARRAY' ) ? $value : [ $value ];
+        }
         else {
-            $config{ $field } = $value;
+            $params{ $key } = $value;
         }
     }
-
-    # Once all that is done, read the description in all at once
-
-    {
-        local $/ = undef;
-        $config{description} = <CONF>;
-    }
-    chomp $config{description};
-    close( CONF );
-    return \%config;
+    return \%params;
 }
 
-
-sub _line_single_value {
-    my ( $class, $field, $value ) = @_;
-    $value ||= '';
-    return sprintf "%-20s%s\n", $field, $value;
-}
-
-
-sub _line_keyed_value {
-    my ( $class, $field, $key, $value ) = @_;
-    $value ||= '';
-    return sprintf "%-20s%-15s%s\n", $field, $key, $value;
-}
 
 1;
 
@@ -275,16 +269,21 @@ OpenInteract2::Config::Package - Read, write and check package config files
 =head1 SYNOPSIS
 
  # Sample package file
- name                MyPackage
- version             1.53
- author              Steve <steve@dude.com>
- author              Chuck <chuck@guy.com>
- url                 http://www.oirox.com/
- template_plugin     TestPlugin     OpenInteract2::Plugin::Test
- observer            mywiki         OpenInteract2::Filter::MyWiki
- description
- This package rocks!
-
+ 
+ [package]
+ name          = MyPackage
+ version       = 1.53
+ author        = Steve <steve@dude.com>
+ author        = Chuck <chuck@guy.com>
+ url           = http://www.oirox.com/
+ description   = This package rocks!
+ 
+ [package template_plugin]
+ TestPlugin = OpenInteract2::Plugin::Test
+ 
+ [package observer]
+ mywiki = OpenInteract2::Filter::MyWiki
+ 
  # Create a new package file from scratch
  
  use OpenInteract2::Config::Package;
@@ -295,58 +294,37 @@ OpenInteract2::Config::Package - Read, write and check package config files
  $c-> url( 'http://www.oirox.com/' );
  $c->author( [ 'Steve <steve@dude.com>', 'Chuck <chuck@guy.com>' ] );
  $c->template_plugin({ TestPlugin => 'OpenInteract2::Plugin::Test' });
+ $c->observer({ mywiki => 'OpenInteract2::Filter::MyWiki' });
  $c->description( 'This package rocks!' );
  
  # Set the filename to save the config to and save it
  
- $c->filename( 'mydir/pkg/MyPackage/package.conf' );
+ $c->filename( 'mydir/pkg/MyPackage/package.ini' );
  eval { $c->save_config };
  
  # Specify a directory for an existing config
  
- my $c = OpenInteract2::Config::Package->new(
-                    { directory => '/path/to/mypackage' } );
+ my $c = OpenInteract2::Config::Package->new({
+     directory => '/path/to/mypackage'
+ });
  
  # Specify a filename for an existing config
  
- my $c = OpenInteract2::Config::Package->new(
-                    { filename => 'work/pkg/mypackage/package-alt.conf' } );
+ my $c = OpenInteract2::Config::Package->new({
+     filename => 'work/pkg/mypackage/package-alt.ini'
+ });
+ 
+ # Read the content yourself and pass it in
+ my $ini_text = _read_ini_file( '...' );
+ my $c = OpenInteract2::Config::Package->new({
+     content => $ini_text
+ });
 
 =head1 DESCRIPTION
 
 This class implements read/write access to a package configuration
-file. This is a very simple line-based format. There are three types
-of values:
-
-B<single value>
-
-Example:
-
- name               MyPackage
-
-B<multiple value>
-
-Example:
-
- author             Chris Winters E<lt>chris@cwinters.comE<gt>
- author             Mario Lemiux <mario@pghpenguins.com>
-
-B<multiple keyed value>
-
-Example:
-
- template_plugin    MyPlugin     OpenInteract2::Template::Plugin::MyPlugin
- template_plugin    MyPluginNew  OpenInteract2::Template::Plugin::MyPluginNew
- observer           mywiki       OpenInteract2::Filter::MyWiki
-
-Additionally, all data below the last entry C<description> is used as
-the description. Example:
-
- description
- Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam
- nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat
- volutpat. Ut wisi enim ad minim veniam, quis nostrud exercitation
- ulliam corper suscipit lobortis nisl ut aliquip ex ea commodo
+file. As all other configurations in OI2 this uses the modified INI
+format.
 
 =head1 METHODS
 
@@ -364,8 +342,12 @@ C<filename>: Read the configuration from this file
 
 =item *
 
-C<directory>: Read the configuration from the file C<package.conf>
+C<directory>: Read the configuration from the file C<package.ini>
 located in this directory. (Also: C<package_dir>)
+
+=item *
+
+C<content>: Use the text in this value as the package configuration.
 
 =back
 
@@ -378,12 +360,12 @@ Returns: new object
 B<create_filename( $directory )>
 
 Create a filename for this configuration file given C<$directory>. The
-default name for the package configuration file is C<package.conf>.
+default name for the package configuration file is C<package.ini>.
 
 Examples:
 
  my $filename = OpenInteract2::Config::Package->create_filename( '/home/httpd/mysite/pkg/foo' );
- # $filename: '/home/httpd/mysite/pkg/foo/package.conf'
+ # $filename: '/home/httpd/mysite/pkg/foo/package.ini'
 
 We do not check whether C<$directory> exists or whether the resulting
 filename is valid.
@@ -397,13 +379,15 @@ valid.
 
 =head2 Object Methods
 
-B<init( \%params )>
+B<author_names()>
 
-Initialize the object with C<\%params>. Only fields listed in
-L<PROPERTIES> will be set, and only properties with a value will be
-set.
+Returns a list of all author names pulled out of the 'author'
+property.
 
-Returns: object
+B<author_emails()>
+
+Returns a list of all author emails pulled out of the 'author'
+property.
 
 B<get_spops_files()>
 
@@ -415,10 +399,10 @@ empty arrayref.
 
 Example:
 
- name        foo
- version     1.51
- spops_file  conf/object_one.ini
- spops_file  conf/object_two.ini
+ name       =  foo
+ version    =  1.51
+ spops_file =  conf/object_one.ini
+ spops_file =  conf/object_two.ini
  ...
  $config->package_dir( '/home/me/pkg' )
  my $files = $config->get_spops_files();
@@ -437,10 +421,10 @@ empty arrayref.
 
 Example:
 
- name        foo
- version     1.51
- action_file  conf/action_one.ini
- action_file  conf/action_two.ini
+ name        = foo
+ version     = 1.51
+ action_file = conf/action_one.ini
+ action_file = conf/action_two.ini
  ...
  $config->package_dir( '/home/me/pkg' )
  my $files = $config->get_action_files();
@@ -459,11 +443,11 @@ empty arrayref.
 
 Example:
 
- name          foo
- version       1.51
- message_file  data/foo-en.msg
- message_file  data/foo-en_us.msg
- message_file  data/foo-en_uk.msg
+ name         = foo
+ version      = 1.51
+ message_file = data/foo-en.msg
+ message_file = data/foo-en_us.msg
+ message_file = data/foo-en_uk.msg
  ...
  $config->package_dir( '/home/me/pkg' )
  my $files = $config->get_message_files();
@@ -522,25 +506,19 @@ URL where you can find out more information
 
 B<spops_file> (\@)
 
-File with SPOPS objects defined in this package. If you do not specify
-these you must store all object configuration information in a single
-file C<conf/spops.ini>. Both perl- and INI-formatted configurations
-are acceptable. (TODO: true?)
+File(s) with SPOPS objects defined in this package.
 
 B<action_file> (\@)
 
-File with the actions defined in this package. If you do not specify
-these you must store all action information in a single file
-C<conf/action.ini>. Both perl- and INI-formatted configurations are
-acceptable. (TODO: true?)
+File(s) with the actions defined in this package.
 
 B<message_file> (\@)
 
-File with the localized messages used in your application. If you do
-not specify these you must store your message files in a subdirectory
-C<msg/> and in files ending with C<.msg>. The format of these files is
-discussed in L<OpenInteract2::I18N|OpenInteract2::I18N> and
-L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>.
+File(s) with the localized messages used in your application. If you
+do not specify these you must store your message files in a
+subdirectory C<msg/> and in files ending with C<.msg>. The format of
+these files is discussed in L<OpenInteract2::I18N|OpenInteract2::I18N>
+and L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>.
 
 B<module> (\@)
 
@@ -576,18 +554,7 @@ for examples.
 
 C<description> ($*)
 
-Description of this package. Instead of reading a single line we read
-every line after the 'description' key to the end of the file. Do not
-put additional configuration keys under 'description', they will not
-be read.
-
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
+Description of this package.
 
 =head1 SEE ALSO
 
@@ -595,9 +562,11 @@ L<OpenInteract2::Package|OpenInteract2::Package>
 
 L<Class::Accessor|Class::Accessor>
 
+L<OpenInteract2::Config::Ini>
+
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

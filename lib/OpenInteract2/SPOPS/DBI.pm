@@ -1,12 +1,12 @@
 package OpenInteract2::SPOPS::DBI;
 
-# $Id: DBI.pm,v 1.7 2004/02/17 04:30:21 lachoy Exp $
+# $Id: DBI.pm,v 1.8 2005/03/17 14:58:05 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::SPOPS );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 # See SPOPS::Config::Initializer for initialization behavior
 
@@ -111,7 +111,7 @@ L<SPOPS::Manual::CodeGeneration|SPOPS::Manual::CodeGeneration>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

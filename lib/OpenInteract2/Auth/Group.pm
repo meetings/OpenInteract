@@ -1,13 +1,13 @@
 package OpenInteract2::Auth::Group;
 
-# $Id: Group.pm,v 1.16 2004/02/18 05:25:27 lachoy Exp $
+# $Id: Group.pm,v 1.17 2005/03/17 14:57:59 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::Group::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::Group::VERSION  = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -126,7 +126,7 @@ Returns: arrayref of groups found; also set into C<$auth>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,17 +1,18 @@
 package OpenInteract2::Exception::Security;
 
-# $Id: Security.pm,v 1.10 2004/06/11 13:01:51 lachoy Exp $
+# $Id: Security.pm,v 1.13 2005/03/17 14:58:02 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Exception Class::Accessor::Fast );
-use OpenInteract2::Context qw( CTX );
 use SPOPS::Secure qw( :verbose :level );
 
-$OpenInteract2::Exception::Security::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Exception::Security::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( security_required security_found );
 OpenInteract2::Exception::Security->mk_accessors( @FIELDS );
 sub Fields { return @FIELDS }
+
+my ( $CTX );
 
 my $DEFAULT_MSG = "Security violation. Object requires '%s' but got '%s'";
 
@@ -30,13 +31,16 @@ sub full_message {
     my $found = ( $self->security_found )
                   ? $LEVELS{ $self->security_found }
                   : 'none specified';
-
+    unless ( $CTX ) {
+        require OpenInteract2::Context;
+        $CTX = OpenInteract2::Context->instance( 1 );
+    }
     my ( $msg );
-    if ( CTX && CTX->request ) {
+    if ( $CTX && $CTX->request ) {
         $msg = eval {
-            CTX->request
-               ->language_handle
-                ->maketext( 'global.exception.security', $required, $found );
+            $CTX->request
+                ->language_handle
+                 ->maketext( 'global.exception.security', $required, $found );
         };
     }
     unless ( $msg ) {
@@ -86,7 +90,7 @@ L<Exception::Class|Exception::Class>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

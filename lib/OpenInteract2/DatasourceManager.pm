@@ -1,6 +1,6 @@
 package OpenInteract2::DatasourceManager;
 
-# $Id: DatasourceManager.pm,v 1.16 2004/11/09 13:49:37 sjn Exp $
+# $Id: DatasourceManager.pm,v 1.17 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::DatasourceManager::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::DatasourceManager::VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -286,7 +286,7 @@ L<OpenInteract2::Datasource::LDAP|OpenInteract2::Datasource::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

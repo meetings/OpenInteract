@@ -1,77 +1,47 @@
 package OpenInteract2::Controller;
 
-# $Id: Controller.pm,v 1.23 2004/09/26 23:52:42 lachoy Exp $
+# $Id: Controller.pm,v 1.27 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
-use base qw( Class::Accessor::Fast Class::Factory );
+use base qw( Class::Accessor::Fast Class::Factory Class::Observable );
 use Log::Log4perl            qw( get_logger );
-use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::ActionResolver;
 use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::VERSION  = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::VERSION  = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 my @FIELDS = qw( type generator_type initial_action );
 __PACKAGE__->mk_accessors( @FIELDS );
 
-my ( $NONE_ACTION, $NOTFOUND_ACTION );
-
-sub initialize_default_actions {
-    my ( $class ) = @_;
-    return if ( $NONE_ACTION and $NOTFOUND_ACTION );
-    $NONE_ACTION     = CTX->lookup_action_none;
-    $NOTFOUND_ACTION = CTX->lookup_action_not_found;
-}
-
 sub new {
     my ( $class, $request, $response ) = @_;
     $log ||= get_logger( LOG_ACTION );
 
-    my $action = $class->_find_action( $request );
+    my $action = OpenInteract2::ActionResolver->get_action( $request );
+    unless ( $action ) {
+        oi_error "None of the action resolvers returned an action object, panic!";
+    }
+
     my $impl_type = $action->controller;
     my $impl_class = $class->_get_controller_implementation_class( $impl_type );
     $log->is_debug &&
-        $log->debug( "Controller for [Action: ", $action->name, "] ",
-                     "to use [Controller Type: $impl_type] ",
-                     "[Controller class: $impl_class]" );
+        $log->debug( "Action '", $action->name, "' to use controller ",
+                     "[type: $impl_type] [class: $impl_class]" );
 
     my $self = bless( {}, $impl_class );
     $self->type( $impl_type );
-
     $self->initial_action( $action );
-
-    # This will probably remain undocumented for a bit... it would be
-    # nice to be able to add other observers at request-time to an
-    # action but I don't want to create a framework without any use
-    # cases...
-
-    # Add a filter (observer) at runtime to the main action. So you
-    # could do:
-    #
-    # /news/display/?news_id=55&OI_FILTER=pittsburghese
-    #
-    # and have the news item be translated to da burg. You could even
-    # do:
-    #
-    # /news/display/?news_id=55&OI_FILTER=pittsburghese&OI_FILTER=bork
-    #
-    # and have it run through the yinzer AND the bork filter.
-
-    my @filter_add = $request->param( 'OI_FILTER' );
-    if ( scalar @filter_add ) {
-        foreach my $filter_name ( @filter_add ) {
-            CTX->map_observer( $filter_name, $action );
-        }
-    }
-
-    # TODO: Why not do this with the class? hmm...
 
     my $controller_info = CTX->lookup_controller_config( $impl_type );
     $self->generator_type( $controller_info->{content_generator} );
 
     $self->init;
+
+    $self->notify_observers( 'action assigned', $action );
 
     CTX->controller( $self );
     return $self;
@@ -81,52 +51,9 @@ sub init { return $_[0] }
 
 sub execute {
     my $class = ref( $_[0] ) || $_[0];
-    oi_error "Subclass [$class] must override execute()";
+    oi_error "Subclass '$class' must override execute()";
 }
 
-
-# Ask the request for the action and task name, then lookup the
-# action. If it's defined and found use it; if it's defined and not
-# found, use the $NOTFOUND_ACTION; if it's not defined use the
-# $NONE_ACTION.
-
-sub _find_action {
-    my ( $class, $request ) = @_;
-    $log ||= get_logger( LOG_ACTION );
-
-    my ( $action_name, $task_name ) =
-               ( $request->action_name, $request->task_name );
-    my ( $action );
-    if ( $action_name ) {
-        $log->is_debug &&
-            $log->debug( "Trying [Action: $action_name] [Task: $task_name] ",
-                         "in controller" );
-        $action = eval {
-            CTX->lookup_action( $action_name,
-                                { REQUEST_URL => $request->url_initial } )
-        };
-        if ( $@ ) {
-            $log->warn( "Caught exception from Context trying to lookup ",
-                        "action '$action_name': $@\nUsing action ",
-                        "specified for 'notfound'" );
-            $action = $NOTFOUND_ACTION->clone();
-        }
-        else {
-            $action->task( $task_name ) if ( $task_name );
-        }
-    }
-    else {
-        $log->is_debug &&
-            $log->debug( "Using action specified for 'none': ",
-                         "'", $NONE_ACTION->name, "'" );
-        $action = $NONE_ACTION->clone();
-    }
-    $log->is_debug &&
-        $log->debug( 'Found action in controller ',
-                     '[Action: ', $action->name, '] ',
-                     '[Task: ', $action->task, ']' );
-    return $action;
-}
 
 sub _get_controller_implementation_class {
     my ( $class, $controller_type ) = @_;
@@ -175,15 +102,64 @@ OpenInteract2::Controller - Top-level controller to generate and place content
 
 =head1 SYNOPSIS
 
+ # In your adapter:
+ 
+  my $controller = eval {
+      OpenInteract2::Controller->new( $request, $response )
+  };
+  if ( $@ ) {
+      $response->content( $@ );
+  }
+  else {
+      $controller->execute;
+  }
+  $response->send;
+
 =head1 DESCRIPTION
 
+The controller determines from the URL or other identifier which
+action gets executed and what happens the content that action
+generates. Typically that content gets placed into a larger template
+(see L<OpenInteract2::Controller::MainTemplate>), but you can perform
+other tasks as well.
+
+In the big picture, the controller is instantiated and invoked from
+the adapter (see L<OpenInteract2::Manual::Architecture>) and is really
+the gateway to the whole content generation process.
+
+=head1 METHODS
+
+=head2 Class methods
+
+B<new( $request, $response )>
+
+Find the action to create from the data in C<$request>. We do this by
+passing the request to a series of L<OpenInteract2::ActionResolver>
+objects, each of which looks at the URL (or other information) from
+the C<$request> and decides if it should create an
+L<OpenInteract2::Action> object from it.
+
+Once we get the action object we ask it for its controller class,
+instantiate an object of that class and assign that controller to the
+context.
+
+We also notify all the controller observers (classes in
+C<OpenInteract2::Observer::Controller>) with 'action assigned' and the
+action created.
+
+=head2 Object methods
+
+B<init()>
+
+Called with every request just before a controller is
+returned. Classes may override.
+
+B<execute()>
+
+Must be implemented by subclass. Should execute the main action and
+store its content (or its modified content) in the C<$response>.
+
 =head1 PROPERTIES
-
-B<request> - The current
-L<OpenInteract2::Request|OpenInteract2::Request> object
-
-B<response> - The current
-L<OpenInteract2::Response|OpenInteract2::Response> object
 
 B<type> - Type of controller
 
@@ -191,13 +167,9 @@ B<generator_type> - Type of content generator
 
 B<initial_action> - The initial action used to generate content.
 
-B<return_url> - URL to which the system should return after completing
-various system tasks. It is a good idea to set this when possible so
-when a user logs in she is returned to the same page.
-
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

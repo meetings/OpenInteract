@@ -1,3 +1,0 @@
-[%- WHILE ( item = iterator.get_next ) -%]
-   [%- INCLUDE form_select_option -%]
-[%- END -%]

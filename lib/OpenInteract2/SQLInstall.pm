@@ -1,6 +1,6 @@
 package OpenInteract2::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.24 2004/12/05 20:46:56 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.30 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Import;
 
-$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -126,6 +126,7 @@ sub _set_datasource {
 
 sub _set_state {
     my ( $self, $file, $status, $error, $statement ) = @_;
+    $file ||= '';
     $self->{_status}{ $file }    = $status;
     $self->{_error}{ $file }     = $error;
     $self->{_statement}{ $file } = $statement;
@@ -164,7 +165,11 @@ sub install_all {
 # INSTALL STRUCTURE
 
 sub install_structure {
-    my ( $self ) = @_;
+    my ( $self, @restrict_files ) = @_;
+
+    # filter out empty/undef items
+    @restrict_files = grep { $_ } @restrict_files;
+
     my $pkg = $self->package;
     unless ( UNIVERSAL::isa( $self->package, 'OpenInteract2::Package' ) ) {
         oi_error 'Cannot install structure without first setting package';
@@ -172,7 +177,8 @@ sub install_structure {
 
     $log->is_info &&
         $log->info( "Installing structure for package ",
-                    $self->package->full_name );
+                    $self->package->full_name, "and skipping files [",
+                    join( '] [', @restrict_files ), ']' );
 
     my $package_name = $pkg->name;
 
@@ -219,6 +225,7 @@ STRUCTURE:
             $ds = CTX->datasource( $ds_name );
         };
         if ( $@ ) {
+            $log->error( "Failed to get datasource '$ds_name': $@" );
             $self->_set_state( "Set: $structure_set",
                                undef,
                                "Error creating datasource: $@",
@@ -227,13 +234,23 @@ STRUCTURE:
         }
         my $driver_name = $ds_info->{sql_install}
                           || $ds_info->{driver_name};
-        my @files = $self->_massage_arrayref(
-                              $self->get_structure_file( $structure_set,
-                                                         $driver_name ) );
-        foreach my $structure_file ( @files ) {
+        my @all_files = $self->_massage_arrayref(
+            $self->get_structure_file( $structure_set, $driver_name )
+        );
+
+        my $num_skip_files = scalar @restrict_files;
+        my %restrict_to = map { $_ => 1 } @restrict_files;
+
+        foreach my $structure_file ( @all_files ) {
+            if ( $num_skip_files and ! $restrict_to{ $structure_file } ) {
+                $log->info( "Skipping file '$structure_file' since ",
+                            "$num_skip_files files were specified to ",
+                            "skip and this one is not in the list" );
+                next;
+            }
+            $log->info( "Processing structure file '$structure_file'" );
             $self->_set_datasource( $structure_file, $ds_name );
 
-            # XXX: Need to use File::Spec here?
             my ( $table_sql );
             my $relative_file = "$STRUCT_DIR/$structure_file";
             my $full_file = $pkg->find_file( $relative_file );
@@ -242,6 +259,7 @@ STRUCTURE:
             };
             if ( $@ or ! $table_sql ) {
                 my $error = $@ ||  "File cannot be found or it is empty";
+                $log->error( $error );
                 $self->_set_state( $full_file,
                                    undef, $error, undef );
                 next STRUCTURE;
@@ -253,10 +271,13 @@ STRUCTURE:
             $self->_set_statement( $structure_file, $full_table_sql );
             eval { $ds->do( $full_table_sql ) };
             if ( $@ ) {
+                $log->error( "Caught exception ($@) running 'do' on SQL:\n",
+                             $full_table_sql );
                 $self->_set_status( $full_file, undef );
                 $self->_set_error( $full_file, $@ );
             }
             else {
+                $log->info( "SQL from '$full_file' processed ok" );
                 $self->_set_status( $full_file, 1 );
                 $self->_set_error( $full_file, undef );
             }
@@ -822,6 +843,10 @@ OpenInteract2::SQLInstall -- Dispatcher for installing various SQL data from pac
  
  # Do one at a time
  $installer->install_structure;
+ 
+ # ..and restrict to processing a single file
+ $installer->install_structure( 'table-A.sql' );
+ 
  $installer->install_data;
  $installer->install_security;
  
@@ -923,13 +948,16 @@ If there is a problem you should C<die> with a useful error message.
 
 Returns: nothing.
 
-B<install_structure()>
+B<install_structure( [ @restrict_to_files ] )>
 
 If you have needs that declaration cannot fill, you can install the
 structures yourself. You have access to the full
 L<OpenInteract2::Context|OpenInteract2::Context> object so you can get
 datasources, lookup SPOPS object information, etc. (See more in
 section on customization below.)
+
+If you do implement it note that, if they specify it, users will
+expect that you only process files in C<@restrict_to_files>.
 
 B<get_structure_set()>
 
@@ -1710,7 +1738,7 @@ L<DBI|DBI>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

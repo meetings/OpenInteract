@@ -19,10 +19,557 @@ You can see the history for a particular issue like this:
 
 =head1 THE FUTURE
 
-OI2 is currently at 1.99_05, equivalent to 2.0 beta 5. The next
-release should be a release candidate (1.99_06/2.0 RC1) -- it will
-have new features (see below) but everything else should be bugfixes
-after that or pushed off to 2.01.
+OI2 is currently at 1.99_06, equivalent to 2.0 beta 6. The next
+release should be a release candidate (1.99_07/2.0 RC1) -- its new
+features should only be minor; everything else should be bugfixes or
+pushed off to 2.01.
+
+=head1 1.99_06 (2.0 beta 6), 18 March 2005
+
+=head2 Upgrade Notes
+
+The following all apply to an existing server configuration -- if
+you're creating a new site you don't need to worry.
+
+=over 4
+
+=item 1.
+
+Modify how two 'action_info' keys are set:
+
+ OLD:
+ 
+ [action_info none]
+ redir = page
+ 
+ [action_info not_found]
+ redir = page
+ 
+ NEW:
+ 
+ [action_info]
+ none      = page
+ not_found = page
+
+=item 2.
+
+Optional - add the following server keys:
+
+ [login]
+ ...
+ initial_login_expires = 24h
+
+=item 3.
+
+In your C<$WEBSITE_DIR/conf/startup.pl> change the following:
+
+  use OpenInteract2::Config::Base;
+    to
+  use OpenInteract2::Config::Bootstrap;
+
+  my $BASE_CONFIG_FILE = '$WEBSITE_DIR/conf/base.conf';
+    to
+  my $BASE_CONFIG_FILE = '$WEBSITE_DIR/conf/bootstrap.ini';
+
+  my $base_config = OpenInteract2::Config::Base->new({ 
+      filename => $BASE_CONFIG_FILE }); 
+    to
+  my $base_config = OpenInteract2::Config::Bootstrap->new({ 
+      filename => $BASE_CONFIG_FILE }); 
+
+=back
+
+=head2 Major Changes
+
+=over 4
+
+=item *
+
+OIN-129 - Be able to create a simple application with Create, Remove,
+Update, Display and Search functionality based on a database table --
+see L<OpenInteract2::Manage::Package::CreatePackageFromTable>, or run:
+
+  oi2_manage task_info --task=easy_app
+
+=item *
+
+OIN-121 - You can now create an OI2 website or package without an
+external 'source_dir' -- all our resources are held as data in class
+files under L<OpenInteract2::Brick>, and the parent class has methods
+to write these resources to the filesystem after an optional initial
+evaluation.
+
+Core package files, previously included as .zip files, are now stored
+as bricks using Base64 encoding.
+
+=item *
+
+OIN-72 - OpenInteract2 packages can now be built into
+CPAN-distributable applications. 
+
+=item *
+
+OIN-141: Create little objects and an organizer to figure out which
+OI2::Action object to run based on the URL (or whatever). This allows
+very simple customization so you can create your own URL-to-action
+mappings. See L<OpenInteract2::ActionResolver> for more.
+
+=item *
+
+OIN-115 - Break L<OpenInteract2::Setup> into individual tasks and
+create a framework so that new setup tasks will get discovered at
+runtime. We get a name from each task and its dependencies and
+determine the order they should be run. This also allows very simple
+customization so you can initialize custom services at server startup.
+See L<OpenInteract2::Setup> for more information.
+
+=item *
+
+OIN-54 - Make configuration of your database easier; it's now about as
+simple as a DBI-E<gt>connect() call...
+
+=item *
+
+OIN-136 and OIN-137: replace 'base.conf' with 'bootstrap.ini' and
+'package.conf' with 'package.ini'. INI is not only OI2's preferred
+configuration format, it's the B<only> configuration format. Sites
+using 'base.conf' have to upgrade -- a 15-second job -- as do packages
+using 'package.conf', but there's a script 'translate_package_to_ini'
+in the 'script/' directory to help with the latter.
+
+=item *
+
+OIN-135: OI2 can now parse additional URL parameters (aka, REST
+parameters) into action parameters. So you can use something like:
+
+  http://www.foo.com/news/display/39
+
+instead of:
+
+  http://www.foo.com/news/display/?news_id=39
+
+or:
+
+  http://www.foo.com/news/archive/2005/03
+
+instead of:
+
+  http://www.foo.com/news/archive/?year=2005&month=03
+
+Further, mapping of REST param to action param is done through
+configuration -- see property 'url_additional' under
+L<OpenInteract2::Action>.
+
+=item *
+
+Add initial support for FastCGI -- use /cgi-bin/oi2.fcgi and see
+conf/httpd_cgi_solo.conf for tiny configuration change.
+
+=item *
+
+OIN-35: Severe errors are now written to the filesystem rather than
+the database, and the error browser (in C<base_error> package) was
+totally rewritten.
+
+=item *
+
+OIN-143: Read localization messages from PO/MO files in addition to
+our custom format.
+
+=back
+
+
+=head2 Minor Changes
+
+See all the JIRA issues raised during this release just in case we
+missed some:
+
+L<http://jira.openinteract.org/secure/ReleaseNote.jspa?projectId=10010&styleName=Html&version=10036>
+
+L<OpenInteract2::Action>
+
+=over 4
+
+=item *
+
+Use new L<OpenInteract2::ParamContainer> for C<param()> and related
+methods.
+
+=back
+
+L<OpenInteract2::Action::CommonSearch>
+
+=over 4
+
+=item *
+
+OIN-122: Set 'total_hits', 'total_pages' and 'page_num' even if you're
+not using paged search results.
+
+=back
+
+L<OpenInteract2::Action::CommonUpdate>
+
+=over 4
+
+=item *
+
+Pass C<$object> and C<\%old_data> to C<_update_post_action()> callback
+rather than forcing the user to get them from parameters.
+
+=back
+
+L<OpenInteract2::ActionResolver>
+
+L<OpenInteract2::ActionResolver::NameAndTask>
+
+L<OpenInteract2::ActionResolver::NotFoundOrEmpty>
+
+L<OpenInteract2::ActionResolver::UserDir>
+
+=over 4
+
+=item *
+
+OIN-141: Break down the process of matching a URL (or other
+identifier) with the action object that generates its content. The
+parent class instantiates all classes under its namespace into a chain
+of responsibility. Each link looks at the URL (or other data) and
+decides if it should create an action from it; if not the next link is
+invoked.
+
+=back
+
+L<OpenInteract2::App>
+
+=over 4
+
+=item *
+
+OIN-72: Added base class for package classes to do installation and
+report other metdata about the package. (Part of making them
+CPAN-installable.)
+
+=back
+
+L<OpenInteract2::Config>
+
+=over 4
+
+=item *
+
+Add C<author_names()> and C<author_emails()> to pull the names and
+emails from the 'author' key.
+
+=back
+
+L<OpenInteract2::Context>
+
+=over 4
+
+=item *
+
+OIN-26: Add C<language_handle()> method, useful for when we don't have
+a request available from which to pull the language handle. (See
+L<OpenInteract2::I18N> for what this means.)
+
+=item *
+
+OIN-54: Add C<assign_datasource_config()> so you can create/modify
+datasource configurations after the initial configuration.
+
+=item *
+
+Add 'last_day_of_month' as option for C<create_date()>
+
+=back
+
+L<OpenInteract2::CreateSecurity>
+
+=over 4
+
+=item *
+
+OIN-140: Move class from base_security package; modify it to create
+action security.
+
+=back
+
+L<OpenInteract2::I18N::Initializer>
+
+=over 4
+
+=item *
+
+OIN-143: Using L<Locale::Maketext::Lexicon>, read localization keys
+from gettext (PO/MO) files in addition to our custom format. A package
+does not have to standardize on a format and can have messages in
+multiple formats.
+
+=back
+
+L<OpenInteract2::Manage>
+
+=over 4
+
+=item *
+
+Use L<OpenInteract2::ParamContainer> for C<param()> and related methods.
+
+=back
+
+L<OpenInteract2::Manage::Package::Export>
+
+=over 4
+
+OIN-111: Ensure that every package we try to export gets a useful
+error message if the export fails.
+
+=back
+
+L<OpenInteract2::Manage::Website::CleanOrphanedUsers>
+
+=over 4
+
+=item *
+
+OIN-91: New management task to remove all users whose 'removal_date'
+has passed. This means they've registered for an account but haven't
+logged in.
+
+=back
+
+L<OpenInteract2::Manage::Website::Create>
+
+=over 4
+
+OIN-127: Allow installation of a website into an existing directory,
+but first check whether the directory holds any of our expected
+subdirectories. If it does we assume we're installing over another
+site and die.
+
+=back
+
+L<OpenInteract2::Manage::Website::CreateSecurity>
+
+L<OpenInteract2::Manage::Website::CreateSecurityForAction>
+
+L<OpenInteract2::Manage::Website::CreateSecurityForSPOPS>
+
+=over 4
+
+=item *
+
+OIN-140: Create a new management task to assign security to an action;
+consolidate common security creation code into parent task.
+
+=back
+
+L<OpenInteract2::Manage::Website::InstallPackageStructure>
+
+=over 4
+
+OIN-134: Add 'file' parameter to pass to modified
+L<OpenInteract2::SQLInstall> C<install_structure()>.
+
+=back
+
+L<OpenInteract2::Package>
+
+=over 4
+
+=item *
+
+OIN-117: When installing a package to a website copy the package
+configuration files to C<$WEBSITE_DIR/conf/$PACKAGE>. This becomes the
+permanent home for configuration and package upgrades B<WILL NOT>
+overwrite these files. If the upgraded configuration files are
+different they're copied to an 'updates/' subdirectory and identified
+with the package version they came from.
+
+=item *
+
+OIN-102: Ensure that if any modules declared in the package.conf fail
+we don't read in any perl modules. The errors found when bringing in
+the module with a bad 'use' are confusing.
+
+=item *
+
+OIN-105: Add check to package validation to ensure that all message
+files are formatted so we can extract a language from them.
+
+=item *
+
+Add simple method C<name_as_class()> to display the package name with
+a leading uppercase letter and camel-case internally.
+
+=item *
+
+Add method C<copy_contents_to()> for copying the contents of a package
+to a directory, reporting what files it copied and what files were not
+because they were identical.
+
+=item *
+
+OIN-72: Remove method C<get_doc_files()> since we're moving
+doc/$package.pod to OI2::App::$Package
+
+=back
+
+L<OpenInteract2::ParamContainer>
+
+=over 4
+
+=item *
+
+Add simple class to provide storage and manipulation of arbitrary
+parameters. (Previously four separate classes had implementations of a
+'param' method...)
+
+=back
+
+L<OpenInteract2::Request>
+
+=over 4
+
+=item *
+
+OIN-141: Move URL parsing into action/task to
+L<OpenInteract2::ActionResolver::NameAndTask>; also remove
+'action_name' and 'task_name' properties.
+
+=item *
+
+Use L<OpenInteract2::ParamContainer> for C<param()> and related methods.
+
+=item *
+
+Add C<param_boolean()> to return a 'TRUE' if a parameter value is
+defined, 'FALSE' if not. (Similar to C<param_toggled()>, but it seems
+like 'TRUE' and 'FALSE' are boolean literals in many databases.)
+
+=item *
+
+Remove C<_find_custom_languages()> and the ability to specify a class
+to do so. Overdesign, and you can do it other ways.
+
+=item *
+
+Renamed internal and previously undocumented method from
+C<find_language()> to C<assign_languages()> and allow optional
+override values to be passed in. This lets the language be assigned
+later in the process.
+
+=back
+
+L<OpenInteract2::Setup>
+
+(Also see the notes under B<Major Changes> for 1.99_06 above.)
+
+=over 4
+
+=item *
+
+Use L<OpenInteract2::ParamContainer> for C<param()> and related methods.
+
+=back
+
+L<OpenInteract2::SPOPS>
+
+=over 4
+
+=item *
+
+OIN-154: override C<object_description()> from SPOPS and add our own
+URL-handling features; also add 'date' so that objects can expose a
+created-on/updated-on date and make generic object listings more
+useful.
+
+=item *
+
+OIN-38: get rid of object keys
+
+=back
+
+L<OpenInteract2::SQLInstall>
+
+=over 4
+
+=item *
+
+OIN-134: Allow C<install_structure()> to optionally take one or more
+files as arguments. If specified the installer will only process files
+by that name. This allows for incremental upgrades where you add
+tables/sequences.
+
+=back
+
+L<OpenInteract2::TT2::Plugin>
+
+=over 4
+
+=item *
+
+Added C<as_boolean()> for evaluating a boolean value in any of its
+case-insensitive forms - 't', 'true', 'y', 'yes', '1'.
+
+=item *
+
+Added C<as_boolean_label()> for evaluating a boolean value in any of
+its case-insensitive forms - 't', 'true', 'y', 'yes', '1' -- and
+returning a localized human label as a result.
+
+=back
+
+L<OpenInteract2::Util>
+
+=over 4
+
+=item *
+
+Added C<digest_content( $content )> to calculate the MD5 digest of
+arbitrary data.
+
+=item *
+
+Added C<is_same_file( $path_a, $path_b )>.
+
+=item *
+
+Move C<find_factry_subclasses()> here from L<OpenInteract2::Manage>
+and modify it to assume @INC in unless other directories given.
+
+=item *
+
+Move code from L<OpenInteract2::Action> (where we determined cache
+expiration) to C<time_duration_in_seconds()>.
+
+=back
+
+=head2 Package Updates
+
+The following packages have been updated since the last version. See
+the 'Changes' file for each to view the modifications:
+
+   OpenInteract     1.99_05 -> 1.99_06
+   -----------------------------------
+   base:            2.11    -> 2.15
+   base_box:        2.17    -> 2.20
+   base_error:      2.10    -> 3.02
+   base_group:      2.16    -> 2.19
+   base_page:       2.28    -> 2.31
+   base_security:   2.18    -> 2.21
+   base_template:   3.15    -> 3.17
+   base_theme:      2.10    -> 2.13
+   base_user:       2.35    -> 2.40
+   comments:        1.18    -> 1.23
+   full_text:       2.58    -> 2.61
+   lookup:          2.07    -> 2.09
+   news:            2.20    -> 2.24
+   object_activity: 2.11    -> 2.13
+   system_doc:      2.08    -> 2.10
+   whats_new:       2.10    -> 2.12
+
 
 =head1 1.99_05 (2.0 beta 5), 5 Dec 2004
 
@@ -150,6 +697,12 @@ Since filters are just specific instances of observers we changed all
 references from 'filter' to 'observer' -- L<OpenInteract2::Filter> is
 now L<OpenInteract2::Observer>, and the package configuration key
 'filter' is now 'observer'.
+
+=item *
+
+Lots of trying to make the system easier to understand, mostly at a
+developer-level. This includes cleaning up interfaces, making common
+usages easier, etc.
 
 =item *
 
@@ -2383,7 +2936,7 @@ L<http://openinteract.sourceforge.net/cgi-bin/twiki/view/OI/>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

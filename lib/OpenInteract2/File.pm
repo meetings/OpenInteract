@@ -1,6 +1,6 @@
 package OpenInteract2::File;
 
-# $Id: File.pm,v 1.11 2004/05/22 15:34:47 lachoy Exp $
+# $Id: File.pm,v 1.12 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use File::Path;
@@ -8,7 +8,7 @@ use File::Spec;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::File::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 # If $filename exists in the website, return the full path; otherwise
 # undef
@@ -308,7 +308,7 @@ L<File::MMagic|File::MMagic>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,11 +1,11 @@
 package OpenInteract2::Manage::Package::CreatePackage;
 
-# $Id: CreatePackage.pm,v 1.13 2004/06/13 18:19:54 lachoy Exp $
+# $Id: CreatePackage.pm,v 1.15 2005/03/17 14:58:03 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 
-$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -28,10 +28,6 @@ sub get_parameters {
            description => 'Directory to create package in',
            do_validate => 'yes',
       },
-      source_dir => {
-           description => $self->get_param_description( 'source_dir' ),
-           is_required => 'yes',
-      },
     };
 }
 
@@ -49,13 +45,6 @@ sub validate_param {
 
 # TASK
 
-sub setup_task {
-    my ( $self ) = @_;
-    my $sample_dir = File::Spec->catdir( $self->param( 'source_dir' ),
-                                         'sample', 'package' );
-    $self->param( sample_dir => $sample_dir );
-}
-
 sub run_task {
     my ( $self ) = @_;
     if ( $self->param( 'package_dir' ) ) {
@@ -63,8 +52,7 @@ sub run_task {
     }
     my $package_name = $self->param( 'package' )->[0];
     my $package = OpenInteract2::Package->create_skeleton({
-        name       => $package_name,
-        sample_dir => $self->param( 'sample_dir' )
+        name => $package_name,
     });
     my $msg = sprintf( 'Package %s created ok in %s',
                        $package->name, $package->directory );
@@ -91,10 +79,8 @@ OpenInteract2::Manage::Package::CreatePackage - Create a sample package
  
  my $package_dir  = '/home/me/work/pkg';
  my $package_name = 'dev_package';
- my $source_dir   = '/home/httpd/OpenInteract-2.0';
  my $task = OpenInteract2::Manage->new(
      'create_package', { package_dir => $package_dir,
-                         source_dir  => $source_dir,
                          package     => $package_name } );
  my @status = $task->execute;
  foreach my $s ( @status ) {
@@ -123,7 +109,7 @@ File installed/modified (if applicable)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

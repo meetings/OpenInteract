@@ -1,6 +1,6 @@
 package OpenInteract2::URL;
 
-# $Id: URL.pm,v 1.28 2004/11/27 18:27:33 lachoy Exp $
+# $Id: URL.pm,v 1.31 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,6 +8,8 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_URL );
 use OpenInteract2::Log       qw( uchk );
 use URI;
+
+$OpenInteract2::URL::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 use constant QUERY_ARG_SEPARATOR => '&amp;';
 
@@ -52,10 +54,10 @@ sub _parse {
         }
     }
 
-    my ( $action_name ) = $path =~ m|^/([^/?]+)|;
-    my ( $task )        = $path =~ m|^/[^/]+/([^/?]+)|;
-
-    return ( $action_name, $task );
+    my @path_items = split( /\//, $path );
+    shift @path_items unless ( $path_items[0] );
+    pop @path_items   unless ( $path_items[-1] );
+    return ( @path_items );
 }
 
 
@@ -120,6 +122,16 @@ sub _create_deployment {
     my ( $class, $deploy_under, $url_base, $params, $do_not_escape ) = @_;
     my ( $is_absolute ) = $url_base =~ /^\s*http:/;
 
+    # do this first so values from URL_PARAMS get escaped too
+    if ( $params->{URL_PARAMS} ) {
+        $url_base =~ s|/$||;
+        my @rest_params = ( ref $params->{URL_PARAMS} )
+                            ? @{ $params->{URL_PARAMS} }
+                            : ( $params->{URL_PARAMS} );
+        $url_base .= '/' . join( '/', @rest_params );
+        delete $params->{URL_PARAMS};
+    }
+
     # Absolute URLs don't get touched, so the escaping +
     # contextualization doesn't get done to them
     unless ( $is_absolute ) {
@@ -131,6 +143,7 @@ sub _create_deployment {
         }
     }
     $params ||= {};
+
     return $url_base unless ( scalar keys %{ $params } );
 
     return $class->add_params_to_url( $url_base, $params );
@@ -273,25 +286,29 @@ Examples:
 
 B<parse( $url )>
 
-Parses C<$url> into an action name and task, disregarding the URL
-context. It does not attempt to verify whether the action name or the
-task is valid. This should only be used on relative URLs, or ones
-already stripped by the
+Parses C<$url> into an action name and task and any additional
+parameters, disregarding the URL context. It does not attempt to
+verify whether the action name or the task is valid. This should only
+be used on relative URLs, or ones already stripped by the
 L<OpenInteract2::Request|OpenInteract2::Request> object.
 
-Note that an action name and task are still returned if an application
-is deployed under a context and the URL does not start with that
-context. See C<parse_absolute()> for a version that takes this into
-account.
+Note that an action name, task and parameters are still returned if an
+application is deployed under a context and the URL does not start
+with that context. See C<parse_absolute()> for a version that takes
+this into account.
 
-Return: two-item list of the action name and task pulled from
-C<$url>. Note that the second item may be undefined.
+Return: list with the action name and task and additional parameters
+pulled from C<$url>; if the C<$url> is empty or just a single '/' the
+list will be empty as well.
 
 Examples:
 
  CTX->assign_deploy_url( undef );
  my ( $action_name, $task ) = OpenInteract2::URL->parse( '/games/explore/' );
  # $action_name = 'games', $task = 'explore'
+ 
+ my ( $action_name, $task, @params ) = OpenInteract2::URL->parse( '/games/explore/1' );
+ # $action_name = 'games', $task = 'explore', $params[0] = '1'
  
  CTX->assign_deploy_url( '/Public' );
  my ( $action_name, $task ) = OpenInteract2::URL->parse( '/games/explore/' );
@@ -301,11 +318,18 @@ Examples:
  my ( $action_name, $task ) = OpenInteract2::URL->parse( '/games/?foo=bar' );
  # $action_name = 'games', $task = undef;
  
+ CTX->assign_deploy_url( '/Public' );
+ my ( $action_name, $task, @params ) = OpenInteract2::URL->parse( '/games/display/42/?foo=bar' );
+ # $action_name = 'games', $task = 'display', $params[0] = '42';
+ 
  my ( $action_name, $task ) = OpenInteract2::URL->parse( '/Public/games/explore/' );
  # $action_name = 'games', $task = 'explore'
  
  my ( $action_name, $task ) = OpenInteract2::URL->parse( '/Public/games/?foo=bar' );
  # $action_name = 'games', $task = undef
+ 
+ my ( $action_name, $task, @params ) = OpenInteract2::URL->parse( '/Public/games/explore/55?foo=bar' );
+ # $action_name = 'games', $task = 'explore', $params[0] = '55'
 
 B<Alias>: C<parse_relative( $url )>
 
@@ -333,6 +357,9 @@ Examples:
  my ( $action_name, $task ) = OpenInteract2::URL->parse_absolute( '/Public/games/explore/' );
  # $action_name = 'games', $task = 'explore'
  
+ my ( $action_name, $task, @params ) = OpenInteract2::URL->parse_absolute( '/Public/games/explore/42' );
+ # $action_name = 'games', $task = 'explore', $params[0] = '42'
+ 
  my ( $action_name, $task ) = OpenInteract2::URL->parse_absolute( '/Public/games/?foo=bar' );
  # $action_name = 'games', $task = undef
 
@@ -353,11 +380,17 @@ C<\%params> as a query string. This allows you to deploy your
 application under any URL context and have all the internal URLs
 continue to work properly.
 
-If no C<\%params> are specified then the resulting URL will B<not>
-have a trailing '?' to indicate the start of a query string. This is
-important to note if you are doing further manipulation of the URL,
-such as you with if you were embedding it in generated
-Javascript. Note that the parameter names and values are URI-escaped.
+One of the entries in C<\%params> is special: C<URL_PARAMS>. If
+specified we append its params (a simple scalar or arrayref ) to
+C<$base_url> as extra path information. This information will not have
+a trailing '/'.
+
+If no other C<\%params> are specified then the resulting URL will
+B<not> have a trailing '?' to indicate the start of a query
+string. This is important to note if you are doing further
+manipulation of the URL, such as you with if you were embedding it in
+generated Javascript. Note that the parameter names and values are
+URI-escaped.
 
 Unless C<$do_not_escape> is set to a true value we also escape the
 C<$base_url>. (This makes URL-escaping the default.) So if you
@@ -370,7 +403,8 @@ You'll get in return:
   /foo/bar%20is%20baz/
 
 Finally: if C<$base_url> begins with 'http:' we do not modify it in
-any way (including escaping it) except to append the C<\%params>.
+any way (including escaping it or adding a context) except to append
+the C<\%params>, including C<URL_PARAMS>.
 
 Return: URL formed from the deployed context, C<$base_url> and
 C<\%params>.
@@ -385,21 +419,41 @@ Examples:
  $url = OpenInteract2::URL->create( '/foo', { bar => 'baz' } );
  # $url = '/foo?bar=baz'
  
- $url = OpenInteract2::URL->create( '/foo', { bar => 'baz', blah => 'blech' } );
+ $url = OpenInteract2::URL->create(
+            '/foo', { URL_PARAMS => '22', bar => 'baz' } );
+ # $url = '/foo/22?bar=baz'
+ 
+ $url = OpenInteract2::URL->create(
+            '/foo', { URL_PARAMS => [ '22', 'baseball' ], bar => 'baz' } );
+ # $url = '/foo/22/baseball?bar=baz'
+ 
+ $url = OpenInteract2::URL->create(
+            '/foo', { bar => 'baz', blah => 'blech' } );
  # $url = '/foo?bar=baz;blah=blech'
  
- $url = OpenInteract2::URL->create( '/foo', { name => 'Mario Lemieux' } );
+ $url = OpenInteract2::URL->create(
+            '/foo', { name => 'Mario Lemieux' } );
  # $url = '/foo?name=Mario%20Lemiux'
  
  CTX->assign_deploy_url( '/Public' );
  $url = OpenInteract2::URL->create( '/foo', { bar => 'baz' } );
  # $url = '/Public/foo?bar=baz'
  
- $url = OpenInteract2::URL->create( '/foo', { bar => 'baz', blah => 'blech' } );
+ $url = OpenInteract2::URL->create(
+            '/foo', { URL_PARAMS => '99', bar => 'baz' } );
+ # $url = '/Public/foo/99?bar=baz'
+ 
+ $url = OpenInteract2::URL->create(
+            '/foo', { bar => 'baz', blah => 'blech' } );
  # $url = '/Public/foo?bar=baz;blah=blech'
  
- $url = OpenInteract2::URL->create( '/foo', { name => 'Mario Lemieux' } );
+ $url = OpenInteract2::URL->create(
+            '/foo', { name => 'Mario Lemieux' } );
  # $url = '/Public/foo?name=Mario%20Lemiux'
+ 
+ $url = OpenInteract2::URL->create(
+            'http://foo bar/foo', { URL_PARAMS => '66', name => 'Mario Lemieux' } );
+ # $url = 'http://foo bar/foo/66?name=Mario%20Lemiux'
  
  CTX->assign_deploy_url( '/cgi-bin/oi.cgi' );
  $url = OpenInteract2::URL->create( '/foo', { bar => 'baz' } );
@@ -418,7 +472,9 @@ and C<\%params> as a query string. This allows you to keep your images
 under any URL context and have all the internal URLs continue to work
 properly.
 
-If no C<\%params> are specified then the resulting URL will B<not>
+We treat C<URL_PARAMS> in C<\%params> as C<create()> does.
+
+If no other C<\%params> are specified then the resulting URL will B<not>
 have a trailing '?' to indicate the start of a query string. This is
 important to note if you are doing further manipulation of the URL,
 such as you with if you were embedding it in generated Javascript.
@@ -456,10 +512,13 @@ C<$base_url> and C<\%params> as a query string. This allows you to
 keep your static files under any URL context and have all the internal
 URLs continue to work properly.
 
-If no C<\%params> are specified then the resulting URL will B<not>
-have a trailing '?' to indicate the start of a query string. This is
-important to note if you are doing further manipulation of the URL,
-such as you with if you were embedding it in generated Javascript.
+We treat C<URL_PARAMS> in C<\%params> as C<create()> does.
+
+If no other C<\%params> are specified then the resulting URL will
+B<not> have a trailing '?' to indicate the start of a query
+string. This is important to note if you are doing further
+manipulation of the URL, such as you with if you were embedding it in
+generated Javascript.
 
 Unless C<$do_not_escape> is set to a true value we URI-escape the
 C<$base_url>. (We always URI-escape the query arguments and values
@@ -494,6 +553,8 @@ as the 'base_url' parameter.
 If C<$action> is not found in the context we return C<undef>. And if
 there is no primary URL for C<$action> in the context we also return
 C<undef>.
+
+We treat C<URL_PARAMS> in C<\%params> as C<create()> does.
 
 Unless C<$do_not_escape> is set to a true value we URI-escape the URL
 created from the action name and task. (We always URI-escape the query
@@ -553,6 +614,9 @@ C<add_params_to_url( $url, \%params )>
 Adds the escaped key/value pairs in C<\%params> as GET parameters to
 C<$url>, which is assumed to be contextualized and escaped already.
 
+We do B<NOT> treat C<URL_PARAMS> in C<\%params> as C<create()> does --
+it's just another parameter.
+
 So:
 
  my $url = '/foo/bar';
@@ -582,7 +646,7 @@ L<OpenInteract2::Context|OpenInteract2::Context>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 intes.net. All rights reserved.
+Copyright (c) 2002-2005 intes.net. All rights reserved.
 
 =head1 AUTHORS
 

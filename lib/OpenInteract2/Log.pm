@@ -1,6 +1,6 @@
 package OpenInteract2::Log;
 
-# $Id: Log.pm,v 1.6 2004/03/16 21:00:18 lachoy Exp $
+# $Id: Log.pm,v 1.8 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
@@ -8,6 +8,8 @@ use Log::Log4perl qw( :levels get_logger );
 use Log::Log4perl::Appender;
 
 @OpenInteract2::Log::EXPORT_OK = qw( uchk );
+$OpenInteract2::Log::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+
 
 # Create a logging message by treating the first argument as a sprintf
 # string and the remainder of the arguments as the parameters to set,
@@ -126,7 +128,7 @@ is used.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package OpenInteract2::SPOPS;
 
-# $Id: SPOPS.pm,v 1.26 2004/11/27 20:47:21 lachoy Exp $
+# $Id: SPOPS.pm,v 1.31 2005/03/18 03:34:27 lachoy Exp $
 
 use strict;
 use Digest::MD5              qw( md5_hex );
@@ -8,126 +8,108 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::URL;
 use OpenInteract2::Util;
-use SPOPS::ClassFactory      qw( OK NOTIFY );
 
-$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
-
-# TODO:
-#   - move object key stuff to a separate class
-
-use constant OBJECT_KEY_TABLE => 'object_keys';
 
 # This is not public, look away, look away!
 $OpenInteract2::SPOPS::TRACKING_DISABLED = 0;
 
 ########################################
-# RULESET FACTORY BEHAVIOR
-########################################
+# OBJECT DESCRIPTION
 
-# TODO: Make this optional? Are we even using object keys anymore?
+# overrides implementation from SPOPS.pm
 
-sub ruleset_factory {
-    my ( $class, $rs_table ) = @_;
-    push @{ $rs_table->{post_save_action} }, \&save_object_key;
-    return __PACKAGE__;
-}
-
-
-# Use the object class and ID to update the object key table
-
-sub save_object_key {
-    my ( $self, $p ) = @_;
+sub object_description {
+    my ( $self ) = @_;
     $log ||= get_logger( LOG_SPOPS );
 
-    # Don't create an object key if we're explicitly told not to
-    return 1 if ( $self->CONFIG->{skip_object_key} || $p->{skip_object_key} );
+    my $config = $self->CONFIG;
+    my $object_type = $config->{object_name};
+    my $title_info  = $config->{title} || $config->{name};
+    $log->is_debug &&
+        $log->debug( "Describing SPOPS object '$object_type' '$title_info'" );
+    my $title = '';
+    if ( exists $self->{ $title_info } ) {
+        $title = $self->{ $title_info };
+    }
+    elsif ( $title_info ) {
+        $title = eval { $self->$title_info() };
+    }
+    $title ||= 'Cannot find name';
 
-    $p ||= {};
-    my $obj_key = $self->fetch_object_key;
-    unless ( $obj_key ) {
-        $obj_key = $self->generate_object_key;
-        my $id = $self->id;
-        my $db = CTX->datasource( CTX->lookup_system_datasource_name );
-        eval {
-            SPOPS::SQLInterface->db_insert({
-                         %{ $p },
-                         table => OBJECT_KEY_TABLE,
-                         field => [ qw/ object_key class object_id / ],
-                         value => [ $obj_key, ref( $self ), $id ],
-                         db    => $db, })
-        };
-        if ( $@ ) {
-            $log->error( "Cannot save object key: $@" );
-            return undef;
+    my $u = OpenInteract2::URL->new();
+    my $oid       = $self->id;
+    my $id_field  = $self->id_field;
+    $log->is_debug && $log->debug( "Describe: '$oid' '$id_field'" );
+    my ( $url, $url_edit );
+    my $inf = $config->{display} || {};
+    my @url_param_values = ();
+    if ( $inf->{URL_PARAMS} ) {
+        my @url_params = ( ref $inf->{URL_PARAMS} )
+                           ? @{ $inf->{URL_PARAMS} }
+                           : ( $inf->{URL_PARAMS} );
+        @url_param_values = map { eval { $self->$_() } } @url_params;
+    }
+    if ( $inf->{ACTION} ) {
+        if ( $inf->{TASK} and @url_param_values ) {
+            $url = $u->create_from_action(
+                $inf->{ACTION}, $inf->{TASK},
+                { URL_PARAMS => \@url_param_values }
+            );
+        }
+        elsif ( $inf->{TASK} ) {
+            $url = $u->create_from_action(
+                $inf->{ACTION}, $inf->{TASK},
+                { $id_field => $oid }
+            );
+        }
+        if ( $inf->{TASK_EDIT} and @url_param_values ) {
+            $url_edit = $u->create_from_action(
+                $inf->{ACTION}, $inf->{TASK_EDIT},
+                { URL_PARAMS => \@url_param_values }
+            );
+        }
+        elsif ( $inf->{TASK_EDIT} ) {
+            $url_edit = $u->create_from_action(
+                $inf->{ACTION}, $inf->{TASK_EDIT},
+                { $id_field => $oid }
+            );
+        }
+
+    }
+    else {
+        if ( $inf->{url} ) {
+            $url = "$inf->{url}?" . $id_field . '=' . $oid;
+        }
+        if ( $inf->{url_edit} ) {
+            $url_edit = "$inf->{url_edit}?" . $id_field . '=' . $oid;
+        }
+        else {
+            $url_edit = "$inf->{url}?edit=1;" . $id_field . '=' . $oid;
         }
     }
-    return $self->{tmp_object_key} = $obj_key;
-}
-
-
-########################################
-# OBJECT KEY
-
-# Create a unique key based on the class and ID
-
-sub generate_object_key {
-    my ( $self ) = @_;
-    return md5_hex( ref( $self ) . $self->id );
-}
-
-
-# Retrieve the object key based on the class and ID
-
-sub fetch_object_key {
-    my ( $self, $p ) = @_;
-    $p ||= {};
-    my $id = $self->id;
-    my $db = CTX->datasource( CTX->lookup_system_datasource_name );
-    my $row = $self->db_select({ %{ $p },
-                                 from   => OBJECT_KEY_TABLE,
-                                 select => [ 'object_key' ],
-                                 where  => 'class = ? AND object_id = ?',
-                                 value  => [ ref $self, scalar $id ],
-                                 return => 'single',
-                                 db     => $db });
-    return $row->[0] if ( $row );
-    return undef;
-}
-
-
-# Retrieve the object class and ID given an object_key
-
-sub fetch_object_info_by_key {
-    my ( $class, $key, $p ) = @_;
-    $p ||= {};
-    my $db = CTX->datasource( CTX->lookup_system_datasource_name );
-    die "Cannot retrieve object info without key!" unless ( $key );
-    my $row = SPOPS::SQLInterface->db_select({
-                              %{ $p },
-                              from   => OBJECT_KEY_TABLE,
-                              select => [ 'class', 'object_id' ],
-                              where  => 'object_key = ?',
-                              value  => [ $key ],
-                              return => 'single',
-                              db     => $db });
-    return ( $row->[0], $row->[1] ) if ( $row );
-    return undef;
-}
-
-
-# Retrieve an object given an object_key
-
-sub fetch_object_by_key {
-    my ( $class, $key, $p ) = @_;
-    my ( $object_class, $object_id ) =
-               $class->fetch_object_info_by_key( $key, $p );
-    if ( $object_class and $object_id ) {
-        return $object_class->fetch( $object_id, $p );
+    my ( $object_date );
+    if ( my $date_field = $inf->{date} ) {
+        $object_date = $self->$date_field();
     }
-    return undef;
+    $log->is_debug &&
+        $log->debug( "Describe: '$url', '$url_edit', '$object_date'" );
+    return {
+        class       => ref $self,
+        object_id   => $oid,
+        oid         => $oid, # backwards compatibility
+        security    => $self->{tmp_security_level},
+        id_field    => $id_field,
+        name        => $object_type,
+        title       => $title,
+        date        => $object_date,
+        url         => $url,
+        url_edit    => $url_edit,
+    };
 }
 
 
@@ -297,7 +279,8 @@ sub get_supergroup_id  {
 
 sub global_datasource_handle {
     my ( $self, $connect_key ) = @_;
-    $connect_key ||= $self->CONFIG->{datasource_config}{spops};
+    $connect_key ||= $self->CONFIG->{datasource}
+                     || CTX->lookup_default_datasource_name;
     return CTX->datasource( $connect_key );
 }
 
@@ -426,6 +409,151 @@ always want to use one of the implementations-specific child classes
 -- see L<OpenInteract2::SPOPS::DBI|OpenInteract2::SPOPS::DBI> and
 L<OpenInteract2::SPOPS::LDAP|OpenInteract2::SPOPS::LDAP>.
 
+=head1 DESCRIBING AN OBJECT
+
+B<object_description()>
+
+Very useful method you can call on any SPOPS object to get general
+information about it. It's particularly useful when you're dealing
+with an object of an unknown type -- such as when you're doing
+fulltext searching or object tagging -- and need summary information
+about it.
+
+The method overrides the implementation found in L<SPOPS>, returning a
+hashref of information with the keys:
+
+=over 4
+
+=item B<class>
+
+Class of the object.
+
+=item B<object_id>
+
+ID of this particular object.
+
+=item B<id_field>
+
+ID field for this object.
+
+=item B<name>
+
+General type of this object: 'News', 'Document', etc.
+
+=item B<title>
+
+Title of this specific object: 'Weather tomorrow to be scorching',
+'Recipe: Franks and Beans', etc.
+
+=item B<date>
+
+Date associated with this object, typically a created-on or updated-on
+date and usually a L<DateTime> object.
+
+=item B<security>
+
+Security set on this object, matches one of the C<SEC_LEVEL_>
+constants exported from L<SPOPS::Secure>.
+
+=item B<url>
+
+URL to display the object.
+
+=item B<url_edit>
+
+URL to display an editable form of the object.
+
+=back
+
+Some of these values you can control from your SPOPS configuration:
+
+B<id_field>
+
+Matches whatever you set in your C<id_field> key.
+
+B<name>
+
+Matches whatever you set in your C<object_name> key.
+
+B<title>
+
+Use C<title> (or C<name> as the method to call to retrieve the
+title. So say you had an object representing a contact in your address
+book. That contact may have 'first_name' and 'last_name' defined, but
+when you display the object you want the contact's full name. So in
+your configuration:
+
+ [contact]
+ title = full_name
+
+And in your implementation you might have the naive:
+
+ sub full_name {
+     my ( $self ) = @_;
+     return join( ' ', $self->first_name, $self->last_name );
+ }
+
+B<date>
+
+If you want a date to be associated with your object, put its
+field/method here. You're strongly encouraged to return a L<DateTime>
+object.
+
+B<url> and B<url_edit>
+
+These can take a little more configuration. All configuration is in
+the 'display' section of your SPOPS configuration, such as:
+
+ [news display]
+ ACTION     = news
+ TASK       = display
+ TASK_EDIT  = display_form
+ URL_PARAMS = news_id
+
+Most often you'll use the keys 'ACTION', 'TASK', and
+'TASK_EDIT'. Similar to other areas of OI2, 'ACTION' and 'TASK' are
+used in conjunction with L<OpenInteract2::URL> to create portable
+URLs. We add 'TASK_EDIT' here because you typically not only want to
+generate a URL for displaying an object but also one for editing it.
+
+If you don't specify any 'URL_PARAMS' then we'll generate a URL with
+the given action/task path and a GET param mapping your object's ID
+field to its ID value. So the following:
+
+ [news]
+ ...
+ id_field = news_id
+ ...
+ [news display]
+ ACTION    = news
+ TASK      = display
+ TASK_EDIT = display_form
+
+will generate the following for an object with ID 99:
+
+ url:      /news/display/?news_id=99
+ url_edit: /news/display_form/?news_id=99
+
+However, you can also generate REST-style parameters using the
+'URL_PARAMS' key. (This maps to the 'URL_PARAMS' argument passed to
+all the C<create*()> methods in L<OpenInteract2::URL>.) So if we
+change the above to:
+
+ [news]
+ ...
+ id_field = news_id
+ ...
+ [news display]
+ ACTION     = news
+ TASK       = display
+ TASK_EDIT  = display_form
+ URL_PARAMS = news_id
+
+Then you'll generate the following URLs with ID 99:
+
+ url:      /news/display/99
+ url_edit: /news/display_form/99
+
 =head1 OBJECT TRACKING METHODS
 
 There are a number of methods for dealing with object tracking -- when
@@ -506,53 +634,6 @@ B<Returns> an arrayref of arrayrefs, each formatted:
 
  [ uid of updater, date of update ]
 
-=head1 OBJECT KEY METHODS
-
-We use a object key to uniquely identify each object in the
-system. (Generally the object key is a digest formed from the class
-and object ID.)
-
-B<generate_object_key()>
-
-Creates a unique key based on the class and ID. (Currently using
-L<Digest::MD5>.)
-
-B<save_object_key( \%params )>
-
-Checks to see if an object key already exists for this class and ID
-and if not, creates a new key and saves it to the lookup table.
-
-Returns: the object key retrieved or saved
-
-B<fetch_object_key()>
-
-Retreives an object key based on the class and ID of an object.
-
-Returns: the object key associated with the class and ID, or undef if
-none found.
-
-B<fetch_object_info_by_key( $key, \%params )>
-
-Given an object key, lookup the object class and ID associated with it.
-
-Returns: If matching information found, a two-element list -- the
-first element is the object class, the second is the object ID. If no
-matching information is found, undef.  matching information found, re
-
-B<fetch_object_by_key( $key, \%params )>
-
-Given an object key, fetch the object associated with it.
-
-Returns: If key matches class and ID in lookup table, the object with
-the class and ID. If no match found, return undef.
-
-=head1 RULESET METHODS
-
-We create one rule in the ruleset of each object. In the
-B<post_save_action> step we ensure that this object has an entry in
-the object key table. (See description of C<save_object_key()> for
-information about the implementation.)
-
 =head1 METHODS
 
 B<notify()>
@@ -606,7 +687,7 @@ Notes that lead off an email.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

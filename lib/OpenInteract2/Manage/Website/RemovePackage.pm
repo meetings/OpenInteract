@@ -1,12 +1,12 @@
 package OpenInteract2::Manage::Website::RemovePackage;
 
-# $Id: RemovePackage.pm,v 1.6 2004/06/13 18:19:54 lachoy Exp $
+# $Id: RemovePackage.pm,v 1.7 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 
-$OpenInteract2::Manage::Website::RemovePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::RemovePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'remove_package'
@@ -97,7 +97,7 @@ Name(s) of packages you want to remove.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -55,13 +55,7 @@ typing. We'll refer to this as C</PATH/TO/WEBSITE> throughout this guide.
 
 Next, issue the command to create the website:
 
- $ oi2_manage create_website --source_dir=/path/to/OpenInteract2-source
-
-(You'll need to use the full path for now, relative paths will fail in
-non-obvious ways.)
-
-The C<--source_dir> must have at least the C<sample/> and C<pkg/>
-directories from the OpenInteract2 distribution.
+ $ oi2_manage create_website
 
 =head2 Configuring Your Site: server.ini
 
@@ -91,29 +85,19 @@ Change:
 
  [datasource main]
  type          = DBI
- spops         = 
- driver_name   =
- dsn           =
+ dbi_type      = 
+ dsn           = 
  username      =
  password      =
- db_owner      =
- sql_install   =
- long_read_len = 65536
- long_trunc_ok = 0
 
 to:
 
  [datasource main]
  type          = DBI
- spops         = SPOPS::DBI::SQLite
- driver_name   = SQLite
+ dbi_type      = SQLite
  dsn           = dbname=/PATH/TO/WEBSITE/oi2test.db
  username      =
  password      =
- db_owner      =
- sql_install   =
- long_read_len = 65536
- long_trunc_ok = 0
 
 B<Set session handler>
 
@@ -220,7 +204,7 @@ L<http://theoryx5.uwinnipeg.ca/ppms/DBD-SQLite.ppd>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

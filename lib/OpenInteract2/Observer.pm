@@ -1,14 +1,15 @@
 package OpenInteract2::Observer;
 
-# $Id: Observer.pm,v 1.2 2004/11/28 04:07:52 lachoy Exp $
+# $Id: Observer.pm,v 1.4 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::IniFile;
+use Scalar::Util             qw( blessed );
 
-$OpenInteract2::Observer::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Observer::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -78,7 +79,7 @@ sub add_observer_to_action {
 
     my $observer = CTX->lookup_observer( $observer_name );
     return unless ( $observer );
-    if ( ref $observer and ref $observer ne 'CODE' ) {
+    if ( blessed( $observer ) ) {
         $observer = $observer->new;   # create a new object
     }
 
@@ -456,7 +457,7 @@ L<Class::Observable>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004 Chris Winters. All rights reserved.
+Copyright (c) 2004-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

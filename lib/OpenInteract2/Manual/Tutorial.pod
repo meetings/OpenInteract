@@ -16,16 +16,6 @@ is. Go read
 L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages> and
 come back when you're done.
 
-=head2 Install OI2
-
-Not only must OI2 be installed, but you also need to either have
-access to the distribution source B<or> your friendly local sysadmin
-needs to create a source directory. This is as simple as:
-
-  $ oi2_manage create_source_dir \
-       --distribution_dir=/private/path/to/OpenInteract-2.00 \
-       --source_dir=/public/path/to/oi_source
-
 =head2 Create a website
 
 If you haven't created a website yet do so now. Check out
@@ -49,6 +39,23 @@ backbone for a massive e-commerce website to make you lots of
 money. It does not attempt to best model the relationships for all the
 data about a book.
 
+=head2 Looking for shortcuts?
+
+If you want to get something running in the fastest manner possible we
+can generate a simple CRUDS application for you. (CRUDS: CReate Update
+Delete Search) Just run something like the following:
+
+ $ oi2_manage easy_app --package=book --table=book \
+       --dsn=DBI:Pg:dbname=mylibrary --username=foo --password=bar
+
+This will create a simple application built off a table 'book' with
+templates and objects for searching, creating, updating and removing
+objects. (More at
+L<OpenInteract2::Manage::Package::CreatePackageFromTable>.)
+
+Since this is a tutorial we'll assume you want to read to learn, so on
+we go.
+
 =head2 Generating the skeleton
 
 OpenInteract comes with tools to create a skeleton package -- we don't
@@ -57,9 +64,7 @@ directory structure, metadata and a number of files to get you going
 on your new package. Here's how to create one -- be sure to first go
 to the directory under which the package will be created:
 
-  $ oi2_manage create_package \
-       --source_dir=/public/path/to/oi_source \
-       --package=book
+  $ oi2_manage create_package --package=book
 
 And here's what you'll see:
 
@@ -89,7 +94,7 @@ And now let's see what it created:
   book/OpenInteract2/Action/Book.pm
   book/OpenInteract2/SQLInstall
   book/OpenInteract2/SQLInstall/Book.pm
-  book/package.conf
+  book/package.ini
   book/MANIFEST.SKIP
   book/Changes
   book/MANIFEST
@@ -99,7 +104,7 @@ L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages>.
 
 You will normally need to edit/add the following:
 
-  book/package.conf              # Add name, version, author information
+  book/package.ini               # Add name, version, author information
   book/MANIFEST                  # Add names of distribution files
   book/conf/spops.ini            # Describe the objects your package uses
   book/conf/action.ini           # Map URLs to handlers in your package
@@ -136,9 +141,10 @@ can read that part first.
 
 We'll just make this very easy to start out with. Unlike the venerable
 intro database shipped with Sybase products, we're not defining
-separate tables for authors, publishers, book artists, etc. We'll just
-define a single table and make some assumptions. Here's the table that
-we'll save to C<book/struct/book.sql>:
+separate tables for authors, publishers, book artists, etc. (See
+L<OpenInteract2::Manual::TutorialAdvanced> for some of that...) We'll
+just define a single table and make some assumptions. Here's the table
+that we'll save to C<book/struct/book.sql>:
 
   CREATE TABLE book (
      book_id          %%INCREMENT%%,
@@ -250,10 +256,10 @@ separate sequence.
 =head2 Let the configuration know
 
 The class we're using as a SQL installer is held in the
-C<book/package.conf> file. Peek into the file and you should see:
+C<book/package.ini> file. Peek into the file and you should see:
 
   ...
-  sql_installer    OpenInteract2::SQLInstall::Book
+  sql_installer = OpenInteract2::SQLInstall::Book
   ...
 
 Excellent, it's already set for us. Let's move on.
@@ -617,7 +623,7 @@ C<book/OpenInteract2/Action/Book.pm>:
   19: # Use whatever standard you like here -- it's always nice to let CVS
   20: # deal with it :-)
   21: 
-  22: $OpenInteract2::Action::Book::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+  22: $OpenInteract2::Action::Book::VERSION = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
   23: 
   24: # Here's an example of the simplest response...
   25: 
@@ -668,24 +674,7 @@ C<book/OpenInteract2/Action/Book.pm>:
   70: }
   71: 
   72: 1;
-  73: 
-  74: __END__
-  75: 
-  76: =head1 NAME
-  77: 
-  78: OpenInteract2::Action::Book - Handler for this package
-  79: 
-  80: =head1 SYNOPSIS
-  81: 
-  82: =head1 DESCRIPTION
-  83: 
-  84: =head1 BUGS
-  85: 
-  86: =head1 TO DO
-  87: 
-  88: =head1 SEE ALSO
-  89: 
-  90: =head1 AUTHORS
+  73: ... documentation below here...
 
 Excellent. We'll just leave the 'hello()' method as-is for right now,
 add a 'search_form()' method, and replace 'list()' with
@@ -1071,7 +1060,7 @@ Now let's get it installed to a website, first however...
 =head2 Take pride in your work
 
 Before you go any further put your info in the relevant areas of
-C<book/package.conf> (next to 'author' and 'url').
+C<book/package.ini> (next to 'author' and 'url').
 
 =head2 Check your package
 
@@ -1096,7 +1085,7 @@ And you should see something like:
   struct/book_sequence.sql, template/search_form.tmpl, template/search_results.tmpl
    
   ACTION: Config required fields
-      OK:     package.conf
+      OK:     package.ini
    
   ACTION: Config defined modules
       OK:     No modules defined, test skipped
@@ -1130,7 +1119,7 @@ command again and you should see:
       OK:     No files not in MANIFEST found in package
    
   ACTION: Config required fields
-      OK:     package.conf
+      OK:     package.ini
    
   ACTION: Config defined modules
       OK:     No modules defined, test skipped
@@ -1277,12 +1266,12 @@ about this.)
 =head2 Installing the modified package
 
 Now that we've modified the templates let's install the new
-package. First edit the C<book/package.conf> file to reflect the new
+package. First edit the C<book/package.ini> file to reflect the new
 version number and add an entry to the top of the 'Changes'
-file. Next, export it and install the distribution to your website:
+file. Next, export it and install the distribution to your website
+with a single command:
 
-  $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.02.zip
+  $ oi2_manage package_all
 
 Restart the server and try to run an empty search again. There's the
 message!
@@ -1389,7 +1378,7 @@ C<book/OpenInteract2/Action/Book.pm>: will end up looking like this:
   use OpenInteract2::Constants qw( :log );
   use OpenInteract2::Context   qw( CTX );
   
-  $OpenInteract2::Action::Book::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+  $OpenInteract2::Action::Book::VERSION = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
   
   sub hello {
       my ( $self ) = @_;
@@ -1429,10 +1418,9 @@ the results for us.
 
 That's pretty simple. Let's package it up and install it to the
 site. (Remember to first edit C<book/Changes> and
-C<book/package.conf>.)
+C<book/package.ini>.)
 
-  $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.03.zip
+  $ oi2_manage package_all
 
 Restart the server and type in the '/book' URL again. Looks the same,
 doesn't it? Now run a search. Oops, no go. What's up?
@@ -1499,10 +1487,7 @@ it doesn't care and will keep unwinding as long as there are more
 entries. So
 L<OpenInteract2::Action::CommonSearch|OpenInteract2::Action::CommonSearch>
 provides another parameter to the template, 'total_hits', which we can
-use to display how many entries we found. (Note that 'total_hits' is
-only provided when you're using paged results, but since that's the
-default and we didn't change the setting we can use the parameter. See
-the docs for more.)
+use to display how many entries we found.
 
 Finally, on line 25 we had to modify our 'FOREACH' loop into a 'WHILE'
 loop. Fortunately that's the only line of the loop we had to change:
@@ -1575,7 +1560,7 @@ need to do is add our list of publishers to it:
   38:     $params->{publisher_list} = $publishers;
   39: }
 
-You know the drill: edit C<book/Changes> and C<book/package.conf>,
+You know the drill: edit C<book/Changes> and C<book/package.ini>,
 bundle up the package and install it, then restart the server.
 
 Now when you open the '/book' URL the search form should be slightly
@@ -1664,11 +1649,10 @@ appended to the URL as a GET query string. If we deploy our OI server
 under a new context (e.g., '/MyApp' ) this plugin method will Do The
 Right Thing.
 
-Now edit your C<book/package.conf> and C<book/Changes> files to
+Now edit your C<book/package.ini> and C<book/Changes> files to
 reflect the updates, bundle the package up and install it:
 
-  $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.05.zip
+  $ oi2_manage package_all
 
 Restart your server and run a search, then click on a title. There's
 your detailed record! There aren't many details to speak of, but we
@@ -1834,11 +1818,10 @@ Finally, we need to activate the C<CommonUpdate> class in our action:
    5:              OpenInteract2::Action::CommonDisplay
    6:              OpenInteract2::Action::CommonUpdate );
 
-Now edit your C<book/package.conf> and C<book/Changes> files to
+Now edit your C<book/package.ini> and C<book/Changes> files to
 reflect the updates, bundle the package up and install it:
 
-  $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.06.zip
+  $ oi2_manage package_all
 
 Restart your server, run a search, and drill down to an object. You
 should see a 'Edit this record' above the detail form with 'Edit' as a
@@ -1926,11 +1909,10 @@ we'll put a link on the search form page:
    5: [% add_url = OI.make_url( ACTION = 'book', TASK = 'display_add' ) -%]
    6: <p align="right"><a href="[% add_url %]">Add</a> a new book</p>
 
-And do your normal C<book/package.conf> and C<book/Changes> editing,
+And do your normal C<book/package.ini> and C<book/Changes> editing,
 then put your new package in the website:
 
-  $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.07.zip
+  $ oi2_manage package_all
 
 Now try to add a new object then do a search, display and edit on it.
 
@@ -1978,11 +1960,10 @@ C<book/template/search_form.tmpl>:
    3: [% PROCESS error_message;
    4:    PROCESS status_message %]
 
-Now the standard C<book/package.conf> and C<book/Changes> editing,
+Now the standard C<book/package.ini> and C<book/Changes> editing,
 and then upgrade the website package:
 
   $ oi2_manage export_package
-  $ oi2_manage install_package --package_file=book-0.08.zip
 
 See how it works!
 
@@ -2042,7 +2023,7 @@ L<http://www.openinteract.org/yapc_2004/>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package OpenInteract2::FullTextIndexer;
 
-# $Id: FullTextIndexer.pm,v 1.1 2004/06/06 19:56:51 lachoy Exp $
+# $Id: FullTextIndexer.pm,v 1.2 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -8,6 +8,8 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::FullTextIterator;
+
+$OpenInteract2::FullTextIndexer::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( min_word_length max_word_length empty_message );
 __PACKAGE__->mk_accessors( @FIELDS );
@@ -374,7 +376,7 @@ The 'full_text' package shipped with OI2.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004 Chris Winters. All rights reserved.
+Copyright (c) 2004-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

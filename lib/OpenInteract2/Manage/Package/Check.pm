@@ -1,12 +1,12 @@
 package OpenInteract2::Manage::Package::Check;
 
-# $Id: Check.pm,v 1.10 2004/06/13 18:19:54 lachoy Exp $
+# $Id: Check.pm,v 1.11 2005/03/17 14:58:03 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 use Cwd  qw( cwd );
 
-$OpenInteract2::Manage::Package::Check::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::Check::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'check_package'
@@ -87,7 +87,7 @@ File checked
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

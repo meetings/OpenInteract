@@ -1,9 +1,9 @@
 package OpenInteract2::Request;
 
-# $Id: Request.pm,v 1.48 2004/11/28 17:50:46 lachoy Exp $
+# $Id: Request.pm,v 1.54 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
-use base qw( Class::Factory Class::Accessor::Fast );
+use base qw( OpenInteract2::ParamContainer Class::Factory Class::Accessor::Fast );
 use Log::Log4perl            qw( get_logger );
 use DateTime;
 use DateTime::Format::Strptime;
@@ -15,20 +15,22 @@ use OpenInteract2::I18N;
 use OpenInteract2::SessionManager;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.48 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.54 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 ########################################
 # ACCESSORS
 
-my @FIELDS = qw(
+my %FIELDS = map { $_ => 1 } qw(
     now server_name remote_host
     user_agent referer cookie_header language_header
-    url_absolute url_relative url_initial action_name task_name
+    url_absolute url_relative url_initial
     session auth_user auth_group auth_is_admin auth_is_logged_in
 );
-__PACKAGE__->mk_accessors( @FIELDS );
+__PACKAGE__->mk_accessors( keys %FIELDS );
+
+sub get_skip_params { return %FIELDS }
 
 my ( $REQUEST_TYPE, $REQUEST_CLASS );
 
@@ -76,32 +78,25 @@ sub new {
 ########################################
 # PARAMETERS
 
-sub param {
-    my ( $self, $name, $value ) = @_;
-    unless ( $name ) {
-        return keys %{ $self->{_param} };
+sub param_url_additional {
+    my ( $self, @added ) = @_;
+    if ( scalar @added ) {
+        $self->{_URL_PARAMS} = \@added;
     }
-    if ( defined $value ) {
-        $self->{_param}{ $name } = $value;
+    else {
+        $self->{_URL_PARAMS} ||= [];
     }
-    if ( ref $self->{_param}{ $name } eq 'ARRAY' ) {
-        return ( wantarray )
-                 ? @{ $self->{_param}{ $name } }
-                 : $self->{_param}{ $name };
-    }
-    if ( exists $self->{_param}{ $name } ) {
-        return ( wantarray )
-                 ? ( $self->{_param}{ $name } )
-                 : $self->{_param}{ $name };
-    }
-    return wantarray ? () : undef;
+    return wantarray ? @{ $self->{_URL_PARAMS} } : $self->{_URL_PARAMS};
 }
-
 
 sub param_toggled {
     my ( $self, $name ) = @_;
     return ( defined $self->param( $name ) ) ? 'yes' : 'no';
+}
 
+sub param_boolean {
+    my ( $self, $name ) = @_;
+    return ( defined $self->param( $name ) ) ? 'TRUE' : 'FALSE';
 }
 
 sub param_date {
@@ -174,27 +169,6 @@ sub assign_request_url {
     $log->is_debug &&
         $log->debug( "Setting relative URL '$relative_url'" );
     $self->url_relative( $relative_url );
-
-    my ( $action_url, $task ) = OpenInteract2::URL->parse( $relative_url );
-    $self->url_initial( $action_url );
-    my ( $action_name );
-    if ( $action_url ) {
-        $action_name = eval { CTX->lookup_action_name( $action_url ) };
-        if ( $@ ) {
-            my $action_nf = CTX->lookup_action_not_found();
-            $action_name = $action_nf->name;
-        }
-    }
-    else {
-        my $action_none = CTX->lookup_action_none();
-        $action_name = $action_none->name;
-    }
-    $action_name ||= '';
-    $task        ||= '';
-    $self->action_name( $action_name );
-    $self->task_name( $task );
-    $log->is_info &&
-        $log->info( "Pulled action info '$action_name: $task' from URL" );
     return $relative_url;
 }
 
@@ -384,8 +358,16 @@ sub language {
            ? @{ $self->{_user_language} } : $self->{_user_language}[0];
 }
 
-sub find_language {
-    my ( $self ) = @_;
+sub assign_languages {
+    my ( $self, @assigned ) = @_;
+    if ( scalar @assigned ) {
+        delete $self->{_lang_handle}; # clear out cache
+        $self->{_user_language} = \@assigned;
+        $log->is_debug &&
+            $log->debug( "Request property 'language' assigned to: ",
+                         join( ', ', @assigned ) );
+        return;
+    }
     my @lang = ();
     my $lang_config = CTX->lookup_language_config;
     if ( $self->auth_is_logged_in ) {
@@ -402,7 +384,8 @@ sub find_language {
     }
     elsif ( my @param_lang = $self->param( $lang_config->{choice_param_name} ) ) {
         $log->is_debug &&
-            $log->debug( "Added language from parameter: $session_lang" );
+            $log->debug( "Added language from request parameter ",
+                         "'$lang_config->{choice_param_name}'" );
         push @lang, @param_lang;
     }
     else {
@@ -411,6 +394,7 @@ sub find_language {
         push @lang, $lang_config->{default_language};
     }
 
+
     if ( my @browser_lang = $self->_find_browser_languages ) {
         $log->is_debug &&
             $log->debug( "Added language to head from browser: ",
@@ -418,12 +402,10 @@ sub find_language {
         unshift @lang, @browser_lang;
     }
 
-    if ( my @clubber_lang = $self->_find_custom_languages( @lang ) ) {
-        $self->{_user_language} = \@clubber_lang;
-    }
-    else {
-        $self->{_user_language} = \@lang;
-    }
+    $self->{_user_language} = \@lang;
+    $log->is_debug &&
+        $log->debug( "Request property 'language' now: ",
+                     join( ', ', @{ $self->{_user_language} } ) );
 }
 
 sub _find_browser_languages {
@@ -445,31 +427,9 @@ sub _find_browser_languages {
     my @langs = map { $_->[0] }
                     sort { $b->[1] <=> $a->[1] } @lang_data;
     $log->is_debug &&
-        $log->debug( "Found the following languages from the browser: ",
+        $log->debug( "Parsed browser header into following language tags: ",
                      join( ', ', @langs ) );
     return @langs;
-}
-
-sub _find_custom_languages {
-    my ( $self, @oi_lang ) = @_;
-    my $lang_info = CTX->lookup_language_config;
-    return unless ( $lang_info->{custom_language_id_class} );
-    $log ||= get_logger( LOG_REQUEST );
-
-    my $lang_class = $lang_info->{custom_language_id_class};
-    $log->is_debug &&
-        $log->debug( "Running custom lang ID class '$lang_class'" );
-    my @new_langs = eval {
-        $lang_class->identify_languages( @oi_lang )
-    };
-    if ( $@ ) {
-        $log->error( "Failed to get custom languages from ",
-                     "'$lang_class': $@" );
-        return ();
-    }
-    else {
-        return @new_langs;
-    }
 }
 
 sub language_handle {
@@ -477,13 +437,13 @@ sub language_handle {
     unless ( $self->{_lang_handle} ) {
         $log ||= get_logger( LOG_REQUEST );
         my @langs = $self->language;
-        $log->info( "Retrieved languages for request: ", join( ', ', @langs ) );
+        $log->info( "Languages for this request: ", join( ', ', @langs ) );
         $self->{_lang_handle} = OpenInteract2::I18N->get_handle( @langs );
         if ( $log->is_debug ) {
             my $type = ref( $self->{_lang_handle} );
             no strict 'refs';
             my @parents = @{ $type . '::ISA' };
-            $log->debug( "Language handle is of type: $type with parents: ",
+            $log->debug( "Language handle is of type '$type' with parents: ",
                          join( ', ', @parents ) );
         }
     }
@@ -509,7 +469,7 @@ sub factory_error {
 # OVERRIDE
 
 # Initialize new object
-sub init          { oi_error 'Subclass must implement init()' }
+sub init { oi_error 'Subclass must implement init()' }
 
 1;
 
@@ -563,24 +523,45 @@ B<new( @params )>
 
 B<param( [ $name, $value ] )>
 
-With no arguments, this returns a list -- not an arrayref! -- of
-parameters the client passed in.
+See docs in L<OpenInteract2::ParamContainer>
 
-If you pass in C<$name> by itself then you get the value(s) associated
-with it. If C<$name> has not been previously set you get an empty list
-or undef depending on the context. Otherwise, we return the
-context-sensitive value of C<$name>
+B<param_url_additional()>
 
-If you pass in a C<$value> along with C<$name> then it is assigned to
-C<$name>, overwriting whatever may have been there before.
+Property that returns as a list any additional path information as
+parameters. This allows REST-style URLs.
 
-Returns: list of parameters (no argument), the parameter associated
-with the first argument (one argument, two arguments),
+What constitutes 'additional' is determined by the relevant
+L<OpenInteract2::ActionResolver> class -- the one that's able to
+resolve a URL into an L<OpenInteract2::Action> object is also
+responsible for setting this property.
+
+For instance, instead of:
+
+  http://www.foo.com/news/display/?news_id=1
+
+You could have:
+
+ http://www.foo.com/news/display/1
+
+And instead of:
+
+ http://www.foo.com/news/archive/?year=2005&month=8
+
+You could use:
+
+ http://www.foo.com/news/archive/2005/8
+
+Returns: list of additional parameters, in order.
 
 B<param_toggled( $name )>
 
 Given the name of a parameter, return 'yes' if it is defined and 'no'
 if not.
+
+B<param_boolean( $name )>
+
+Given the name of a parameter, return 'TRUE' if it is defined and
+'FALSE' if not. (This maps to the SQL standard for boolean literals.)
 
 B<param_date( $name, [ $strptime_format ]  )>
 
@@ -731,6 +712,40 @@ B<language_handle()> (read-only)
 
 A L<Locale::Maketext|Locale::Maketext> object from which you can get
 localized messages.
+
+B<assign_languages( [ @assigned ] )>
+
+Typically called only by an adapter or the authentication classes
+which use the default behavior described below. But you can also
+assign languages directly to the request object with this:
+
+ $request->assign_languages( 'en', 'jp', 'sv' );
+
+If you do assign languages directly any language handle previously
+cached for the request is removed.
+
+Otherwise we find the language from one of: 
+
+=over 4
+
+=item *
+
+the user (if logged in)
+
+=item *
+
+session (from 'language' key);
+
+=item *
+
+parameter value (listed in server configuration of
+'language.choice_param_name';
+
+=item *
+
+or default language set in 'language.default_language'.
+
+=back
 
 =head2 Properties
 
@@ -922,7 +937,7 @@ L<OpenInteract2::Request::Standalone|OpenInteract2::Request::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

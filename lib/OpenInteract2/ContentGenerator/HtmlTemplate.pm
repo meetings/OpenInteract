@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::HtmlTemplate;
 
-# $Id: HtmlTemplate.pm,v 1.7 2004/02/18 05:25:27 lachoy Exp $
+# $Id: HtmlTemplate.pm,v 1.8 2005/03/17 14:58:00 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::ContentGenerator );
@@ -12,7 +12,7 @@ use OpenInteract2::ContentGenerator::TemplateSource;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::ContentGenerator::HtmlTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::HtmlTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -87,7 +87,7 @@ Content generator for L<HTML::Template>. May be horribly inefficient.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,25 +1,16 @@
 package OpenInteract2::Manage::Website::CreateSecurity;
 
-# $Id: CreateSecurity.pm,v 1.4 2004/06/13 18:19:54 lachoy Exp $
+# $Id: CreateSecurity.pm,v 1.7 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
+use OpenInteract2::CreateSecurity;
 use OpenInteract2::Exception qw( oi_error oi_param_error );
 
-$OpenInteract2::Manage::Website::CreateSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
-
-# METADATA
-
-sub get_name {
-    return 'create_security';
-}
-
-sub get_brief_description {
-    return "Create security settings for multiple SPOPS objects at once.";
-}
+$OpenInteract2::Manage::Website::CreateSecurity::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub get_parameters {
     my ( $self ) = @_;
@@ -40,11 +31,6 @@ sub get_parameters {
                   "Security level to set. Must be 'none', 'read' or 'write'.",
             is_required => 'yes',
         },
-        spops => {
-            description =>
-                  "SPOPS object tag for class you'd like to set security",
-            is_required => 'yes',
-        }
     };
 }
 
@@ -59,22 +45,23 @@ sub check_parameters {
     my ( $self ) = @_;
     $self->_setup_context;
     my $creator = OpenInteract2::CreateSecurity->new({
-                         scope       => $self->param( 'scope' ),
-                         scope_id    => $self->param( 'scope_id' ),
-                         level       => $self->param( 'level' ),
-                         class       => $self->param( 'spops' ),
-                         website_dir => $self->param( 'website_dir' ),
+        scope       => $self->param( 'scope' ),
+        scope_id    => $self->param( 'scope_id' ),
+        level       => $self->param( 'level' ),
+        website_dir => $self->param( 'website_dir' ),
     });
+    $self->_assign_create_params( $creator );
     unless ( $creator->validate ) {
         my $errors = $creator->errors_with_params;
-        if ( $errors->{class} ) {
-            $errors->{spops} = $errors->{class};
-            delete $errors->{class};
-        }
         oi_param_error "One or more parameters were invalid",
                        { parameter_fail => $errors };
     }
     $self->param( creator => $creator );
+}
+
+sub _assign_create_params {
+    my ( $self ) = @_;
+    oi_error ref( $self ), " must implement '_assign_create_params()'";
 }
 
 # RUN
@@ -87,13 +74,11 @@ sub setup_task { return }
 sub run_task {
     my ( $self ) = @_;
     my $creator = $self->param( 'creator' );
-    my $count = $creator->run;
+    $creator->run;
     my $msg = join( '', "Processed ", $creator->num_processed, " and ",
                         "encountered ", $creator->num_failed, " failures. " );
     $self->_ok( 'create security', $msg );
 }
-
-OpenInteract2::Manage->register_factory_type( get_name() => __PACKAGE__ );
 
 1;
 
@@ -112,10 +97,10 @@ OpenInteract2::Manage::Website::CreateSecurity - Create security for multiple SP
  
  my $website_dir = '/home/httpd/mysite';
  my %PARAMS = (
-    scope => 4,
-    scope_id => 4,
-    spops    => 'news',
-    level    => 'read',
+    scope       => 'group',
+    scope_id    => 4,
+    spops       => 'news',
+    level       => 'read',
     website_dir => $website_dir,
  );
  my $task = OpenInteract2::Manage->new( 'create_security', \%PARAMS );
@@ -137,7 +122,7 @@ Scope of security you're setting
 
 =item B<scope_id>=ID of 'scope'
 
-Scope ID of security you're setting. Not used with 'world' scope.
+Scope ID of security you're setting. Ignored with 'world' scope.
 
 =item B<spops>=object-key
 
@@ -165,12 +150,11 @@ Success/failure message.
 
 =head1 SEE ALSO
 
-L<OpenInteract2::CreateSecurity|OpenInteract2::CreateSecurity> (in
-'base_security' package)
+L<OpenInteract2::CreateSecurity|OpenInteract2::CreateSecurity>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003-2004 Chris Winters. All rights reserved.
+Copyright (C) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

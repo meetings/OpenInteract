@@ -105,18 +105,20 @@ MANIFEST.SKIP
 
 =back
 
-There is no structural change necessary for these files to
-work. However, depending on your scenario you may wish to upgrade your
-package by a whole version number to indicate that it will only work
-with OI2. This also allows you to maintain two source trees for a
-particular package, just in case you need to support both of them.
+Except for C<package.conf> there is no structural change necessary for
+these files to work. However, depending on your scenario you may wish
+to upgrade your package by a whole version number to indicate that it
+will only work with OI2. This also allows you to maintain two source
+trees for a particular package, just in case you need to support both
+of them.
 
 B<package.conf>
 
-The only structural change is that the 'template_blocks' directive has
-been removed from the package configuration.
+This has been replaced by C<package.ini>; the script
+C<scripts/translate_package_to_ini.pl> shipped with OI2 will do this
+for you.
 
-To change:
+Additionally, you'll need to change:
 
 =over 4
 
@@ -141,8 +143,7 @@ discrepancies between your C<MANIFEST> and the files in the directory.
 
 You can also use the L<ExtUtils::Manifest|ExtUtils::Manifest> trick:
 
-  $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
-
+ $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
 
 =head2 Configuration (conf/)
 
@@ -204,17 +205,10 @@ C<spops_file>.
 
 =head2 Documentation (doc/)
 
-Documentation is pretty much the same. The system documentation tool
-under C</SystemDoc/> will pick up all POD files in a package's C<doc/>
-directory. Instead of using an index (C<titles>) that always, always
-got out of sync, we instead just parse all the docs and grab the title
-out of it. Yes, it's more expensive, but how often are you browsing
-package docs? (And you have fast disk drives and/or an aggressively
-caching filesystem, right?)
-
-And because OI no longer has error handlers you can delete the
-C<ERRORS> section from your POD. (Packages generated with OI had this
-by default.)
+Documenation has moved to the C<OpenInteract2::App> subclass. And
+because OI no longer has error handlers you can delete the C<ERRORS>
+section from your POD. (Packages generated with OI had this by
+default.)
 
 To change:
 
@@ -226,9 +220,8 @@ C<titles> - Delete this file, it's no longer used.
 
 =item *
 
-C<package.pod> - If you have a file of this name, rename it to
-'packagename'.pod -- e.g., 'gallery.pod' if you're modifying the
-'gallery' package, etc.
+C<package.pod> - Copy the content into
+C<OpenInteract2::App::YourPackage>.
 
 =back
 
@@ -276,7 +269,7 @@ These should remain the same.
 
 =head2 Template (template/)
 
-
+These should remain the same.
 
 =head2 Examples (eg/)
 
@@ -311,15 +304,30 @@ This is where you'll likely spend the bulk of your conversion time.
 
 =head2 Request vs. Context
 
+In OpenInteract 1.x the omnipresent object was C<$R>. In OpenInteract
+2.x it's C<CTX>, imported from L<OpenInteract2::Context>. The main
+difference is that we now have a clear separation of concerns -- the
+context holds data that lives from request to request; per-request
+data are held in the objects returned by the C<request()> and
+C<response()> methods, represented by L<OpenInteract2::Request> and
+L<OpenInteract2::Response> classes.
+
 =head2 Logging
+
+We now use the L<Log::Log4perl> package from CPAN -- see
+L<OpenInteract2::Manual::Logging> for more information.
 
 =head2 Libraries (OpenInteract/)
 
+These get moved to C<OpenInteract2/>
+
 =head2 Handlers (OpenInteract/Handler)
+
+These get moved to C<OpenInteract2/Action>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

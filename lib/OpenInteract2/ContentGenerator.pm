@@ -1,12 +1,14 @@
 package OpenInteract2::ContentGenerator;
 
-# $Id: ContentGenerator.pm,v 1.13 2004/02/18 05:25:26 lachoy Exp $
+# $Id: ContentGenerator.pm,v 1.16 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
+
+$OpenInteract2::ContentGenerator::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 # Each value in %GENERATOR is a singleton for a particular content
 # generator, retrieved via instance()
@@ -18,49 +20,10 @@ my ( $log );
 ########################################
 # FACTORY
 
-sub initialize_all_generators {
-    my ( $class ) = @_;
-    my $log_init = get_logger( LOG_INIT );
-
-    $log_init->is_debug &&
-        $log_init->debug( "Initializing all content generators" );
-    my $all_generator_info = CTX->lookup_content_generator_config;
-
-BIG_GENERATOR:
-    while ( my ( $name, $generator_data ) = each %{ $all_generator_info } ) {
-        next if ( $name eq 'default' );
-        my $generator_class = $generator_data->{class};
-        unless ( $generator_class ) {
-            $log_init->error( "Cannot use generator '$name': no class ",
-                              "specified in key 'class'" );
-            next BIG_GENERATOR;
-        }
-        my $full_name = "[Name: $name] [Class: $generator_class]";
-        $log_init->is_debug &&
-            $log_init->debug( "Trying to require and initialize $full_name" );
-        eval "require $generator_class";
-        if ( $@ ) {
-           $log_init->error( "Failed to require generator $full_name: $@" );
-           next BIG_GENERATOR;
-        }
-        my ( $generator );
-        eval {
-            $generator = $generator_class->new( $name, $generator_class );
-            $generator->initialize( $generator_data );
-        };
-        if ( $@ ) {
-            $log_init->error( "Require ok, but cannot initialize generator ",
-                              "$full_name. Error: $@" );
-        }
-        else {
-            $log_init->is_debug &&
-                $log_init->debug( "Successfully required and initialized ",
-                                  "generator $full_name" );
-            $GENERATOR{ $name } = $generator;
-        }
-    }
+sub add_generator {
+    my ( $class, $name, $generator ) = @_;
+    $GENERATOR{ $name } = $generator;
 }
-
 
 sub instance {
     my ( $class, $name ) = @_;
@@ -80,8 +43,10 @@ sub instance {
 sub new {
     my ( $pkg, $name, $gen_class ) = @_;
     my ( $package, @etc ) = caller;
-    unless ( __PACKAGE__ eq $package ) {
-        oi_error "Cannot call 'new()' from anywhere except " . __PACKAGE__;
+    unless ( $package eq __PACKAGE__ ||
+             $package eq 'OpenInteract2::Setup::InitializeContentGenerators' ) {
+        oi_error "Cannot call 'new()' from anywhere except " . __PACKAGE__ . " " .
+                 "or the relevant ::Setup action.";
     }
     return bless( { name  => $name,
                     class => $gen_class }, $pkg );
@@ -143,25 +108,6 @@ too, but that would be mad.)
 
 =head2 Class Methods
 
-B<initialize_all_generators()>
-
-Normally only called from
-L<OpenInteract2::Setup|OpenInteract2::Setup>. This cycles through the
-data in the configuration key C<content_generator>, performs a
-C<require> on each class specified there, instantiates an object of
-that class and calls C<initialize()> on it, passing in the data
-(hashref) from the respective 'content_generator' configuration
-section as the only argument.
-
-This object is a singleton and will be returned whenever you call
-C<instance()> (below). So you can save state that may be used by your
-generator many times throughout its lifecycle. Note that it is not
-cleared out per-request, so the data it stores should not be specific
-to a particular user or session.
-
-Returns: nothing. If errors occur in the generator classes we log
-them.
-
 B<instance( $generator_name )>
 
 Return an object representing the given content generator. If
@@ -178,6 +124,12 @@ B<initialize( \%configuration_params )>
 Object method that gets called only once. Since this is normally at
 server startup you can execute processes that are fairly intensive if
 required.
+
+This may seem like it should be a class method but since each
+generator is a singleton it's an object method. As a result you can
+save state that may be used by your generator many times throughout
+its lifecycle. Note that it is not cleared out per-request, so the
+data it stores should not be specific to a particular user or session.
 
 The C<\%configuration_params> are pulled from the respective
 'content_generator' section of the server configuration. So if you
@@ -207,7 +159,7 @@ Actually generates the content. This is the fun part!
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

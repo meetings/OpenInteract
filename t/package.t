@@ -1,13 +1,13 @@
 # -*-perl-*-
 
-# $Id: package.t,v 1.16 2004/09/27 20:12:02 lachoy Exp $
+# $Id: package.t,v 1.17 2005/02/28 01:03:59 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
 use File::Copy qw( cp );
 use File::Spec::Functions    qw( catdir catfile );
-use Test::More  tests => 121;
+use Test::More  tests => 117;
 
 require_ok( 'OpenInteract2::Package' );
 
@@ -90,9 +90,10 @@ my $package_dir  = get_test_package_dir();
     # Open up a bad configuration, assign it to the package and ensure
     # that the export fails
 
-    my $bad_config_file = get_use_file( 'test_package_bad.conf', 'name' );
-    my $bad_config = OpenInteract2::Config::Package->new(
-                         { filename => $bad_config_file });
+    my $bad_config_file = get_use_file( 'test_package_bad.ini', 'name' );
+    my $bad_config = OpenInteract2::Config::Package->new({
+        filename => $bad_config_file
+    });
     my $good_config = $d_package->config;
     $d_package->config( $bad_config );
     eval { $d_package->export };
@@ -316,31 +317,28 @@ my $package_dir  = get_test_package_dir();
 # CREATE SKELETON
 
 {
-    my $source_dir = get_source_dir();
-    my %skel_args = ( source_dir => $source_dir );
-
     # Expect this to die since we're not giving a name
 
-    eval { OpenInteract2::Package->create_skeleton( { %skel_args } ) };
+    eval { OpenInteract2::Package->create_skeleton() };
     like( $@, qr/^Must pass in package name/,
           "Expected error with no name to create package" );
 
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => '   ' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => '   ' }) };
     like( $@, qr/Name must not be blank/,
           "Expected error with blank name to create package" );
 
     # Expect these to die since we're giving a bad name (like Bon Jovi, arg)
 
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'my package' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => 'my package' }) };
     like( $@, qr/Name must not have spaces/,
           "Expected error with spaces in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'my-package' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => 'my-package' }) };
     like( $@, qr/Name must not have dashes/,
           "Expected error with dashes in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => '2mypackage' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => '2mypackage' }) };
     like( $@, qr/Name must not start with a number/,
           "Expected error with leading number in name to create package" );
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'mypackagenum#' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => 'mypackagenum#' }) };
     like( $@, qr/Name must not have non-word characters/,
           "Expected error with non-word chars in name to create package" );
 
@@ -352,12 +350,11 @@ my $package_dir  = get_test_package_dir();
     chdir( $skel_work_dir );
 
     my $skel_pkg = eval {
-        OpenInteract2::Package->create_skeleton({ name       => 'foo',
-                                                  source_dir => $source_dir })
+        OpenInteract2::Package->create_skeleton({ name => 'foo' })
     };
     ok( ! $@, 'Create skeleton superficially succeeded' ) || diag "Error: $@";
     diag( "Error creating skeleton: $@" ) if ( $@ );
-    my @dirs  = ( 'conf', 'data',  'doc', 'script', 'struct', 'template',
+    my @dirs  = ( 'conf', 'data',  'script', 'struct', 'template',
                   'html', [ 'html', 'images' ],
                   'OpenInteract2', ['OpenInteract2', 'Action' ],
                   [ 'OpenInteract2', 'SQLInstall' ] );
@@ -371,8 +368,7 @@ my $package_dir  = get_test_package_dir();
     my @files = ( 'Changes',
                   'MANIFEST',
                   'MANIFEST.SKIP',
-                  'package.conf',
-                  [ 'doc', 'foo.pod' ],
+                  'package.ini',
                   [ 'OpenInteract2', 'SQLInstall', 'Foo.pm' ],
                   [ 'OpenInteract2', 'Action', 'Foo.pm' ],
                   [ 'conf', 'spops.ini' ],
@@ -392,7 +388,7 @@ my $package_dir  = get_test_package_dir();
 
     # Expect this to die since the directory will already exist
 
-    eval { OpenInteract2::Package->create_skeleton({ %skel_args, name => 'foo' }) };
+    eval { OpenInteract2::Package->create_skeleton({ name => 'foo' }) };
     like( $@, qr/^Cannot create package destination directory.*already exists$/,
           "Expected error since destionation directory exists" );
     chdir( $original_pwd );
@@ -426,7 +422,4 @@ sub _check_test_package {
     my $actions = $pkg->get_action_files;
     is( scalar @{ $actions }, 1,
         "Action files from package $label" );
-    my $docs = $pkg->get_doc_files;
-    is( scalar @{ $docs }, 1,
-        "Doc files from package $label" );
 }

@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonSearch;
 
-# $Id: CommonSearch.pm,v 1.17 2004/12/05 08:52:55 lachoy Exp $
+# $Id: CommonSearch.pm,v 1.24 2005/03/18 04:09:49 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -9,8 +9,9 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::ResultsManage;
+use SPOPS::Iterator::WrapList;
 
-$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::CommonSearch::VERSION   = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -55,15 +56,26 @@ sub search {
     }
 
     # If we're not using paged results, then just run the normal
-    # search and get back an iterator
+    # search and get back an iterator, but run through it once so we
+    # can count up the results
 
     else {
         $log->is_debug &&
             $log->debug( "Search results not paged, using basic iterator" );
-        $tmpl_params{iterator} = eval {
-            $self->_search_build_and_run( \%tmpl_params )
+        my $iter = eval {
+            $self->_search_build_and_run();
         };
         $self->_search_catch_errors( "$@" );
+        my $items = $iter->get_all();
+        $log->is_debug &&
+            $log->debug( scalar( @{ $items } ), " objects in iterator, ",
+                         "recreating iterator" );
+        $tmpl_params{iterator} = SPOPS::Iterator::WrapList->new({
+            object_list => $items
+        });
+        $tmpl_params{total_hits}  = scalar @{ $items };
+        $tmpl_params{page_num}    = 1;
+        $tmpl_params{total_pages} = 1;
     }
 
     $tmpl_params{search_criteria} = $self->param( 'c_search_criteria' );
@@ -97,7 +109,7 @@ sub _search_retrieve_paged_results {
         $log->is_debug &&
             $log->debug( "Running search for the first time" );
         my $iterator = eval {
-            $self->_search_build_and_run({ is_paged => 'yes' })
+            $self->_search_build_and_run();
         };
         $self->_search_catch_errors( "$@" );
         $results->save( $iterator );
@@ -177,10 +189,12 @@ sub _search_init_param {
 
     # Now we're dealing with valid data...
 
-    my @all_fields = ( $self->param( 'c_search_fields_like' ),
-                       $self->param( 'c_search_fields_exact' ),
-                       $self->param( 'c_search_fields_left_exact' ),
-                       $self->param( 'c_search_fields_right_exact' ) );
+    my @all_fields = (
+        $self->param( 'c_search_fields_like' ),
+        $self->param( 'c_search_fields_exact' ),
+        $self->param( 'c_search_fields_left_exact' ),
+        $self->param( 'c_search_fields_right_exact' )
+    );
     $self->param( c_search_fields => \@all_fields );
     return undef;
 }
@@ -245,11 +259,11 @@ sub _search_build_and_run {
             %{ $additional_params } })
     };
     if ( $@ ) {
-        $log->error( "Search failed: $@" );
+        $log->warn( "Search failed: $@" );
         oi_error $@;
     }
     $log->is_info &&
-        $log->info( "Got iterator from '$object_class' given query params" );
+        $log->info( "Got iterator from '$object_class' ok" );
     return $iter;
 }
 
@@ -534,7 +548,11 @@ you will get the standard error page.
 
 =head1 METHODS FOR 'search_form'
 
-No additional methods are available for you to override.
+_search_form_customize( \%template_params )
+
+Add any necessary parameters to C<\%template_params> before the
+content generation step where they get passed to the template
+specified in C<c_search_form_template>.
 
 =head1 CONFIGURATION FOR 'search_form'
 
@@ -586,8 +604,8 @@ These paramters are available to your template:
 
 =item *
 
-B<iterator>: An L<SPOPS::Iterator|SPOPS::Iterator> with your search
-results.
+B<iterator>: An L<SPOPS::Iterator|SPOPS::Iterator> (or one of its
+subclasses) with your search results.
 
 =item *
 
@@ -597,20 +615,15 @@ search. Note that the search strings does not contain any wildcards
 'book.title'). If you plan to display the results you may want to
 modify the fieldnames in C<_search_customize()>.
 
-=back
+=item *
 
-And if you have set C<c_search_results_paged> (see below) to 'yes'
-you will also get:
-
-=over 4
+B<page_num>: Page of the results we are currently on. (If results not
+paged, always '1'.)
 
 =item *
 
-B<page_num>: Page of the results we are currently on.
-
-=item *
-
-B<total_pages>: The total number of pages in the result set.
+B<total_pages>: The total number of pages in the result set. (If
+results not paged, always '1'.)
 
 =item *
 
@@ -618,16 +631,9 @@ B<total_hits>: The total number of hits in the result set.
 
 =item *
 
-B<search_id>: The ID of this search.
+B<search_id>: The ID of this search. (Not set if results not paged.)
 
 =back
-
-If C<c_search_results_paged> is set to 'no', you will get nothing
-beyond the default. The only difference is that 'iterator' will
-contain all of your search results. If you would like to get all the
-results in a list so you can see how many there are, call 'get_all()'
-on the iterator and ask the returned arrayref how many members it
-contains.
 
 =head1 METHODS FOR 'search'
 
@@ -1026,7 +1032,7 @@ should be saved in her session (or a cookie?) so it is sticky.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,4 +1,4 @@
-# $Id: utils.pl,v 1.85 2004/12/05 20:54:35 lachoy Exp $
+# $Id: utils.pl,v 1.100 2005/03/04 03:11:21 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
@@ -22,9 +22,7 @@ $Data::Dumper::Indent = 1;
 my ( $log );
 
 BEGIN {
-    #my $log_level = $DEBUG;
-    # TODO: Change before distributing!
-    my $log_level = $WARN;
+    my $log_level = ( $ENV{OI2DEBUG} ) ? $DEBUG : $WARN;
     $log = OpenInteract2::Log->init_file( 'oi2_tests.log', $log_level );
     $log->warn( "Starting test run [$0] [", scalar localtime, "]" );
 }
@@ -44,25 +42,11 @@ sub main::barf {
     warn Dumper( $ref ), "\n";
 }
 
-sub main::get_package_versions {
-    return (
-         base            => '2.11',
-         base_box        => '2.17',
-         base_error      => '2.10',
-         base_group      => '2.16',
-         base_page       => '2.28',
-         base_security   => '2.18',
-         base_template   => '3.15',
-         base_theme      => '2.10',
-         base_user       => '2.35',
-         comments        => '1.18',
-         full_text       => '2.58',
-         lookup          => '2.07',
-         news            => '2.20',
-         object_activity => '2.11',
-         system_doc      => '2.08',
-         whats_new       => '2.10',
-   );
+sub main::get_packages {
+    return qw( base  base_box  base_error  base_group  base_page
+               base_security  base_template  base_theme  base_user
+               comments  full_text  lookup  news  object_activity
+               system_doc  whats_new );
 }
 
 ########################################
@@ -73,9 +57,12 @@ sub main::compare_urls {
     my ( $path_created, $query_created ) = split /\?/, $url_created, 2;
     is( $path_created, $url_base,
         "$desc: base paths match" );
-    my %query_map = map { split( '=', $_ ) }
+    my %query_actual = map { split( '=', $_ ) }
                         split( '&amp;', $query_created );
-    is_deeply( \%query_map, $query_base,
+    my %query_expected = map { $_ => $query_base->{ $_ } }
+                               grep { $_ ne 'URL_PARAMS' }
+                               keys %{ $query_base };
+    is_deeply( \%query_actual, \%query_expected,
                "$desc: query strings match" );
 }
 
@@ -131,16 +118,6 @@ sub main::get_test_site_db_file {
 sub main::get_test_package_dir {
     return catdir( get_test_dir(), 'test_pkg' );
 }
-
-# This should be the parent of the test directory...
-
-sub main::get_source_dir {
-    my $test_dir = get_test_dir();
-    my @dirs = splitdir( $test_dir );
-    pop @dirs;
-    return catdir( @dirs );
-}
-
 
 sub main::rmtree {
     return File::Path::rmtree( [ @_ ] );
@@ -210,9 +187,8 @@ sub main::initialize_website_libraries {
 }
 
 sub main::install_website {
-    my $source_dir  = get_source_dir();
     my $website_dir = get_test_site_dir();
-    my $is_recent = _is_recent_website( $website_dir );
+    my $is_recent   = _is_recent_website( $website_dir );
 
     initialize_website_libraries();
 
@@ -237,9 +213,9 @@ sub main::install_website {
     create_tmp_dir();
 
     # let any errors bubble up
-    my $manage = OpenInteract2::Manage->new( 'create_website',
-                                             { website_dir => $website_dir,
-                                               source_dir  => $source_dir } );
+    my $manage = OpenInteract2::Manage->new(
+        'create_website', { website_dir => $website_dir }
+    );
     LOG()->debug( "Created management task for creating website" );
     $manage->execute;
     LOG()->debug( "Executed management task ok" );
@@ -274,13 +250,13 @@ sub _get_website_check_file {
 sub main::modify_website_post_creation {
     my ( $website_dir ) = @_;
     modify_server_config();
-    CTX->setup({ skip => 'activate spops' });
+    CTX->setup({ skip => 'initialize spops' });
     OpenInteract2::Manage->new(
         'install_sql', {
             website_dir => $website_dir,
             package     => [ 'SYSTEM' ],
         })->execute();
-    OpenInteract2::Setup->activate_spops_classes;
+    #OpenInteract2::Setup->run_setup_for( 'read spops config' );
 }
 
 # Write out SQLite information so that the Context gets read in
@@ -293,8 +269,7 @@ sub main::modify_server_config {
     my $db_file = get_test_site_db_file();
 
     my $ini = OpenInteract2::Config::Ini->new({ filename => $config_file });
-    $ini->{datasource}{main}{spops}       = 'SPOPS::DBI::SQLite';
-    $ini->{datasource}{main}{driver_name} = 'SQLite';
+    $ini->{datasource}{main}{dbi_type}    = 'SQLite';
     $ini->{datasource}{main}{dsn}         = "dbname=$db_file";
     $ini->write_file;
 }
@@ -302,8 +277,9 @@ sub main::modify_server_config {
 sub main::initialize_context {
     install_website();
     unless ( CTX ) {
-        OpenInteract2::Context->create(
-                    { website_dir => get_test_site_dir() });
+        OpenInteract2::Context->create({
+            website_dir => get_test_site_dir()
+        });
     }
     return CTX;
 }

@@ -1,6 +1,6 @@
 package OpenInteract2::Response;
 
-# $Id: Response.pm,v 1.27 2004/11/09 12:15:32 sjn Exp $
+# $Id: Response.pm,v 1.28 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use base qw( Class::Factory Class::Accessor::Fast );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -402,7 +402,7 @@ L<OpenInteract2::Response::Standalone|OpenInteract2::Response::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

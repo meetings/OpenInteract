@@ -1,17 +1,17 @@
 package OpenInteract2::Datasource::LDAP;
 
-# $Id: LDAP.pm,v 1.8 2004/02/18 05:25:27 lachoy Exp $
+# $Id: LDAP.pm,v 1.11 2005/03/17 14:58:01 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
-use Net::LDAP                qw();
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::LDAP::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
+my $REQUIRED = 0;
 
 use constant LDAP_PORT    => 389;
 use constant LDAP_DEBUG   => 0;
@@ -20,6 +20,9 @@ use constant LDAP_VERSION => 2;
 
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
+    unless ( $REQUIRED ) {
+        require Net::LDAP; $REQUIRED++;
+    }
     $log ||= get_logger( LOG_DS );
     unless ( ref $ds_info ) {
         $log->error( "No data given to create LDAP [$ds_name] handle" );
@@ -114,6 +117,13 @@ sub connect_and_bind {
     my $ldap = $class->connect( $ds_info, @params );
     $class->bind( $ldap, $ds_info );
     return $ldap;
+}
+
+# no-op...
+
+sub resolve_datasource_info {
+    my ( $self, $name, $ds_info ) = @_;
+    return { %{ $ds_info } };
 }
 
 1;
@@ -251,7 +261,7 @@ L<Net::LDAP|Net::LDAP>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

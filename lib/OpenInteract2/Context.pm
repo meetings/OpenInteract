@@ -1,23 +1,22 @@
 package OpenInteract2::Context;
 
-# $Id: Context.pm,v 1.78 2004/12/05 21:10:32 lachoy Exp $
+# $Id: Context.pm,v 1.87 2005/03/17 14:57:57 sjn Exp $
 
 use strict;
 use base                     qw( Exporter Class::Accessor::Fast );
 use Data::Dumper             qw( Dumper );
 use DateTime;
-use DateTime::TimeZone;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Log       qw( uchk );
 
-$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.78 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.87 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_TEMP_LIB_DIR => 'templib';
 
 my ( $log_spops, $log_act, $log_init );
 
-sub version { return '1.99_05' }
+sub version { return '1.99_06' }
 
 # Exportable deployment URL call -- main, images, static
 
@@ -25,6 +24,8 @@ my ( $DEPLOY_URL, $DEPLOY_IMAGE_URL, $DEPLOY_STATIC_URL );
 sub DEPLOY_URL        { return $DEPLOY_URL }
 sub DEPLOY_IMAGE_URL  { return $DEPLOY_IMAGE_URL }
 sub DEPLOY_STATIC_URL { return $DEPLOY_STATIC_URL }
+
+my ( $DEFAULT_LANGUAGE_HANDLE );
 
 # This is the only copy of the context that should be around. We might
 # modify this later so we can have multiple copies of the context
@@ -40,7 +41,7 @@ sub CTX { return $CTX }
 );
 
 require OpenInteract2::Config;
-require OpenInteract2::Config::Base;
+require OpenInteract2::Config::Bootstrap;
 require OpenInteract2::DatasourceManager;
 require OpenInteract2::Observer;
 require OpenInteract2::Request;
@@ -48,8 +49,10 @@ require OpenInteract2::Response;
 require OpenInteract2::Action;
 require OpenInteract2::Controller;
 require OpenInteract2::Exception;
+require OpenInteract2::Setup;
+require OpenInteract2::I18N;
 
-my @CORE_FIELDS    = qw( base_config server_config repository packages cache
+my @CORE_FIELDS    = qw( bootstrap repository packages cache
                          datasource_manager timezone timezone_object setup_class );
 my @REQUEST_FIELDS = qw( request response controller user group is_logged_in is_admin );
 __PACKAGE__->mk_accessors( @CORE_FIELDS, @REQUEST_FIELDS );
@@ -58,7 +61,7 @@ __PACKAGE__->mk_accessors( @CORE_FIELDS, @REQUEST_FIELDS );
 # CONSTRUCTOR AND INITIALIZATION
 
 # $item should be either a hashref of parameters (preferably with one
-# parameter 'website_dir') or an OI2::Config::Base object
+# parameter 'website_dir') or an OI2::Config::Bootstrap object
 
 sub create {
     my ( $class, $item, $params ) = @_;
@@ -71,19 +74,20 @@ sub create {
     # Don't assign this to $CTX until after it's setup!
     my $ctx = bless( {}, $class );
 
-    my ( $base_config );
-    if ( ref $item eq 'OpenInteract2::Config::Base' ) {
-        $base_config = $item;
-        $website_dir = $base_config->website_dir;
+    my ( $bootstrap );
+    if ( ref $item eq 'OpenInteract2::Config::Bootstrap' ) {
+        $bootstrap   = $item;
+        $website_dir = $bootstrap->website_dir;
     }
     elsif ( $item->{website_dir} ) {
-        $base_config = eval {
-            OpenInteract2::Config::Base->new({
-                              website_dir => $item->{website_dir} })
+        $bootstrap = eval {
+            OpenInteract2::Config::Bootstrap->new({
+                website_dir => $item->{website_dir}
+            })
         };
         if ( $@ ) {
             OpenInteract2::Exception->throw(
-                     "Cannot create base config object using website ",
+                     "Cannot create bootstrap object using website ",
                      "directory '$item->{website_dir}': $@" );
         }
         $website_dir = $item->{website_dir};
@@ -98,11 +102,12 @@ sub create {
         OpenInteract2::Log->init_screen;
     }
 
-    $log_init = get_logger( LOG_INIT );
+    $log_init ||= get_logger( LOG_INIT );
 
-    if ( $base_config ) {
-        $ctx->base_config( $base_config );
-        $log_init->is_debug && $log_init->debug( "Assigned base config ok" );
+    if ( $bootstrap ) {
+        $ctx->bootstrap( $bootstrap );
+        $log_init->is_debug &&
+            $log_init->debug( "Assigned bootstrap ok; setting up..." );
         eval { $ctx->setup( $params ) };
         if ( $@ ) {
             my $error = $@;
@@ -135,213 +140,40 @@ sub setup {
     my ( $self, $params ) = @_;
     $params ||= {};
 
-    my %skip = ();
+    my @skip = ();
     if ( $params->{skip} ) {
-        if ( ref $params->{skip} ne 'ARRAY' ) {
-            $params->{skip} = [ $params->{skip} ];
-        }
-        %skip = map { $_ => 1 } @{ $params->{skip} };
-    }
-
-    my $base_config = $self->base_config;
-    unless ( $base_config and
-             ref( $base_config ) eq 'OpenInteract2::Config::Base' ) {
-        $log_init->error( "Cannot run setup() without base_config defined" );
-        OpenInteract2::Exception->throw(
-            "Cannot run setup() on context without a valid base ",
-            "configuration object set" );
-    }
-
-    my $server_config = $self->_read_server_config;
-    $log_init->is_info && $log_init->info( "Assigned server config ok" );
-
-    my $setup_class = $self->lookup_class( 'setup' );
-    $self->setup_class( $setup_class );
-    $log_init->is_info &&
-        $log_init->info( "Will use setup class '$setup_class'" );
-    eval "require $setup_class";
-    if ( $@ ) {
-        OpenInteract2::Exception->throw(
-            "Cannot require setup class '$setup_class': $@" );
-    }
-    $log_init->is_info &&
-        $log_init->info( "Required '$setup_class' ok; commencing setup" );
-
-    # go ahead and set the global context now... the other processes
-    # mostly just need access to the global configuration
-
-    $CTX = $self;
-
-    my $setup = $setup_class->new();
-    $setup->run_pre_process();
-
-    my $timezone = $server_config->{timezone};
-    unless ( $timezone ) {
-        $timezone = 'America/New_York';
-        $log_init->warn(
-            "No timezone set in server configuration! Please set the ",
-            "configuration key 'Global.timezone' to a valid ",
-            "DateTime::TimeZone value. (I'm going to be a cultural ",
-            "imperialist and assume '$timezone')."
-        );
-    }
-    my $timezone_object = DateTime::TimeZone->new( name => $timezone );
-    $self->timezone( $timezone );
-    $self->timezone_object( $timezone_object );
-
-    $log_init->is_info && $log_init->info( "Assigned timezone ok" );
-
-    # Assign constants from server config to the context.
-
-    $self->assign_deploy_url;
-    $self->assign_deploy_image_url;
-    $self->assign_deploy_static_url;
-    $log_init->is_info &&
-        $log_init->info( "Assigned constants from server config ok" );
-
-    if ( $skip{ 'initialize repository' } ) {
-        $skip{ 'initialize temp lib' }++;
-        $skip{ 'initialize action' }++;
-        $skip{ 'initialize spops' }++;
-        $skip{ 'initialize controller' }++;
-        $skip{ 'initialize indexer' }++;
-    }
-    else {
-        my $repository = $setup->read_repository;
-        if ( $repository ) {
-            $self->repository( $repository );
-            my $packages = $setup->read_packages;
-            $self->packages( $packages );
-        }
-        $log_init->is_info &&
-            $log_init->info( "Opened repository and read package definitions ok" );
-        $setup->create_temp_lib( $params, $skip{ 'initialize temp lib' } );
-    }
-
-    unless ( $skip{ 'initialize datasource' } ) {
-        my $ds_manager_class = $server_config->{datasource_config}{manager};
-        eval "require $ds_manager_class";
-        $self->datasource_manager( $ds_manager_class );
-        $log_init->is_info && $log_init->info( "Assigned datasource manager ok" );
-        $setup->check_datasources();
-    }
-
-    if ( $skip{ 'initialize action' } ) {
-        $skip{ 'initialze controller' }++;
-    }
-    else {
-        my $action_table = $setup->read_action_table;
-        $log_init->is_info && $log_init->info( "Read action table ok" );
-        my $action_classes = $setup->require_action_classes( $action_table );
-        $setup->initialize_action_classes( $action_classes );
-        $setup->register_action_types;
-        $log_init->is_info && $log_init->info( "Required action classes ok" );
-        $self->action_table( $action_table );
-        $log_init->is_info && $log_init->info( "Assigned action table ok" );
-    }
-
-    unless ( $skip{ 'initialize spops' } ) {
-        my $spops_config = $setup->read_spops_config;
-        $log_init->is_info && $log_init->info( "Read SPOPS configurations ok" );
-        unless ( $skip{ 'activate spops' } ) {
-            $setup->activate_spops_classes( $spops_config );
-            $log_init->is_info && $log_init->info( "Activated SPOPS classes ok" );
-        }
-        $self->spops_config( $spops_config );
-        $log_init->is_info && $log_init->info( "Assigned SPOPS table ok" );
-    }
-
-    unless ( $skip{ 'initialize observer' } ) {
-        $setup->initialize_observers;
-        $log_init->is_info &&
-            $log_init->info( "Initialized observers ok" );
-    }
-
-    unless ( $skip{ 'initialize messages' } ) {
-        $setup->read_localized_messages;
-        $log_init->is_info && $log_init->info( "Read localized messages ok" );
-    }
-
-    unless ( $skip{ 'initialize indexer' } ) {
-        $setup->initialize_indexers;
-    }
-
-    # Not optional...
-
-    my $system_classes = $setup->read_system_classes;
-    $log_init->is_info &&
-        $log_init->info( "Required system classes ok: ",
-                    join( ', ', @{ $system_classes } ) );
-
-    # Also not optional...
-
-    $setup->register_in_factory(
-        $server_config->{request}, 'OpenInteract2::Request' );
-    $setup->register_in_factory(
-        $server_config->{response}, 'OpenInteract2::Response' );
-
-    unless ( $skip{ 'initialize session' } ) {
-        $setup->require_session_classes( $server_config->{session_info} );
-    }
-
-    unless ( $skip{ 'initialize cache' } ) {
-        my $cache = $setup->create_cache;
-        if ( $cache ) {
-            $self->cache( $cache );
-            $log_init->is_info && $log_init->info( "Created cache ok" );
+        if ( ref $params->{skip} eq 'ARRAY' ) {
+            push @skip, @{ $params->{skip} };
         }
         else {
-            $log_init->is_info &&
-                $log_init->info( "Cache not configured for use, ok" );
+            push @skip, $params->{skip};
         }
+        $log_init->info( "Will skip setup tasks: ", join( ', ', @skip ) );
+    }
+    my $bootstrap = $self->bootstrap;
+    unless ( $bootstrap and
+             ref( $bootstrap ) eq 'OpenInteract2::Config::Bootstrap' ) {
+        $log_init->error( "Cannot run setup() without bootstrap defined" );
+        OpenInteract2::Exception->throw(
+            "Cannot run setup() on context without a valid ",
+            "bootstrap configuration object set" );
     }
 
-    unless ( $skip{ 'initialize generator' } ) {
-        $setup->initialize_content_generator;
-        $log_init->is_info && $log_init->info( "Initialized content generators ok" );
-    }
+    # This should call _initialize_singleton() when it's got the
+    # context in a decent state...
 
-    unless ( $skip{ 'initialze controller' } ) {
-        $setup->initialize_controller;
-        $log_init->is_info &&
-            $log_init->info( "Initialized controller and default actions ok" );
-    }
+    $log_init->info( "Running setup actions..." );
+    OpenInteract2::Setup->run_all_actions( $self, @skip );
+    $log_init->info( "Setup actions ran ok, context now initialized" );
 
-    $setup->run_post_process();
-
-    $log_init->is_debug && $log_init->info( "Initialized context ok" );
     return $self;
 }
 
-########################################
-# SERVER CONFIG
 
-# Just grab the config and set the runtime info.
-
-sub _read_server_config {
+# Called from OI2::Setup after it's read the server configuration
+sub _initialize_singleton {
     my ( $self ) = @_;
-    my $base_config = $self->base_config;
-    unless ( ref $base_config eq 'OpenInteract2::Config::Base' ) {
-        OpenInteract2::Exception->new(
-            "'base_config' property of context not set properly" );
-    }
-    my $server_config_file = $base_config->get_server_config_file;
-    unless ( $server_config_file ) {
-        OpenInteract2::Exception->new(
-            "Cannot read server configuration: file not defined ",
-            "in base config" );
-    }
-    my $config_type = $base_config->config_type;
-    $log_init->is_info &&
-        $log_init->info( "Trying to read '$config_type' file '$server_config_file'" );
-    my $server_conf = OpenInteract2::Config->new(
-        $config_type, { filename => $server_config_file } );
-    $log_init->is_info && $log_init->info( "Read server config ok" );
-    $server_conf->{dir}{website} = $base_config->website_dir;
-    $server_conf->translate_dirs;
-    $log_init->is_info &&
-        $log_init->info( "Translated server config directories ok" );
-    return $self->server_config( $server_conf );
+    $CTX = $self;
 }
 
 
@@ -353,6 +185,22 @@ sub _read_server_config {
 # the configuration. Note: modifications made here should get
 # reflected in the configuration as well.
 
+sub server_config {
+    my ( $self, $config ) = @_;
+    if ( $config ) {
+        $log_init ||= get_logger( LOG_INIT );
+        $config->{dir}{website} = $self->bootstrap->website_dir;
+        $config->translate_dirs;
+        $log_init->info( "Translated server config directories ok" );
+
+        $self->{server_config} = $config;
+        $self->assign_deploy_url;
+        $self->assign_deploy_image_url;
+        $self->assign_deploy_static_url;
+        $log_init->info( "Assigned constants from server config ok" );
+    }
+    return $self->{server_config};
+}
 
 # Where is this app deployed under?
 
@@ -408,6 +256,10 @@ sub _clean_deploy_url {
 
 # What type of requests/responses are we getting/generating?
 
+
+# TODO: get rid of 'context_info' reference; these are strictly
+# assigned by adapter now
+
 sub assign_request_type {
     my ( $self, $type ) = @_;
 
@@ -429,22 +281,30 @@ sub assign_response_type {
         $log_init->info( "Assigned response type '$type'" );
 }
 
+
 ########################################
 # DATE FACTORY
 
 sub create_date {
     my ( $self, $params ) = @_;
     $params ||= {};
-    if ( $params->{year} ) {
-        return DateTime->new(
-            time_zone => $self->timezone_object,
-            %{ $params }
-        );
-    }
-    elsif ( $params->{epoch} ) {
+    if ( $params->{epoch} ) {
         return DateTime->from_epoch(
             time_zone => $self->timezone_object,
             epoch     => $params->{epoch},
+        );
+    }
+    elsif ( $params->{last_day_of_month} ) {
+        delete $params->{last_day_of_month};
+        return DateTime->last_day_of_month(
+            time_zone => $self->timezone_object,
+            %{ $params },
+        );
+    }
+    elsif ( $params->{year} ) {
+        return DateTime->new(
+            time_zone => $self->timezone_object,
+            %{ $params }
         );
     }
     else {
@@ -453,6 +313,7 @@ sub create_date {
         );
     }
 }
+
 
 ########################################
 # ACTION LOOKUP
@@ -473,6 +334,7 @@ sub lookup_action_name {
     return $action_name;
 }
 
+
 sub lookup_action_info {
     my ( $self, $action_name ) = @_;
     $log_act ||= get_logger( LOG_ACTION );
@@ -492,9 +354,9 @@ sub lookup_action_info {
     # we know best.
 
     unless ( $action_info ) {
-        $log_act->error( "Action '$action_name' not found in action table" );
-        OpenInteract2::Exception->throw(
-            "Action '$action_name' not found in action table" );
+        my $msg = "Action '$action_name' not found in action table" ;
+        $log_act->error( $msg );
+        OpenInteract2::Exception->throw( $msg );
     }
 
     $log_act->is_debug &&
@@ -525,49 +387,42 @@ sub lookup_action {
     $log_act ||= get_logger( LOG_ACTION );
     my $action_info = $self->lookup_action_info( $action_name );
     unless ( $action_info ) {
-        $log_act->error( "No action found for '$action_name'" );
-        OpenInteract2::Exception->throw(
-            "No action defined for '$action_name'" );
+        my $msg = "No action found for '$action_name'";
+        $log_act->error( $msg );
+        OpenInteract2::Exception->throw( $msg );
     }
     return OpenInteract2::Action->new( $action_info, $props );
 }
 
-
 sub lookup_action_none {
     my ( $self ) = @_;
-    $log_act ||= get_logger( LOG_ACTION );
-    my $action_info = $self->server_config->{action_info}{none};
-    unless ( $action_info ) {
-        $log_act->error( "Please define the server configuration entry ",
-                         "under 'action_info.none'" );
-        OpenInteract2::Exception->throw(
-            "The 'none' item under 'action_info' is not defined. ",
-            "Please check your server configuration." );
-    }
-    if ( my $action_name = $action_info->{redir} ) {
-        return $self->lookup_action( $action_name );
-    }
-    return OpenInteract2::Action->new( $action_info );
+    my $action_name = $self->server_config->{action_info}{none};
+    return $self->_create_action_from_name(
+        $action_name, 'action_info.none'
+    );
 }
-
 
 sub lookup_action_not_found {
     my ( $self ) = @_;
-    $log_act ||= get_logger( LOG_ACTION );
-    my $action_info = $self->server_config->{action_info}{not_found};
-    unless ( $action_info ) {
-        $log_act->error( "Please define the server configuration entry ",
-                         "under 'action_info.not_found'" );
-        OpenInteract2::Exception->throw(
-            "The 'not_found' item under 'action_info' is not ",
-            "defined. Please check your server configuration." );
-    }
-    if ( my $action_name = $action_info->{redir} ) {
-        return $self->lookup_action( $action_name );
-    }
-    return OpenInteract2::Action->new( $action_info );
+    my $action_name = $self->server_config->{action_info}{not_found};
+    return $self->_create_action_from_name(
+        $action_name, 'action_info.not_found'
+    );
 }
 
+sub _create_action_from_name {
+    my ( $self, $name, $key ) = @_;
+    unless ( $name ) {
+        my $msg = join( '',
+            "Check your server configuration -- you must define an ",
+            "action number in your server configuration under '$key'"
+        );
+        $log_act ||= get_logger( LOG_ACTION );
+        $log_act->error( $msg );
+        OpenInteract2::Exception->throw( $msg );
+    }
+    return $self->lookup_action( $name );
+}
 
 sub lookup_default_action_info {
     my ( $self ) = @_;
@@ -582,9 +437,9 @@ sub lookup_object {
     my ( $self, $object_name ) = @_;
     $log_spops ||= get_logger( LOG_SPOPS );
     unless ( $object_name ) {
-        $log_spops->error( "Must lookup object class using name" );
-        OpenInteract2::Exception->throw(
-            "Cannot lookup object class without object name" );
+        my $msg = "Cannot lookup object class without object name";
+        $log_spops->error( $msg );
+        OpenInteract2::Exception->throw( $msg );
     }
     my $spops_config = $self->spops_config;
     unless ( $spops_config->{ lc $object_name } ) {
@@ -616,6 +471,7 @@ sub lookup_controller_config {
     }
     return $self->server_config->{controller};
 }
+
 
 ########################################
 # FULLTEXT INDEXING LOOKUP
@@ -656,6 +512,7 @@ sub fulltext_indexer {
     return $ft_class->new( $ft_config );
 }
 
+
 ########################################
 # CONTENT GENERATOR LOOKUP
 
@@ -666,6 +523,7 @@ sub lookup_content_generator_config {
     }
     return $self->server_config->{content_generator};
 }
+
 
 ########################################
 # OBSERVERS
@@ -695,6 +553,7 @@ sub map_observer {
     OpenInteract2::Observer->add_observer_to_action( $observer_name, $action_or_name );
 }
 
+
 ########################################
 # DIRECTORY/FILE LOOKUPS
 
@@ -710,9 +569,9 @@ sub lookup_directory {
 
 sub lookup_temp_lib_directory {
     my ( $self ) = @_;
-    my $base_config = $self->base_config;
-    my $lib_dir = $base_config->temp_lib_dir || DEFAULT_TEMP_LIB_DIR;
-    return File::Spec->catdir( $base_config->website_dir, $lib_dir );
+    my $bootstrap = $self->bootstrap;
+    my $lib_dir = $bootstrap->temp_lib_dir || DEFAULT_TEMP_LIB_DIR;
+    return File::Spec->catdir( $bootstrap->website_dir, $lib_dir );
 }
 
 sub lookup_temp_lib_refresh_filename {
@@ -726,6 +585,7 @@ sub lookup_override_action_filename {
 sub lookup_override_spops_filename {
     return 'spops_override.ini';
 }
+
 
 ########################################
 # LOOKUPS, OTHER
@@ -770,6 +630,7 @@ sub lookup_box_config {
     return $self->server_config->{box};
 }
 
+
 ########################################
 # CLASS LOOKUP
 
@@ -781,6 +642,7 @@ sub lookup_class {
     }
     return $self->server_config->{system_class};
 }
+
 
 # Config shortcut
 
@@ -818,6 +680,7 @@ sub action_table {
     return $self->server_config->{action};
 }
 
+
 # Config shortcut
 
 sub spops_config {
@@ -832,6 +695,15 @@ sub spops_config {
 }
 
 # Config shortcut
+
+sub assign_datasource_config {
+    my ( $self, $name, $config ) = @_;
+    unless ( $name and $config ) {
+        return;
+    }
+    $self->server_config->{datasource}{ $name } = $config;
+    return $config;
+}
 
 sub lookup_datasource_config {
     my ( $self, $name ) = @_;
@@ -898,6 +770,25 @@ sub datasource {
 sub content_generator {
     my ( $self, $name ) = @_;
     return OpenInteract2::ContentGenerator->instance( $name );
+}
+
+
+sub assign_default_language_handle {
+    my ( $self, $lh ) = @_;
+    $DEFAULT_LANGUAGE_HANDLE = $lh
+}
+
+sub language_handle {
+    my ( $self, $lang ) = @_;
+    if ( $self->request and my $h = $self->request->language_handle ) {
+        return $h;
+    }
+    elsif ( $lang ) {
+        return OpenInteract2::I18N->get_handle( $lang );
+    }
+    else {
+        return $DEFAULT_LANGUAGE_HANDLE;
+    }
 }
 
 sub cleanup_request {
@@ -1010,6 +901,10 @@ OpenInteract2::Context - Provides the environment for a server
  
  # XXX: Add a cleanup handler (NOT DONE)
  #CTX->add_handler( 'cleanup', \&my_cleanup );
+ 
+ # Get a language handle if you're not sure whether the request will
+ # be around
+ my $handle = CTX->language_handle( $some_lang );
 
 =head1 DESCRIPTION
 
@@ -1086,13 +981,13 @@ C<$no_exception> to avoid an infinite loop...)
 
 Returns: L<OpenInteract2::Context|OpenInteract2::Context> object
 
-B<create( $base_config|\%config_params, [ \%setup_params ] )>
+B<create( $bootstrap|\%config_params, [ \%setup_params ] )>
 
 Creates a new context. If you pass in a
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base> object or
-specify 'website_dir' in C<\%setup_params>, it will run the server
-initialization routines in C<setup()>. (If you pass in an invalid
-directory for the parameter an exception is thrown.)
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap>
+object or specify 'website_dir' in C<\%setup_params>, it will run the
+server initialization routines in C<setup()>. (If you pass in an
+invalid directory for the parameter an exception is thrown.)
 
 If you do not know these items when the context is created, you can do
 something like:
@@ -1101,10 +996,14 @@ something like:
  
  ... some time later ...
  
- my $base_config = OpenInteract2::Config::Base->new({ website_dir => $dir } );
+ my $bootstrap = OpenInteract2::Config::Bootstrap->new({
+     website_dir => $dir
+ });
  ... or ...
- my $base_config = OpenInteract2::Config::Base->new({ filename => $file } );
- $ctx->base_config( $base_config );
+ my $bootstrap = OpenInteract2::Config::Bootstrap->new({
+     filename => $file
+ });
+ $ctx->bootstrap( $bootstrap );
  $ctx->setup();
 
 You may also initialize the L<Log::Log4perl|Log::Log4perl> logger when
@@ -1129,12 +1028,12 @@ B<setup( \%params )>
 
 Runs a series of routines, mostly from
 L<OpenInteract2::Setup|OpenInteract2::Setup>, to initialize the
-singleton context object. If the C<base_config> property has not been
+singleton context object. If the C<bootstrap> property has not been
 set with a valid
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base> object, an
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap> object, an
 exception is thrown.
 
-If you pass to C<create()> a C<base_config> object or a valid website
+If you pass to C<create()> a C<bootstrap> object or a valid website
 directory, C<setup()> will be called automatically.
 
 You can skip steps of the process by passing the step name in an
@@ -1146,74 +1045,15 @@ For instance, if you do not wish to activate the SPOPS objects:
 
  OpenInteract2::Context->create({ skip => 'activate spops' });
 
-If you do not wish to read in the action table or SPOPS configuration:
+If you do not wish to read in the action table or SPOPS configuration
+or perform any of the other actions that depend on them:
 
- OpenInteract2::Context->create({ skip => [ 'initialize action',
-                                            'initialize spops' ] });
+ OpenInteract2::Context->create({ skip => [ 'read action table',
+                                            'read spops config' ] });
 
-The steps we take to setup the site are listed below. Steps performed
-by L<OpenInteract2::Setup|OpenInteract2::Setup> are marked with the
-method called.
+You can get a list of all setup actions as a one-liner:
 
-=over 4
-
-=item *
-
-Read in the server configuration and assign the debugging level from
-it. (Setup: C<read_server_config()>) (Skip: n/a)
-
-=item *
-
-Read in the package repository (Setup: C<read_repository()>) and all
-packages in the site (Setup: C<read_packages()>). (Skip: 'initialize
-repository')
-
-=item *
-
-Create a temporary library directory so all classes are found in one
-location. (Setup: C<create_temp_lib>) (Skip: 'initialize temp lib')
-
-=item *
-
-Require modules specified in the C<session_info> server configuration
-key under 'class' and 'impl_class'. (Skip: 'initialize session')
-
-=item *
-
-Read in the action table from the available packages. (Setup:
-C<read_action_table()>) We also ensure that all classes referenced in
-the action table are brought into the system via C<require>. (Skip:
-'initialize action')
-
-=item *
-
-Read in the SPOPS object configurations from the available
-packages. (Setup: C<read_spops_config()>) Activate all SPOPS objects
-at once. (Setup: C<activate_spops_classes()>) (Skip: 'initialize
-spops'; you can also skip just the activation step with 'activate
-spops')
-
-=item *
-
-Read in the localized messages from all packages. (Setup:
-C<read_localized_messages()>). (Skip: 'initialize messages')
-
-=item *
-
-Create the cache. If it is not configured this is a no-op. (Setup:
-C<create_cache()>) (Skip: 'initialize cache')
-
-=item *
-
-Initialize all content generators. (Setup:
-C<initialize_content_generator()>) (Skip: 'initialize generator')
-
-=item *
-
-Initialize the main controller with default actions. (Skip:
-'initialize controller'; also skipped with 'initialize action')
-
-=back
+ perl -MOpenInteract2::Setup -e 'print join( ", ", OpenInteract2::Setup->list_actions )';
 
 Returns: the context object
 
@@ -1237,8 +1077,21 @@ to the L<DateTime> constructor (with one exception, see below) but if
 you do not specify a C<year> then we assume you want the current time
 and call the L<DateTime> C<now()> method.
 
-The exception: when you specify 'epoch' in C<\%params> we call the
-C<from_epoch()> method instead of the constructor.
+The exceptions:
+
+=over 4
+
+=item *
+
+when you specify 'epoch' in C<\%params> we call the C<from_epoch()>
+constructorinstead of C<new()>.
+
+=item *
+
+when you specify 'last_day_of_month' in C<\%params> we call the
+C<last_day_of_month()> constructor instead of C<new()>.
+
+=back
 
 This is just a shortcut method and you instead may want to get the
 timezone from the context to create your own L<DateTime> objects. Up
@@ -1408,6 +1261,11 @@ that.
 
 Returns: the result of looking up the datasource using
 L<OpenInteract2::DatasourceManager|OpenInteract2::DatasourceManager>
+
+B<assign_datasource_config( $name, \%config )>
+
+Assigns datasource configuration C<\%config> for datasource named
+C<$name>.
 
 B<lookup_datasource_config( [ $name ] )>
 
@@ -1640,9 +1498,9 @@ Returns: fully-qualified directory
 B<lookup_temp_lib_directory()>
 
 Creates the fully-qualified name for the temporary library
-directory. This can be specified in the base configuration
-(C<conf/base.conf>) or a default (C<tmplib/>) is provided. Both are
-relative to the website directory.
+directory. This can be specified in the bootstrap configuration
+(C<conf/bootstrap.ini>) or a default (C<tmplib/>) is provided. Both
+are relative to the website directory.
 
 This method does not care of the directory exists or not, it just
 creates the name.
@@ -1702,18 +1560,34 @@ B<lookup_box_config()>
 
 Looks up the configuration for boxes, found in the 'box' section.
 
+=head2 Object Methods: Localization
+
+B<language_handle( [ $language_spec ] )>
+
+Typically we store the language handle in the
+L<OpenInteract2::Request> object -- every user provides us with a set
+of useful languages and we create a handle from that. If a request is
+available then we call that for the language handle.
+
+But sometimes you need to access localization resources when you don't
+have a request available. For that, you can call this method. If you
+don't provide a language we use the one referenced in the server
+configuration key 'language.default_language'.
+
 =head1 PROPERTIES
 
 The following are simple get/set properties of the context object.
 
-B<base_config>: Holds the
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base> object. This
-must be defined for the context to be initialized.
-
 B<server_config>: Holds the
-L<OpenInteract2::Config::IniFile|OpenInteract2::Config::IniFile> object
-with the server configuration. This will be defined after the context
-is initialized via C<setup()>.
+L<OpenInteract2::Config::IniFile|OpenInteract2::Config::IniFile>
+object with the server configuration. This will be defined during
+context setup. When it is assigned we translate entries under 'dir' to
+be properly located. We also call the various 'assign_deploy_*'
+methods.
+
+B<bootstrap>: Holds the
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap> object. This
+must be defined for the context to be initialized.
 
 B<repository>: Holds the
 L<OpenInteract2::Repository|OpenInteract2::Repository> object with
@@ -1733,7 +1607,7 @@ the context is initialized via C<setup()>.
 
 L<OpenInteract2::Action|OpenInteract2::Action>
 
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base>
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap>
 
 L<OpenInteract2::Setup|OpenInteract2::Setup>
 
@@ -1741,7 +1615,7 @@ L<OpenInteract2::URL|OpenInteract2::URL>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

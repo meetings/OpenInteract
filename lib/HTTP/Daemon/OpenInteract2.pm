@@ -1,4 +1,4 @@
-# $Id: OpenInteract2.pm,v 1.11 2004/06/13 02:05:31 lachoy Exp $
+# $Id: OpenInteract2.pm,v 1.13 2005/03/18 04:09:48 lachoy Exp $
 
 # This is just the daemon with a product token...
 
@@ -8,6 +8,8 @@ use strict;
 
 use base qw( HTTP::Daemon );
 use OpenInteract2::Context qw( CTX );
+
+$HTTP::Daemon::OpenInteract2Daemon::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -452,7 +454,7 @@ L<HTTP::Daemon|HTTP::Daemon>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

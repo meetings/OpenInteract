@@ -1,6 +1,6 @@
 package OpenInteract2::Auth;
 
-# $Id: Auth.pm,v 1.20 2004/10/05 01:27:51 lachoy Exp $
+# $Id: Auth.pm,v 1.22 2005/03/17 14:57:57 sjn Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -9,7 +9,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( user groups );
 __PACKAGE__->mk_accessors( @FIELDS );
@@ -92,7 +92,7 @@ sub login {
 
     # ...and load the languages
 
-    $request->find_language;
+    $request->assign_languages;
 
     unless ( ref $self->groups eq 'ARRAY' ) {
         $AUTH_GROUP_CLASS->get_groups( $self );
@@ -381,7 +381,7 @@ L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

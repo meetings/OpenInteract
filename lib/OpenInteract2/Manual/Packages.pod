@@ -17,9 +17,8 @@ generally defines some feature scope within it.
 In OpenInteract2, packages implement the actual application
 functionality while the core framework handles the storage interface
 (e.g., putting your objects in a database), dispatches URL requests to
-your objects (this is called I<handling> an I<action>), security,
-authentication and authorization, session management and a few other
-details.
+your objects, security, authentication and authorization, session
+management and lots of other features.
 
 An application usually defines persistent objects that keep state from
 request to request and server shutdown to server shutdown. It also
@@ -28,8 +27,12 @@ access them and how functionality is exposed to the user (by way of a
 URL-to-action mapping).
 
 OpenInteract2 comes with tools to install, uninstall and query
-currently installed packages. This greatly simplifies the task of
-creating, testing and distributing your application.
+packages currently installed to a website. This greatly simplifies the
+task of creating, testing and distributing your application.
+
+You can also bundle a package up in a CPAN-friendly distribution and
+use Perl's built-in tools to install the package to your Perl
+installation as well as to your website.
 
 =head1 PACKAGE CONTENTS
 
@@ -241,7 +244,7 @@ L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,11 +1,12 @@
 package OpenInteract2::Manage::Website::Create;
 
-# $Id: Create.pm,v 1.23 2004/12/05 18:50:11 lachoy Exp $
+# $Id: Create.pm,v 1.31 2005/03/17 14:58:03 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use File::Spec::Functions    qw( catdir );
 use File::Path               qw( rmtree );
+use OpenInteract2::Brick;
 use OpenInteract2::Config::Readonly;
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
@@ -13,7 +14,7 @@ use OpenInteract2::Manage    qw( SYSTEM_PACKAGES );
 use OpenInteract2::Package;
 use OpenInteract2::Repository;
 
-$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Create::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 # think about merging this with info from OI2::Manage::Website::SetDirectoryPermissions
 
@@ -50,11 +51,10 @@ sub get_brief_description {
 sub get_parameters {
     my ( $self ) = @_;
     return {
-        source_dir  => $self->_get_source_dir_param,
         website_dir => {
                description =>
                         "Directory where website will be created. It must " .
-                        "not already exist when you run the task.",
+                        "not already exist or be empty when you run the task.",
                is_required => 'yes',
                do_validate => 'yes',
         },
@@ -69,11 +69,23 @@ sub get_parameters {
 sub validate_param {
     my ( $self, $name, $value ) = @_;
     if ( $name eq 'website_dir' ) {
-        if ( -d $value ) {
-            return "Website directory '$value' already exists; cannot " .
-                   "create website over an existing site";
+        return unless ( -d $value );
+
+        # Now do a quick check to see if any of our directories are
+        # already there -- if so we're trying to install over another
+        # site and will bail
+
+        foreach my $dir_info ( @WEBSITE_SUBDIR ) {
+            my ( $mode, $dir ) = @{ $dir_info };
+            my $check_dir = catdir( $value, $dir );
+            if ( -d $check_dir ) {
+                return "Website directory '$value' already exists and " .
+                       "contains directory '$dir'; cannot create website " .
+                       "over an existing site";
+            }
         }
         return;
+
     }
     return $self->SUPER::validate_param( $name, $value );
 }
@@ -105,31 +117,18 @@ sub tear_down_task {
 sub run_task {
     my ( $self ) = @_;
     my $website_dir = $self->param( 'website_dir' );
-    my $source_dir  = $self->param( 'source_dir' );
 
     $self->_create_directories( $website_dir );
     $self->notify_observers( progress => 'Directories created' );
 
-    $self->_copy_widgets( $website_dir, $source_dir );
+    $self->_copy_from_bricks( $website_dir,
+                              'apache', 'apache2', 'cgi', 'daemon',
+                              'messages', 'website_config', 'widgets' );
     $self->notify_observers(
-        progress => 'Global templates copied' );
-
-    $self->_copy_cgi( $website_dir, $source_dir );
-    $self->notify_observers(
-        progress => 'CGI interface copied' );
-
-    $self->_copy_messages( $website_dir, $source_dir );
-
-    $self->_copy_server_conf( $website_dir, $source_dir );
-
-    $self->_copy_apache_conf( $website_dir, $source_dir );
-
-    $self->_copy_daemon_conf( $website_dir, $source_dir );
-    $self->notify_observers(
-        progress => 'OI2 and web server configuration copied' );
+        progress => 'All files from sample website copied' );
 
     # This will initialize the context to our new website...
-    $self->_setup_context({ skip => 'initialize repository' });
+    $self->_setup_context({ skip => 'read repository' });
 
     my $repository = OpenInteract2::Repository->new();
     $repository->website_dir( $website_dir );
@@ -137,10 +136,10 @@ sub run_task {
 
     $self->notify_observers( progress => 'Installing packages',
                              { long => 'yes' } );
-    $self->_install_packages( $source_dir, SYSTEM_PACKAGES );
+    $self->_install_packages_from_bricks( $website_dir, SYSTEM_PACKAGES );
     $self->notify_observers( progress => 'Packages installed' );
 
-    $self->_set_nowrite_files( $website_dir, $source_dir );
+    $self->_set_nowrite_files( $website_dir );
     $self->_add_status_head({
         action  => 'create website',
         is_ok   => 'yes',
@@ -154,16 +153,17 @@ sub run_task {
 
 sub _create_directories {
     my ( $self, $website_dir ) = @_;
-    eval { mkdir( $website_dir, 0775 ) || die $! };
-    if ( $@ ) {
-        oi_error "Cannot create website directory [$website_dir]: $@";
+    unless ( -d $website_dir ) {
+        mkdir( $website_dir, 0775 )
+            || oi_error "Cannot create website directory '$website_dir': $!";
     }
+
     foreach my $sub_dir_info ( @WEBSITE_SUBDIR ) {
         my ( $perm, @subdirs ) = @{ $sub_dir_info };
         my $full_subdir = catdir( $website_dir, @subdirs );
         eval { mkdir( $full_subdir, $perm ) || die $! };
         if ( $@ ) {
-            oi_error "Cannot create subdirectory in [$full_subdir]: $@";
+            oi_error "Cannot create subdirectory in '$full_subdir': $@";
         }
         $self->_add_status({
             is_ok    => 'yes',
@@ -174,117 +174,36 @@ sub _create_directories {
     }
 }
 
-sub _copy_widgets {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_widget_dir =
-        catdir( $source_dir, 'sample', 'website', 'template' );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_widget_dir )
-                         ->run( $website_dir );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status({
-            is_ok   => 'yes',
-            action  => 'copy widget',
-            message => 'Copied file from sample site',
-            filename => $copied,
-        });
-    }
-}
-
-sub _copy_messages {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_msg_dir = catdir( $source_dir, 'sample', 'website', 'msg' );
+sub _copy_from_bricks {
+    my ( $self, $website_dir, @brick_names ) = @_;
     my %vars = ( website_dir => $website_dir );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_msg_dir )
-                         ->run( $website_dir, \%vars );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status({
-            is_ok    => 'yes',
-            action   => 'copy localized messages',
-            message  => 'Copied file from sample site',
-            filename => $copied,
-        });
-    }
-}
-
-sub _copy_server_conf {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_conf_dir = catdir( $source_dir, 'sample', 'website', 'conf' );
-    my %vars = ( website_dir => $website_dir );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_conf_dir )
-                         ->run( $website_dir, \%vars );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status({
-            is_ok   => 'yes',
-            action  => 'copy server config',
-            message => 'Copied file from sample site',
-            filename => $copied,
-        });
-    }
-}
-
-sub _copy_cgi {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_cgi_dir = catdir( $source_dir, 'sample', 'website', 'cgi-bin' );
-    my %vars = ( website_dir => $website_dir );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_cgi_dir )
-                         ->run( $website_dir, \%vars );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status( { is_ok   => 'yes',
-                              action  => 'copy CGI',
-                              message => 'Copied file from sample site',
-                              filename => $copied } );
-        # OIN-10: hack just to ensure we get the right perms
-        if ( $copied =~ /cgi$/ ) {
-            chmod( 0755, $copied );
+    foreach my $brick_name ( @brick_names ) {
+        my $brick = OpenInteract2::Brick->new( $brick_name );
+        my $status = $brick->copy_all_resources_to( $website_dir, \%vars );
+        foreach my $file_copied ( @{ $status->{copied} } ) {
+            $self->_add_status({
+                is_ok   => 'yes',
+                action  => "copy '$brick_name'",
+                message => 'Copied file from class resource',
+                filename => $file_copied,
+            });
         }
-    }
-}
-
-
-sub _copy_apache_conf {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    $self->_copy_webserver_conf( $website_dir, $source_dir,
-                                 'apache', 'apache 1.x' );
-    $self->_copy_webserver_conf( $website_dir, $source_dir,
-                                 'apache2', 'apache 2.x' );
-}
-
-sub _copy_webserver_conf {
-    my ( $self, $website_dir, $source_dir, $type, $desc ) = @_;
-    my $source_apache_dir = catdir( $source_dir, 'sample', $type );
-    my %vars = ( website_dir => $website_dir );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_apache_dir )
-                         ->run( $website_dir, \%vars );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status({
-            is_ok   => 'yes',
-            action  => "copy $desc config",
-            message => 'Copied file from sample site',
-            filename => $copied,
-        });
-    }
-
-}
-
-sub _copy_daemon_conf {
-    my ( $self, $website_dir, $source_dir ) = @_;
-    my $source_daemon_dir = catdir( $source_dir, 'sample', 'daemon' );
-    my %vars = ( website_dir => $website_dir );
-    my $transferred = OpenInteract2::Config::TransferSample
-                         ->new( $source_daemon_dir )
-                         ->run( $website_dir, \%vars );
-    foreach my $copied ( @{ $transferred } ) {
-        $self->_add_status({
-            is_ok   => 'yes',
-            action  => 'copy standalone daemon config',
-            message => 'Copied file from sample site',
-            filename => $copied,
-        });
+        foreach my $file_skipped ( @{ $status->{skipped} } ) {
+            $self->_add_status({
+                is_ok   => 'yes',
+                action  => "copy '$brick_name'",
+                message => 'Skipped copying file from class resource - marked as readonly',
+                filename => $file_skipped,
+            });
+        }
+        foreach my $file_same ( @{ $status->{same} } ) {
+            $self->_add_status({
+                is_ok   => 'yes',
+                action  => "copy '$brick_name'",
+                message => 'Skippe copying file from class resource - resources same',
+                filename => $file_same,
+            });
+        }
     }
 }
 
@@ -367,10 +286,8 @@ OpenInteract2::Manage::Website::Create - Create a new website
  use OpenInteract2::Manage;
  
  my $website_dir = '/home/httpd/mysite';
- my $source_dir  = '/usr/local/src/OpenInteract-2.01';
  my $task = OpenInteract2::Manage->new(
-                      'create_website', { website_dir => $website_dir,
-                                          source_dir  => $source_dir } );
+     'create_website', { website_dir => $website_dir } );
  my @status = $task->execute;
  foreach my $s ( @status ) {
      my $ok_label      = ( $s->{is_ok} eq 'yes' )
@@ -388,8 +305,9 @@ Creates a new OpenInteract website. This entails creating a directory
 for your website and all the necessary subdirectories, plus all the
 packages, default configuration files, widgets, etc.
 
-The directory specified in the 'website_dir' parameter must not exist
-yet or the task will fail.
+The directory specified in the 'website_dir' parameter should either
+not exist or be empty or the task will fail. ('Empty' in this case
+means 'contains none of the subdirectories we will create'.)
 
 After running this command, you typically have to only edit some
 configuration files and your website can be up and running! See the
@@ -413,17 +331,9 @@ work it generates a B<lot> of status messages. Accordingly it also
 generates a few 'progress' observations along the way so you can get
 feedback.
 
-=head1 BUGS
-
-None known.
-
-=head1 TO DO
-
-Nothing known.
-
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

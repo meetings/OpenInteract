@@ -120,6 +120,8 @@ level of 'DEBUG' or 'INFO' will not be written to the appender.
 
 So the following would write to the appender:
 
+ # Note: LOG_OI and LOG_CONFIG are constants; more below
+ 
  my $log = get_logger( LOG_OI );
  $log->info( "This info message will get written" );
  $log->warn( "This warn message will get written" );
@@ -155,8 +157,8 @@ to control using this framework.
 =head2 Custom Appender
 
 OI2 comes with a custom appender which takes a message, creates an
-error object from it and saves it to the database. From there you can
-browse it using the OI admin tools.
+error object from it and saves it to your filesystem organized by
+date. From there you can browse it using the OI admin tools.
 
 WARNING: Do not set the 'Threshold' too low on the OI
 appender. Otherwise your error log will be flooded with messages,
@@ -172,9 +174,11 @@ L<OpenInteract2::Log|OpenInteract2::Log>
 
 L<OpenInteract2::Log::OIAppender|OpenInteract2::Log::OIAppender>
 
+L<OpenInteract2::ErrorStorage|OpenInteract2::ErrorStorage>
+
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

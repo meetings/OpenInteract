@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::CreateSuperuserPassword;
 
-# $Id: CreateSuperuserPassword.pm,v 1.11 2004/10/02 23:22:28 lachoy Exp $
+# $Id: CreateSuperuserPassword.pm,v 1.12 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Utility;
 
-$OpenInteract2::Manage::Website::CreateSuperuserPassword::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::CreateSuperuserPassword::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -165,7 +165,7 @@ Success/failure message.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2003-2004 Chris Winters. All rights reserved.
+Copyright (C) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

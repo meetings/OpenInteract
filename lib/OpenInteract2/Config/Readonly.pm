@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Readonly;
 
-# $Id: Readonly.pm,v 1.11 2004/12/05 20:01:35 lachoy Exp $
+# $Id: Readonly.pm,v 1.12 2005/03/17 14:58:00 sjn Exp $
 
 use strict;
 use base qw( Class::Accessor );
@@ -12,7 +12,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Wrap               qw( wrap );
 
-$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 __PACKAGE__->mk_accessors( 'directory' );
 
@@ -319,7 +319,7 @@ L<File::Basename|File::Basename>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

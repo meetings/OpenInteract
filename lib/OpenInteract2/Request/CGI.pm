@@ -1,6 +1,6 @@
 package OpenInteract2::Request::CGI;
 
-# $Id: CGI.pm,v 1.20 2004/11/28 17:50:46 lachoy Exp $
+# $Id: CGI.pm,v 1.23 2005/03/18 04:09:51 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -21,8 +21,7 @@ OpenInteract2::Request::CGI->mk_accessors( @FIELDS );
 sub init {
     my ( $self, $params ) = @_;
     $log ||= get_logger( LOG_REQUEST );
-    $log->is_info &&
-        $log->info( "Creating CGI request" );
+    $log->is_info && $log->info( "Creating CGI request" );
     if ( $params->{cgi} ) {
         $self->cgi( $params->{cgi} );
     }
@@ -31,13 +30,13 @@ sub init {
         $self->cgi( CGI->new() );
     }
     my $cgi = $self->cgi;
+    my $req_type = $cgi->request_method || 'GET';
 
     # Assign URL info from CGI...
 
-    my $base_url = $cgi->script_name;
+    my $base_url = $cgi->script_name || '';
 
-    $log->is_info &&
-        $log->info( "Deployed under '$base_url'" );
+    $log->is_info && $log->info( "Deployed as $req_type to $base_url" );
     CTX->assign_deploy_url( $base_url );
 
     my $full_url = join( '', $base_url, $cgi->path_info );
@@ -63,8 +62,7 @@ sub init {
 
     $self->_assign_params_from_cgi( $cgi );
 
-    $log->is_info &&
-        $log->info( "Finished creating CGI request" );
+    $log->is_info && $log->info( "Finished creating CGI request" );
     return $self;
 }
 
@@ -89,11 +87,12 @@ sub _assign_params_from_cgi {
             foreach my $upload ( @items ) {
                 my $upload_info = $cgi->uploadInfo( $upload );
                 my $oi_upload = OpenInteract2::Upload->new({
-                                   name         => $field,
-                                   content_type => $upload_info->{'Content-Type'},
-                                   size         => (stat $upload)[7],
-                                   filehandle   => $upload,
-                                   filename     => $cgi->tmpFileName( $upload ) });
+                    name         => $field,
+                    content_type => $upload_info->{'Content-Type'},
+                    size         => (stat $upload)[7],
+                    filehandle   => $upload,
+                    filename     => $cgi->tmpFileName( $upload )
+                });
                 $self->_set_upload( $field, $oi_upload );
                 $num_upload++;
             }
@@ -102,17 +101,21 @@ sub _assign_params_from_cgi {
         # ISNOTA upload
         else {
             if ( scalar @items > 1 ) {
+                $log->is_debug &&
+                    $log->debug( "Param: $field = (multiple) ",
+                                 join( ', ', @items ) );
                 $self->param( $field, \@items );
             }
             else {
+                $log->is_debug &&
+                    $log->debug( "Param: $field = (single) $items[0]" );
                 $self->param( $field, $items[0] );
             }
             $num_param++;
         }
     }
-    $log->is_debug &&
-        $log->debug( "Set parameters ($num_param) and file ",
-                     "uploads ($num_upload)" );
+    $log->is_info &&
+        $log->info( "Set $num_param params, $num_upload file uploads" );
 }
 
 1;
@@ -144,7 +147,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

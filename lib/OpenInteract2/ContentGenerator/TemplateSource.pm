@@ -1,21 +1,23 @@
 package OpenInteract2::ContentGenerator::TemplateSource;
 
-# $Id: TemplateSource.pm,v 1.12 2004/12/05 21:02:08 lachoy Exp $
+# $Id: TemplateSource.pm,v 1.15 2005/03/17 14:58:01 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
-use OpenInteract2::SiteTemplate;
 
-$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+
+my $REQUIRED = 0;
 
 my ( $log );
 
 sub identify {
     my ( $class, $template_source ) = @_;
     $log ||= get_logger( LOG_TEMPLATE );
+    $REQUIRED || require OpenInteract2::SiteTemplate && $REQUIRED++;
 
     unless ( ref $template_source eq 'HASH' ) {
         $log->error( "Template source not hashref: ", ref $template_source );
@@ -79,8 +81,9 @@ sub identify {
     # Uh oh...
 
     else {
+        require Data::Dumper;
         $log->error( "No template to process! Information given for ",
-                     "source:\n", Dumper( $template_source ) );
+                     "source:\n", Data::Dumper->Dumper( $template_source ) );
         oi_error "No template to process!";
     }
 
@@ -220,7 +223,7 @@ modified time (which is a L<DateTime|DateTime> object).
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

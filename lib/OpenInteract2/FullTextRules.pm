@@ -1,13 +1,13 @@
 package OpenInteract2::FullTextRules;
 
-# $Id: FullTextRules.pm,v 1.3 2004/11/09 13:49:37 sjn Exp $
+# $Id: FullTextRules.pm,v 1.4 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::FullTextRules::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::FullTextRules::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -222,7 +222,7 @@ L<OpenInteract2::FullTextIndexer> in the 'full_text' package
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004 Chris Winters. All rights reserved.
+Copyright (c) 2004-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

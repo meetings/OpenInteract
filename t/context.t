@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: context.t,v 1.41 2004/11/28 04:49:22 lachoy Exp $
+# $Id: context.t,v 1.46 2005/03/04 20:34:06 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -16,7 +16,7 @@ if ( $@ ) {
     exit;
 }
 
-plan tests => 153;
+plan tests => 152;
 
 require_ok( 'OpenInteract2::Context' );
 
@@ -68,10 +68,9 @@ my $packages = $repository->fetch_all_packages;
 is( scalar @{ $packages }, 16,
     'Number of packages fetched by repository' );
 
-my %package_versions = get_package_versions();
-while ( my ( $pkg_name, $pkg_ver ) = each %package_versions ) {
-    is( $repository->fetch_package( $pkg_name )->version, $pkg_ver,
-        "Package '$pkg_name' version" );
+foreach my $pkg_name ( get_packages() ) {
+    is( ref( $repository->fetch_package( $pkg_name ) ), 'OpenInteract2::Package',
+        "Package '$pkg_name' exists" );
 }
 
 ########################################
@@ -80,7 +79,7 @@ while ( my ( $pkg_name, $pkg_ver ) = each %package_versions ) {
 my $action_table = $ctx->action_table;
 is( ref $action_table, 'HASH',
     'Action table is correct data structure' );
-is( scalar keys %{ $action_table }, 44,
+is( scalar keys %{ $action_table }, 45,
     'Correct number of actions in table' );
 
 my $news_info = $ctx->lookup_action_info( 'news' );
@@ -159,8 +158,6 @@ is( ref $spops_config, 'HASH',
 is( scalar keys %{ $spops_config }, 19,
     'Correct number of SPOPS configs in structure' );
 
-is( $ctx->lookup_object( 'error_object' ), 'OpenInteract2::ErrorObject',
-    'SPOPS error lookup matched' );
 is( $ctx->lookup_object( 'group' ), 'OpenInteract2::Group',
     'SPOPS group lookup matched' );
 is( $ctx->lookup_object( 'content_type' ), 'OpenInteract2::ContentType',

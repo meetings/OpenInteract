@@ -1,10 +1,9 @@
 package OpenInteract2::Manage;
 
-# $Id: Manage.pm,v 1.41 2004/11/09 13:49:37 sjn Exp $
+# $Id: Manage.pm,v 1.49 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
-use base qw( Exporter Class::Factory Class::Observable );
-use Carp                     qw( carp );
+use base qw( Exporter OpenInteract2::ParamContainer Class::Factory Class::Observable );
 use Cwd                      qw( cwd );
 use File::Spec::Functions    qw( :ALL );
 use Log::Log4perl            qw( get_logger :levels );
@@ -13,7 +12,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_param_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.41 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.49 $ =~ /(\d+)\.(\d+)/);
 
 my $SYSTEM_PACKAGES = [
     qw/ base       base_box        base_error    base_group
@@ -76,15 +75,15 @@ sub execute {
 
     eval { $self->run_task };
     my $error = $@;
-    if ( $@ ) {
-        #carp "Caught error: $@";
+    if ( $error ) {
         $self->notify_observers( progress => 'Failed task' );
-        $self->param( 'task_failed', 'yes' );
+        $self->param( task_failed => 'yes' );
+        $self->param( task_error  => "$error" );
     }
     $self->tear_down_task;
     chdir( $pwd );
     if ( $error ) {
-        oi_error $@;
+        oi_error $error;
     }
     $self->notify_observers( progress => 'Task complete' );
     return $self->get_status;
@@ -93,8 +92,6 @@ sub execute {
 
 ########################################
 # STANDARD PARAMETER DESCRIPTIONS AND DESCRIPTORS
-
-# Provides some 
 
 sub get_param_description {
     my ( $self, $param_name ) = @_;
@@ -155,8 +152,8 @@ sub check_parameters {
 
     my %field_invalid = ();
     while ( my ( $name, $info ) = each %{ $params } ) {
-        my $do_validate = ( $info->{is_required} eq 'yes' ||
-                            $info->{do_validate} eq 'yes' );
+        my $do_validate = ( ( defined $info->{is_required} and $info->{is_required} eq 'yes' ) ||
+                            ( defined $info->{do_validate} and $info->{do_validate} eq 'yes' ) );
         next unless ( $do_validate );
         my $value = $self->param( $name );
         my @errors = grep { defined $_ } $self->validate_param( $name, $value );
@@ -395,21 +392,9 @@ sub all_parameters_long_options {
 ########################################
 # PARAMETERS
 
-sub param {
-    my ( $self, $key, $value ) = @_;
-    return $self->{params}  unless ( $key );
-    if ( $value ) {
-        $self->{params}{ $key } = $value;
-    }
-    return $self->{params}{ $key };
-}
-
 sub param_copy_from {
     my ( $self, $other_task ) = @_;
-    my $other_params = $other_task->param;
-    while ( my ( $name, $value ) = each %{ $other_params } ) {
-        $self->param( $name, $value );
-    }
+    $self->param_assign( $other_task->param );
     return $self->param;
 }
 
@@ -472,19 +457,23 @@ sub merge_status_by_action {
 
 sub _fail {
     my ( $self, $action, $msg, %additional ) = @_;
-    $self->_add_status({ is_ok    => 'no',
-                         action   => $action,
-                         message  => $msg,
-                         %additional });
+    $self->_add_status({
+        is_ok    => 'no',
+        action   => $action,
+        message  => $msg,
+        %additional,
+    });
     return;
 }
 
 sub _ok {
     my ( $self, $action, $msg, %additional ) = @_;
-    $self->_add_status({ is_ok    => 'yes',
-                         action   => $action,
-                         message  => $msg,
-                         %additional });
+    $self->_add_status({
+        is_ok    => 'yes',
+        action   => $action,
+        message  => $msg,
+        %additional,
+    });
     return;
 }
 
@@ -494,61 +483,59 @@ sub _ok {
 # INFRASTRUCTURE (SUBCLASSES)
 
 sub _setup_context {
-    my ( $self, @params ) = @_;
+    my ( $self, $params ) = @_;
+
+    # don't recreate the context every time
+    eval { OpenInteract2::Context->instance };
+    return unless ( $@ );
+
+    my $log = get_logger();
+    if ( $self->param( 'debug' ) ) {
+        $log->level( $DEBUG );
+    }
     my $website_dir = $self->param( 'website_dir' );
     unless ( -d $website_dir ) {
         oi_error "Cannot open context with invalid website ",
                  "directory '$website_dir'";
     }
-    my $base_config = OpenInteract2::Config::Base->new({
-                              website_dir => $website_dir });
-    if ( $self->param( 'debug' ) ) {
-        get_logger()->level( $DEBUG );
-    }
-    OpenInteract2::Context->create( $base_config, @params );
+    $log->info( "Website directory '$website_dir' exists, setting up context..." );
+    my $bootstrap = OpenInteract2::Config::Bootstrap->new({
+        website_dir => $website_dir
+    });
+    $log->info( "Created bootstrap config ok, creating context..." );
+    OpenInteract2::Context->create( $bootstrap, $params );
+    $log->info( "Context setup for management task(s) ok" );
 }
 
 # Creates status entry with all files removed/skipped/updated
 
-sub _create_sync_status {
-    my ( $self, $dirsync, $dir ) = @_;
-    my %status = ();
-    my @failed = $dirsync->entries_failed;
-    if ( scalar @failed ) {
-        %status = ( is_ok   => 'no',
-                    message => "Following files from $dir had failures: " .
-                               join( ', ', @failed ) );
+sub _set_copy_file_status {
+    my ( $self, $status ) = @_;
+    $status->{copied}  ||= [];
+    $status->{skipped} ||= [];
+    $status->{same}    ||= [];
+    foreach my $file ( @{ $status->{copied} } ) {
+        $self->_ok(
+            'copy updated template files',
+            "File $file copied",
+            filename => $file
+        );
     }
-    else {
-        %status = ( is_ok   => 'yes',
-                    message => "Mirrored $dir directory ok" );
+    foreach my $file ( @{ $status->{skipped} } ) {
+        $self->_ok(
+            'copy updated template files',
+            "File $file skipped, marked as read-only",
+            filename => $file
+        );
     }
-    my @updated = $dirsync->entries_updated;
-    if ( scalar @updated ) {
-        $status{updated} = "Updated items: " . join( ', ', @updated );
+    foreach my $file ( @{ $status->{same} } ) {
+        $self->_ok(
+            'copy updated template files',
+            "File $file skipped, source and destination same",
+            filename => $file
+        );
     }
-    else {
-        $status{updated} = 'No items updated';
-    }
-
-    my @removed = $dirsync->entries_removed;
-    if ( scalar @removed ) {
-        $status{removed} = "Removed items: " . join( ', ', @removed );
-    }
-    else {
-        $status{removed} = 'No items removed';
-    }
-
-    my @skipped = $dirsync->entries_skipped;
-    if ( scalar @skipped ) {
-        $status{skipped} = "Skipped items: " . join( ', ', @skipped );
-    }
-    else {
-        $status{skipped} = 'No items skipped';
-    }
-    return \%status;
 }
-
 
 ########################################
 # FACTORY
@@ -567,71 +554,11 @@ sub factory_error {
 
 
 ##############################
-# INITIALZE ALL TASKS
+# FIND ALL MANAGEMENT TASKS
 
-# Now that all our stuff everything is loaded, find all management
-# tasks anywhere on @INC
-
-my %MANAGE_FILES = ();
-
-sub find_management_tasks {
-    my ( $class, @dirs ) = @_;
-
-    foreach my $lib_dir ( @dirs ) {
-        next unless ( $lib_dir );
-        my $manage_dir = catdir( $lib_dir, 'OpenInteract2', 'Manage' );
-        next unless ( -d $manage_dir );
-        eval { _find_descend( $manage_dir ) };
-        if ( $@ ) {
-            carp "Error trying to find management tasks: $@\n";
-        }
-    }
-
-    # Now grab the class names from the files stored in %MANAGE_FILES
-    # so we don't try to include the same class from different files
-    # -- this normally only happens for developers who have the OI2
-    # lib directory in their PERL5LIB and who are running tests
-
-    my %MANAGE_CLASSES = ();
-    foreach my $file ( sort keys %MANAGE_FILES ) {
-        my $file_class = $file;
-        $file_class =~ s/^.*OpenInteract2/OpenInteract2/;
-        $file_class =~ s/\.pm$//;
-        $file_class =~ s/\W/::/g;
-        $MANAGE_CLASSES{ $file_class } ||= $file;
-    }
-
-    # Why 'sort'? It ensures that classes further up the hierarchy
-    # (e.g., 'OI2::Manage::Website') get required before their
-    # children; otherwise we get lots of 'subroutine foo redefined'
-    # messages under '-w', irritating.
-
-    foreach my $manage_class ( sort keys %MANAGE_CLASSES ) {
-        #warn "Requiring file '$manage_class'\n";
-        eval "require $manage_class";
-        if ( $@ ) {
-            carp "Failed to bring in library '$manage_class': $@";
-        }
-    }
-}
-
-sub _find_descend {
-    my ( $lib_dir ) = @_;
-    opendir( MANAGEDIR, $lib_dir )
-                    || die "Cannot open directory '$lib_dir': $!";
-    my @entries = grep ! /^\./, readdir( MANAGEDIR );
-    foreach my $entry ( @entries ) {
-        my $full_entry_dir = File::Spec->catdir( $lib_dir, $entry );
-        if ( -d $full_entry_dir ) {
-            _find_descend( $full_entry_dir ); # let this error bubble
-        }
-        next unless ( $entry =~ /\.pm$/ );
-        my $full_filename = File::Spec->catfile( $lib_dir, $entry );
-        $MANAGE_FILES{ $full_filename } = 1;
-    }
-}
-
-__PACKAGE__->find_management_tasks( @INC );
+OpenInteract2::Util->find_factory_subclasses(
+    'OpenInteract2::Manage', @INC
+);
 
 
 ########################################
@@ -881,13 +808,7 @@ You can also retrieve the status messages by calling C<get_status()>.
 
 B<param( $key, $value )>
 
-If C<$key> is unspecified, returns all parameters as a hashref.
-
-If C<$value> is unspecified, returns the current value set for
-parameter C<$key>.
-
-If both C<$key> and C<$value> are specified, sets the parameter
-C<$key> to C<$value> and returns it.
+See L<OpenInteract2::ParamContainer> for details.
 
 Example:
 
@@ -908,7 +829,7 @@ B<param_copy_from( $other_task )>
 
 Copy all parameters from C<$other_task> into this object.
 
-Returns: results of C<param()> on this object.
+Returns: results of C<param()> on this object after the copy
 
 B<get_status()>
 
@@ -1091,7 +1012,7 @@ L<OpenInteract2::Setup|OpenInteract2::Setup>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,14 +1,13 @@
 package OpenInteract2::Manage::Website::Upgrade;
 
-# $Id: Upgrade.pm,v 1.15 2004/12/05 20:01:35 lachoy Exp $
+# $Id: Upgrade.pm,v 1.19 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use File::Spec::Functions  qw( catdir );
 use OpenInteract2::Manage  qw( SYSTEM_PACKAGES );
-use OpenInteract2::Config::TransferSample;
 
-$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'upgrade_website';
@@ -27,7 +26,6 @@ sub get_parameters {
     my ( $self ) = @_;
     return {
         website_dir => $self->_get_website_dir_param,
-        source_dir  => $self->_get_source_dir_param,
         skip_packages => {
             description => 'Indicates that we should not update the packages',
             is_boolean  => 'yes',
@@ -35,9 +33,14 @@ sub get_parameters {
     };
 }
 
+sub setup_task {
+    my ( $self ) = @_;
+    $self->_setup_context({ skip => 'read packages' });
+}
+
 sub run_task {
     my ( $self ) = @_;
-    my $source_dir = $self->param( 'source_dir' );
+    my $website_dir = $self->param( 'website_dir' );
     if ( $self->param( 'skip_packages' ) ) {
         $self->_ok( 'install package',
                     'Package install skipped, none installed' );
@@ -45,35 +48,13 @@ sub run_task {
     else {
         $self->notify_observers( progress => 'Upgrading packages',
                                  { long => 'yes' } );
-        $self->_install_packages( $source_dir, SYSTEM_PACKAGES );
+        $self->_install_packages_from_bricks( $website_dir, SYSTEM_PACKAGES );
         $self->notify_observers( progress => 'Package upgrade complete' );
     }
 
-    my $widget_dir = catdir( $source_dir, 'sample', 'website', 'template' );
-    my $website_dir = $self->param( 'website_dir' );
-    my $transfer = OpenInteract2::Config::TransferSample->new( $widget_dir );
-    $transfer->run( $website_dir );
-    foreach my $file ( @{ $transfer->files_copied } ) {
-        $self->_ok(
-            'copy updated template files',
-            "File $file copied",
-            filename => $file
-        );
-    }
-    foreach my $file ( @{ $transfer->files_skipped } ) {
-        $self->_ok(
-            'copy updated template files',
-            "File $file skipped, marked as read-only",
-            filename => $file
-        );
-    }
-    foreach my $file ( @{ $transfer->files_same } ) {
-        $self->_ok(
-            'copy updated template files',
-            "File $file skipped, source and destination same",
-            filename => $file
-        );
-    }
+    my $brick = OpenInteract2::Brick->new( 'widgets' );
+    my $status = $brick->copy_all_resources_to( $website_dir );
+    $self->_set_copy_file_status( $status );
     $self->notify_observers( progress => 'Widget copy complete' );
 }
 
@@ -128,7 +109,7 @@ No additional entries in the status messages.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002-2004 Chris Winters. All rights reserved.
+Copyright (C) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

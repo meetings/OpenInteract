@@ -1,11 +1,11 @@
 package OpenInteract2::Exception::Parameter;
 
-# $Id: Parameter.pm,v 1.5 2004/02/18 05:25:28 lachoy Exp $
+# $Id: Parameter.pm,v 1.7 2005/03/17 14:58:02 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Exception Class::Accessor::Fast );
 
-$OpenInteract2::Exception::Parameter::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Exception::Parameter::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 my @FIELDS = qw( parameter_fail );
 OpenInteract2::Exception::Parameter->mk_accessors( @FIELDS );
@@ -14,8 +14,14 @@ sub Fields { return @FIELDS }
 sub full_message {
     my ( $self ) = @_;
     my $failures = $self->parameter_fail;
-    my $valid_msg = join( '; ', map { "$_: " . $failures->{ $_ } } keys %{ $failures } );
-    return "One or more parameters were not valid: $valid_msg";
+    my @errors = ();
+    foreach my $field ( sort keys %{ $failures } ) {
+        my $field_msg = ( ref $failures->{ $field } eq 'ARRAY' )
+                          ? join( '; ', @{ $failures->{ $field } } )
+                          : $failures->{ $field };
+        push @errors, "$field: $field_msg";
+    }
+    return "One or more parameters were not valid: " . join( ' ;; ', @errors );
 }
 
 1;
@@ -49,7 +55,7 @@ L<Exception::Class|Exception::Class>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

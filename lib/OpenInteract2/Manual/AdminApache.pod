@@ -9,11 +9,9 @@ This section of the OpenInteract2 manual will show you how to compile
 Apache and mod_perl for a two-server proxy setup, along with other
 information for configuring Apache.
 
-=head1 DESCRIPTION
-
-First: Apache and mod_perl really aren't difficult to setup. As long
-as you have a standard C compiler (GCC!) and a little patience, the
-keys to the future are yours!
+Apache and mod_perl really aren't difficult to setup. As long as you
+have a standard C compiler (GCC!) and a little patience it's really a
+piece of cake.
 
 =head1 APACHE 1.x OVERVIEW
 
@@ -64,6 +62,15 @@ they did, you'd need more of the processes.
 
 =item *
 
+Since OI2 can run under a URL context you can segment your site to
+different application servers. For instance, you can say that
+everything under '/oi' goes back to your OI2 application server
+running under mod_perl and everything under '/jsp' goes to a Tomcat
+web container with your Java Server Pages. But to the user it's all
+under one site -- nifty.
+
+=item *
+
 The front-end proxy is able to feed data back to the client at
 whatever rate it needs without taking up many resources the entire
 time. For instance, users reaching your website with modems can tie up
@@ -92,65 +99,49 @@ Right Thing.
 
 =head1 BUILDING APACHE 1.x
 
-First, you need to get the C<mod_proxy_add_forward> module make
-available by Ask Bjoern Hansen. (See the resources at the end of the
-document.)
+You can create apache and mod_perl with the following steps. Note that
+this assumes you have not installed apache from source before and that
+you're installing to the directory C</usr/local/apache> -- modify as
+needed.
 
-Once you've retrieved the file, copy it into the C<src/modules/extra>
-directory of your Apache source code directory. An example of the
-'activate-module' and 'enable-module' directives to put this module
-into your Apache is below in the as well as in the source code for
-C<mod_proxy_add_forward> itself.
+1.  $ tar -zxvf apache-1.3.33.tar.gz
   
-Once you've retrieved the extra module and copied it to the right
-place, you can create apache and mod_perl with the following
-steps. Note that this assumes you have not installed apache from
-source before and that you're installing to the directory
-C</usr/local/apache> -- modify as needed.
+ 2.  $ tar -zxvf mod_perl-1.29.tar.gz
+ 
+ 3.  $ cd apache-1.3.33
+ 
+ 4.  $ ./configure --prefix=/usr/local/apache \ 
+            --enable-module=rewrite --enable-module=proxy \
 
-  
-  1.  $ tar -zxvf apache-1.3.23.tar.gz
-  
-  2.  $ tar -zxvf mod_perl-1.26.tar.gz
-  
-  3.  $ cd apache-1.3.23
-  
-  4.  $ ./configure --prefix=/usr/local/apache \ 
-             --enable-module=rewrite --enable-module=proxy \
-             --activate-module=src/modules/extra/mod_proxy_add_forward.c \
-             --enable-module=proxy_add_forward
-  
-  5.  $ make
-  
-  6.  $ make install
-  (proxy server binary is now installed as /usr/local/apache/bin/httpd)
-  
-  7.  $ cd ../mod_perl-1.26
-  
-  8.  $ perl Makefile.PL EVERYTHING=1
-  
-  # Configure mod_perl with ../apache_1.3.23/src ? [y]
-  9.  $ y
-  
-  # Shall I build httpd in ../apache_1.3.23/src for you? [y]
-  10. $ y
-  
-  11. $ make
-  
-  12. $ make test
-  (note: if this fails due to an error with URI::URL, set the
-  environment variable 'PERL_HTTP_URI_CLASS' to 'URI::URL', with
-  something like:
-  
-  $ export PERL_HTTP_URI_CLASS=URI::URL
-  
-  13. $ make install
-  (mod_perl Perl modules are now installed)
-  
-  14. $ cp ../apache-1.3.23/src/httpd /usr/local/apache/bin/httpd_modperl
-  (mod_perl-enabled Apache is now installed)
-  
-
+ 5.  $ make
+ 
+ 6.  $ make install
+ (proxy server binary is now installed as /usr/local/apache/bin/httpd)
+ 
+ 7.  $ cd ../mod_perl-1.29
+ 
+ 8.  $ perl Makefile.PL EVERYTHING=1
+ 
+ # Configure mod_perl with ../apache_1.3.33/src ? [y]
+ 9.  $ y
+ 
+ # Shall I build httpd in ../apache_1.3.33/src for you? [y]
+ 10. $ y
+ 
+ 11. $ make
+ 
+ 12. $ make test
+ (note: if this fails due to an error with URI::URL, set the
+ environment variable 'PERL_HTTP_URI_CLASS' to 'URI::URL', with
+ something like:
+ 
+ $ export PERL_HTTP_URI_CLASS=URI::URL
+ 
+ 13. $ make install
+ (mod_perl Perl modules are now installed)
+ 
+ 14. $ cp ../apache-1.3.33/src/httpd /usr/local/apache/bin/httpd_modperl
+ (mod_perl-enabled Apache is now installed)
 
 This is a very simple method for creating both a lightweight proxy
 Apache binary and a heavyweight mod_perl-enabled Apache binary. See
@@ -164,27 +155,68 @@ probably works fine for the front-end proxy server.
 
 =head1 CONFIGURING APACHE 1.x
 
-Use C<oi2_manage>! Use C<OI2_MANAGE>!
+=head2 oi2_manage and a running start
 
 The C<oi2_manage> script included with OpenInteract2 performs a number
 of tasks for you that make your life much easier. When you run the
 C<create_website> command along with the appropriate parameters,
 C<oi2_manage> will copy configuration files from the base installation
-to your website directory and customize them for your website.
+to your website directory and customize them for your website. This
+includes a set of files to get Apache running quite easily.
 
-For instance, two of the files that are copied to your website's
-C<conf/> directory are C<httpd_static.conf> and C<httpd_modperl.conf>.
-(See the C<httpd_static.conf> and C<httpd_modperl.conf> files from the
-C<sample/apache/> directory in the distribution. The items marked with
-'[% %]' TT syntax are replaced in the customization process.)
-You will still need to edit a few parameters in them -- C<oi2_manage>
-is pretty smart, but it can't find out which IP address you want your
-website to listen to!  -- but much of it is filled in for you.
+Each Apache file defines a C<VirtualHost> and is meant to be
+C<Included> into a main server configuration. For instance, one of the
+files we generate is C<conf/httpd_modperl.conf>. Assuming you created
+your website in C</home/httpd/mysite.com> you'd add the following to
+your main mod_perl server configuration:
+
+ Include /home/httpd/mysite.com/conf/httpd_modperl.conf
+
+and Apache will bring in the file at runtime. Of course, you can
+always copy-and-paste if that floats your boat, but you'll probably
+find that using C<Include> makes your life easier.
+
+There are four Apache 1.x configuration files created for you in the
+C<conf/> website directory:
+
+=over 4
+
+=item *
+
+C<httpd_cgi_solo.conf> - If you want to run OI2 as a CGI script you
+can use this. (This configuration is B<NOT RECOMMENDED> because of
+performance but you might find it useful.)
+
+=item *
+
+C<httpd_modperl_solo.conf> - If you want to run OI2 in a
+mod_perl-enabled server without a front-end proxy, use this.
+
+=item *
+
+C<httpd_static.conf> - If you want to run OI2 with a proxy
+configuration, this is the C<VirtualHost> to use for the front-end. It
+proxies all requests except for static files back to a mod_perl
+server.
+
+=item *
+
+C<httpd_modperl.conf> - If you want to run OI2 with a proxy
+configuration, this is the C<VirtualHost> to use for the back-end
+inside a mod_perl server.
+
+=back
+
+All files are customized to your setup so you won't need to change any
+directory or file information. You will still need to edit a few
+parameters in them -- C<oi2_manage> is pretty smart, but it can't find
+out which IP address you want your website to listen to! 
 
 =head2 Static Configuration
 
 After you've run C<oi2_manage>, you will need to modify a few
-parameters in the static Apache configuration file.
+parameters in the C<httpd_static.conf> if you're using the front-end
+proxy setup:
 
 =over 4
 
@@ -192,7 +224,7 @@ parameters in the static Apache configuration file.
 
 B<IP address>: Do a search-replace for '127.0.0.1' with the IP address
 you want the website to listen to. Note that if you're using named
-virtual hosts you should removethe C<Listen> directive. You will also
+virtual hosts you should remove the C<Listen> directive. You will also
 need to specify the C<NameVirtualHost> directive in your main Apache
 configuration file.
 
@@ -211,19 +243,17 @@ C<RewriteRule>) is processed in order. Once a rule is met, no further
 rules are processed unless the satisfied rule specifies it.
 
 The default proxy configuration assumes that the only static files you
-will want to serve directly from the proxy server are images. This
+will want to serve directly from the proxy server are images. That
 action is specified by this line:
 
-  RewriteRule ^/images - [L]
-
+ RewriteRule ^/images - [L]
 
 If you want to add other locations that will be entirely served
 by the lightweight server, just add them after this line. For
 example, if my website had a directory '/forms' where we kept PDF
 versions of forms for our customers to fill out, I could add:
 
-  RewriteRule ^/forms - [L]
-
+ RewriteRule ^/forms - [L]
 
 And every URL beginning with C</forms> will be answered by the
 front-end lightweight server. The C<[L]> stands for "Local" and means
@@ -235,13 +265,15 @@ instance, say I entered this C</forms> configuration directive and
 later a developer on the back-end server tries to configure
 OpenInteract2 to perform a certain action when given the C</forms>
 URL. Unless the developer knows that the front-end server is answering
-all the C</forms> URLs, she will have a very frustrating time trying
-to figure out why her handler isn't responding.
+all the C</forms> URLs she'll have a very frustrating time trying to
+figure out why her handler isn't responding.
 
 =head2 mod_perl Configuration
 
 After you've run C<oi2_manage>, you will need to modify a few
-parameters in the mod_perl Apache configuration file.
+parameters in the mod_perl Apache configuration file -- this holds
+whether you're modifying C<httpd_modperl_solo.conf> or
+C<httpd_modperl.conf>:
 
 =over 4
 
@@ -261,7 +293,7 @@ B<ServerName>: Change the value for the 'ServerName' key
 =item *
 
 B<Port>: (optional) Do a search-replace for the default value of
-'8080' with whatever port you want to run the mod_perl server on
+'8080' with whatever port you want to run the mod_perl server on.
 
 =back
 
@@ -271,38 +303,33 @@ this for you. But if you're curious, read on.
 
 =head2 Additional mod_perl Configuration
 
-Four separate items need to be customized in the
-C<conf/httpd_modperl.conf> file:
+The files copied by C<oi2_manage> use the following items in
+C<conf/httpd_modperl.conf>:
 
 B<First>, define the library paths for this website. Note that this is
 applied on a server-wide basis, so be careful of namespace clashes.
 
 Example:
 
-  <Perl>
-    use lib qw( /home/httpd/mysite.com );
-  </Perl>
+ <Perl>
+   use lib qw( /home/httpd/mysite.com );
+ </Perl>
 
+B<Second>, we need to bring in the C<startup.pl> -- this includes a
+few modules for us and initializes the L<OpenInteract2::Context>
+object once at server startup.
 
-B<Second>, you need to bring in your C<startup.pl>. (Information on
-what is done in the C<startup.pl> is found in the C<OpenInteracts
-Developer's Guide>.)
-
-  PerlRequire /home/httpd/mysite.com/conf/startup.pl
-
-
-TODO: Modify this to deal with being deployed under a separate
-directory.
+ PerlRequire /home/httpd/mysite.com/conf/startup.pl
 
 B<Third> and finally, we need to ensure that every request coming in
 goes through a single Apache content handler:
 L<Apache::OpenInteract2|Apache::OpenInteract2>. To enable this, just
 do:
 
-  <Location /> 
-    SetHandler perl-script 
-    PerlHandler Apache::OpenInteract2
-  </Location>
+ <Location /> 
+   SetHandler perl-script 
+   PerlHandler Apache::OpenInteract2
+ </Location>
 
 We can just say "Apache::OpenInteract2" in the httpd.conf file because
 we have already included the library in our C<startup.pl>.
@@ -310,10 +337,10 @@ we have already included the library in our C<startup.pl>.
 Since OpenInteract2 allows you to deploy the application under a
 different URL context you can also use something like:
 
-  <Location /OI2> 
-    SetHandler perl-script 
-    PerlHandler Apache::OpenInteract2
-  </Location>
+ <Location /OI2> 
+   SetHandler perl-script 
+   PerlHandler Apache::OpenInteract2
+ </Location>
 
 As long as you accompany it with a matching entry in the server
 configuration key 'context_info.deployed_under'.
@@ -328,13 +355,19 @@ DO NOT restart the Apache/mod_perl process using the C<HUP>
 signal. Your modules will not get reloaded properly, but everything
 will appear to work. Very tricky.
 
+=item *
+
+If images don't show when accessing the Virtual Host you're setting
+up, it may be worth looking at the Apache default configuration. Some
+default configurations specify a global alias for the "/images"
+location, and if this is the case, you can easily override it by
+adding something like this to your VirtualHost config:
+
+ Alias /images /path/to/your/installation/html/images
+
 =back
 
 =head1 SEE ALSO
-
-B<mod_proxy_add_forward>
-
-http://develooper.com/code/mpaf/mod_proxy_add_forward.c
 
 B<mod_perl Guide>
  
@@ -362,7 +395,7 @@ http://www.apache.org/docs/vhosts/index.html
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Package::Export;
 
-# $Id: Export.pm,v 1.12 2004/06/13 18:19:54 lachoy Exp $
+# $Id: Export.pm,v 1.16 2005/03/17 14:58:03 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 use Cwd qw( cwd );
 use File::Spec::Functions qw( catdir );
 
-$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::Export::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -40,20 +40,6 @@ sub validate_param {
     return $self->SUPER::get_validate_sub( $name );
 }
 
-# We only want to see if 'package_dir' contains a package if the
-# 'package' parameter is not defined
-
-sub _check_package_dir {
-    my ( $self, $package_dir ) = @_;
-    unless ( -d $package_dir ) {
-        return "Value for 'package_dir' [$package_dir] is not " .
-               "a valid directory";
-    }
-    my $packages = $self->param( 'package' ) || [];
-    return if ( scalar @{ $packages } > 0 );
-    return $self->_package_in_dir( $package_dir );
-}
-
 sub run_task {
     my ( $self ) = @_;
     my $package_dir = $self->param( 'package_dir' );
@@ -73,16 +59,27 @@ sub run_task {
 sub _export_package {
     my ( $self, $package_dir ) = @_;
     my $package = OpenInteract2::Package->new({
-                        directory => $package_dir });
-    my $filename = $package->export;
+        directory => $package_dir
+    });
+    my $is_ok = 'yes';
+    my ( $msg );
+    my $filename = eval { $package->export };
+    if ( $@ ) {
+        $is_ok = 'no';
+        $msg   = sprintf( 'Failed to export %s-%s: %s', 
+                          $package->name, $package->version, "$@" );
+    }
+    else {
+        $msg   = sprintf( 'Exported package %s-%s to %s',
+                          $package->name, $package->version, $filename );
+    }
     my %status = (
-            is_ok    => 'yes',
+            is_ok    => $is_ok,
             action   => sprintf( 'Export package %s', $package->name ),
             filename => $filename,
             package  => $package->name,
             version  => $package->version,
-            message  => sprintf( 'Exported package %s-%s to %s',
-                                $package->name, $package->version, $filename )
+            message  => $msg,
     );
     $self->_add_status( \%status );
 }
@@ -175,7 +172,7 @@ File created by the export
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

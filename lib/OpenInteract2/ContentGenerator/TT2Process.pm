@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::TT2Process;
 
-# $Id: TT2Process.pm,v 1.20 2004/11/28 01:02:50 lachoy Exp $
+# $Id: TT2Process.pm,v 1.21 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::ContentGenerator );
@@ -16,7 +16,7 @@ use OpenInteract2::TT2::Plugin;
 use OpenInteract2::TT2::Provider;
 use Template;
 
-$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -521,7 +521,7 @@ L<OpenInteract2::TT2::Provider|OpenInteract2::TT2::Provider>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

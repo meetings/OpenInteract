@@ -1,6 +1,6 @@
 package OpenInteract2::Repository;
 
-# $Id: Repository.pm,v 1.20 2004/06/13 02:05:31 lachoy Exp $
+# $Id: Repository.pm,v 1.25 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor::Fast );
@@ -13,7 +13,7 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package;
 #use Scalar::Util             qw( blessed );
 
-$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Repository::VERSION   = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract2::Repository::EXPORT_OK = qw( REPOSITORY_FILE );
 
 use constant REPOSITORY_FILE => 'repository.ini';
@@ -26,7 +26,7 @@ my ( $log );
 ########################################
 # CONSTRUCTOR
 
-# Open up the repository, using the OpenInteract2::Config::Base object
+# Open up the repository, using the OpenInteract2::Config::Bootstrap object
 # or a specified website directory. Can also open up from a separate
 # file if specified.
 
@@ -40,7 +40,7 @@ sub new {
 
     my $repository_file = REPOSITORY_FILE;
     my $typeof = ref $item;
-    if ( $typeof eq 'OpenInteract2::Config::Base' ) {
+    if ( $typeof eq 'OpenInteract2::Config::Bootstrap' ) {
         $self->website_dir( $item->website_dir );
         $self->config_dir( $item->config_dir );
         $self->package_dir( $item->package_dir );
@@ -130,6 +130,21 @@ sub fetch_package {
     return undef;
 }
 
+sub get_package_info {
+    my ( $self, $name ) = @_;
+    return undef unless ( $name );
+    foreach my $pkg_info ( @{ $self->_package_info } ) {
+        if ( $pkg_info->{name} eq $name ) {
+            return {
+                name      => $name,
+                version   => $pkg_info->{version},
+                directory => $pkg_info->{directory},
+            };
+        }
+    }
+    return undef;
+}
+
 
 sub fetch_all_packages {
     my ( $self ) = @_;
@@ -149,20 +164,16 @@ sub add_package {
 #        oi_error "Must pass in a package object to add";
 #    }
 
-    if ( my $old_package = $self->fetch_package( $package->name ) ) {
-        eval {
-            $self->remove_package( $old_package, { transient => 'yes' } )
-        };
-        if ( $@ ) {
-            oi_error "Failed to add package [", $package->name, "] since ",
-                     "old version [", $old_package->version, "] was not ",
-                     "successfully removed: $@";
-        }
+    if ( my $old_info = $self->get_package_info( $package->name ) ) {
+        $self->_remove_package_info( $old_info->{name}, { transient => 'yes' } );
+        $self->_remove_package_cache( $old_info->{name} );
     }
-    my %new_info = ( name      => $package->name,
-                     version   => $package->version,
-                     directory => $package->directory,
-                     installed => $package->installed_date || scalar localtime );
+    my %new_info = (
+        name      => $package->name,
+        version   => $package->version,
+        directory => $package->directory,
+        installed => $package->installed_date || scalar localtime
+    );
     $self->_add_package_info( \%new_info );
     unless ( $options->{transient} and $options->{transient} eq 'yes' ) {
         eval { $self->_save_repository };
@@ -178,7 +189,8 @@ sub add_package {
 
 sub remove_package {
     my ( $self, $package, $options ) = @_;
-    $self->_remove_package_info( $package->name );
+    return unless ( $package );
+    $self->_remove_package_info( $package->{name} );
     unless ( $options->{transient} && 'yes' eq $options->{transient} ) {
         eval { $self->_save_repository };
         if ( $@ ) {
@@ -255,7 +267,7 @@ sub _read_repository {
     my ( $self ) = @_;
     my $ini_file = $self->repository_file;
     unless ( -f $ini_file ) {
-        oi_error "Cannot read repository because file [$ini_file] ",
+        oi_error "Cannot read repository because file '$ini_file' ",
                  "does not exist";
     }
     my $ini = OpenInteract2::Config::IniFile->read_config({
@@ -313,8 +325,8 @@ sub _save_repository {
                                 "renamed, but cannot rename new repository ",
                                 "to the proper file.  THIS MEANS YOU DO NOT ",
                                 "HAVE A VALID REPOSITORY FILE. Please rename ",
-                                "by hand the file [$tmp_ini_file] to ",
-                                "[$ini_file] and the system should function ",
+                                "by hand the file '$tmp_ini_file' to ",
+                                "'$ini_file' and the system should function ",
                                 "ok. Renaming error: $!";
     return $ini_file;
 }
@@ -332,9 +344,9 @@ OpenInteract2::Repository - Operations to manipulate package repositories.
 
   # Get a reference to a repository
  
-  my $repository = OpenInteract2::Repository->new( CTX->base_config );
+  my $repository = OpenInteract2::Repository->new( CTX->bootstrap );
  
-  # OR a handy shortcut
+  # OR a handy shortcut once the setup actions have run
  
   my $repository = CTX->repository;
  
@@ -414,14 +426,14 @@ use it rather than create it.
 
 =head1 METHODS
 
-B<new( [ $base_config | \%params ] )>
+B<new( [ $bootstrap | \%params ] )>
 
 Creates a new repository object. You normally do not call this
 directly, since you can easily retrieve the repository from the
 context.
 
-Initialization is preferred with C<$base_config>, which is a
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base>
+Initialization is preferred with C<$bootstrap>, which is a
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap>
 object. This contains the website, config and package directories we
 need to initialize the repository.
 
@@ -465,6 +477,11 @@ Returns: full path to the configuration directory
 B<full_package_dir>
 
 Returns: full path to the package directory
+
+B<get_package_info( $package_name )>
+
+Returns a hashref with 'name', 'version' and 'directory' defined if
+C<$package_name> in this repository. Otherwise returns C<undef>.
 
 B<fetch_package( $package_name )>
 
@@ -517,21 +534,13 @@ Returns: First file from C<@files> that exists in package
 C<$package_name> Throws exception if C<$package_name> not provided or
 package corresponding to C<$package_name> not found.
 
-=head1 TO DO
-
-Nothing known.
-
-=head1 BUGS
-
-None known.
-
 =head1 SEE ALSO
 
 L<OpenInteract2::Package|OpenInteract2::Package>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

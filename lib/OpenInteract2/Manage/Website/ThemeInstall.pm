@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::ThemeInstall;
 
-# $Id: ThemeInstall.pm,v 1.11 2004/11/27 20:47:22 lachoy Exp $
+# $Id: ThemeInstall.pm,v 1.12 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use Data::Dumper;
 use OpenInteract2::Context qw( CTX );
 
-$OpenInteract2::Manage::Website::ThemeInstall::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ThemeInstall::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'install_theme';
@@ -161,7 +161,7 @@ No additional entries in the status messages.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

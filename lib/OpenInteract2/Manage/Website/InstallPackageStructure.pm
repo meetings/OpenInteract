@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::InstallPackageStructure;
 
-# $Id: InstallPackageStructure.pm,v 1.12 2004/06/13 18:19:54 lachoy Exp $
+# $Id: InstallPackageStructure.pm,v 1.15 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context  qw( CTX );
 use OpenInteract2::SQLInstall;
 
-$OpenInteract2::Manage::Website::InstallPackageStructure::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::InstallPackageStructure::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'install_sql_structure';
@@ -22,6 +22,11 @@ sub get_parameters {
     return {
         website_dir => $self->_get_website_dir_param,
         package     => $self->_get_package_param,
+        file        => {
+            description    => 'Process only the listed structure file(s); if unspecified all are processed',
+            is_required    => 'no',
+            is_multivalued => 'yes',
+        },
     };
 }
 
@@ -40,7 +45,8 @@ PACKAGE:
         my $installer = $self->_get_package_installer(
                 $action, $repository, $package_name );
         next PACKAGE unless ( $installer );
-        $installer->install_structure;
+        my @restrict_to = grep { $_ } $self->param( 'file' );
+        $installer->install_structure( @restrict_to );
         my @install_status = $installer->get_status;
         for ( @install_status ) {
             $_->{action}  = $action;
@@ -86,6 +92,20 @@ OpenInteract2::Manage::Website::InstallPackageStructure - Managment task
 
 Installs SQL data structures for one or more packages.
 
+=head1 PARAMETERS
+
+=over 4
+
+=item B<website_dir>
+
+=item B<package>
+
+=item B<file> ($ or @; optional)
+
+Tell the installer to restrict itself to the listed files.
+
+=back
+
 =head1 STATUS MESSAGES
 
 In addition to the default entries, successful status messages
@@ -105,7 +125,7 @@ Name of package this action spawmed from.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

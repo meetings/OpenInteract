@@ -1,7 +1,7 @@
 MANIFEST
 MANIFEST.SKIP
 Changes
-package.conf
+package.ini
 conf/action.ini
 conf/spops.ini
 data/fruit-initial-data.dat

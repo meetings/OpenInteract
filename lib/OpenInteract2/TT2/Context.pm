@@ -1,12 +1,12 @@
 package OpenInteract2::TT2::Context;
 
-# $Id: Context.pm,v 1.2 2004/02/17 04:30:22 lachoy Exp $
+# $Id: Context.pm,v 1.3 2005/03/18 04:09:51 lachoy Exp $
 
 use strict;
 use base qw( Template::Context );
 use Template::Constants qw( STATUS_ERROR ERROR_FILE );
 
-$OpenInteract2::TT2::Context::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::TT2::Context::VERSION  = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 # Overriding Template::Context so we can get around the issue of the
 # template name 'x::y' being interpreted as a directive to have a
@@ -101,7 +101,7 @@ L<Template::Context|Template::Context>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

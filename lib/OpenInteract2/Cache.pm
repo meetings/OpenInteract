@@ -1,11 +1,13 @@
 package OpenInteract2::Cache;
 
-# $Id: Cache.pm,v 1.11 2004/10/31 00:26:25 lachoy Exp $
+# $Id: Cache.pm,v 1.13 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
+
+$OpenInteract2::Cache::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 # Returns: caching object (implementation-neutral)
 
@@ -258,8 +260,10 @@ Parameters:
 
 =item *
 
-B<data>: The data to save in the cache. This can be an SPOPS object or
-HTML content.
+B<data>: The data to save in the cache. This can be an SPOPS object,
+HTML content or any cacheable Perl data structure. (Don't try to store
+database handles, filehandles, or any other object with 'live'
+connections to real-world resources.)
 
 =item *
 
@@ -319,7 +323,7 @@ Clears the cache of all items.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -7,7 +7,7 @@ use OpenInteract2::Exception qw( oi_error );
 my @FIELDS = qw( old_content old_config transforms );
 __PACKAGE__->mk_accessors( @FIELDS );
 
-$OpenInteract2::Conversion::IniConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Conversion::IniConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 sub new {
     my ( $class, $old_something ) = @_;
@@ -387,7 +387,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

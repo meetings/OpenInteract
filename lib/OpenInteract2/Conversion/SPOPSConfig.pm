@@ -1,12 +1,12 @@
 package OpenInteract2::Conversion::SPOPSConfig;
 
-# $Id: SPOPSConfig.pm,v 1.8 2004/02/17 04:30:19 lachoy Exp $
+# $Id: SPOPSConfig.pm,v 1.9 2005/03/17 14:58:01 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Conversion::IniConfig );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Conversion::SPOPSConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Conversion::SPOPSConfig::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 my @ORDER = qw( class code_class isa field field_discover id_field
                 is_secure increment_field convert_date_field
                 sequence_name no_insert skip_undef no_update
@@ -161,7 +161,7 @@ L<SPOPS::Manual::Configuration|SPOPS::Manual::Configuration>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,11 +1,11 @@
 package OpenInteract2::Action::TemplateOnly;
 
-# $Id: TemplateOnly.pm,v 1.6 2004/06/15 00:02:21 lachoy Exp $
+# $Id: TemplateOnly.pm,v 1.7 2005/03/17 14:57:59 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Action );
 
-$OpenInteract2::Action::TemplateOnly::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::TemplateOnly::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 sub _find_task {
     return 'execute_template';
@@ -62,7 +62,7 @@ type and most of the work is done for you.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

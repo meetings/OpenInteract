@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ViewSession;
 
-# $Id: ViewSession.pm,v 1.10 2004/06/13 18:19:54 lachoy Exp $
+# $Id: ViewSession.pm,v 1.11 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -10,7 +10,7 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::SessionManager;
 
 
-$OpenInteract2::Manage::Website::ViewSession::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ViewSession::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     'view_session';
@@ -100,7 +100,7 @@ as displayed by L<Data::Dumper|Data::Dumper>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

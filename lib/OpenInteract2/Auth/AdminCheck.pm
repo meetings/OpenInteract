@@ -1,13 +1,13 @@
 package OpenInteract2::Auth::AdminCheck;
 
-# $Id: AdminCheck.pm,v 1.12 2004/02/18 05:25:27 lachoy Exp $
+# $Id: AdminCheck.pm,v 1.13 2005/03/17 14:57:59 sjn Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::AdminCheck::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -71,7 +71,7 @@ Returns: 'yes' if admin, 'no' if not. Also set in C<$auth>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

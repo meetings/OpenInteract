@@ -1,6 +1,6 @@
 package OpenInteract2::FullTextIterator;
 
-# $Id: FullTextIterator.pm,v 1.1 2004/06/06 19:56:51 lachoy Exp $
+# $Id: FullTextIterator.pm,v 1.2 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( SPOPS::Iterator );
@@ -8,7 +8,7 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use SPOPS::Iterator          qw( ITER_IS_DONE );
 
-$OpenInteract2::FullTextIterator::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::FullTextIterator::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -160,7 +160,7 @@ L<OpenInteract2::FullTextIndexer|OpenInteract2::FullTextIndexer>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

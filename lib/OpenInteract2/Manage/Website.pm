@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website;
 
-# $Id: Website.pm,v 1.21 2004/12/05 18:50:11 lachoy Exp $
+# $Id: Website.pm,v 1.25 2005/03/17 14:58:02 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
@@ -8,7 +8,7 @@ use File::Spec::Functions    qw( catdir catfile );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package   qw( DISTRIBUTION_EXTENSION );
 
-$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 sub setup_task {
     my ( $self ) = @_;
@@ -50,32 +50,57 @@ sub _install_packages {
     my $website_dir = $self->param( 'website_dir' );
 
     my @files = ();
-PACKAGE:
     foreach my $package_name ( @{ $package_names } ) {
         my $package_file = $package_dist->{ $package_name };
-        return unless ( $package_file );
-        my $install_task = OpenInteract2::Manage->new(
-            'install_package', { package_file => $package_file,
-                                 website_dir  => $website_dir }
-        );
-
-        # The package install fires a 'progress' observation that it's done
-        # installing the package, which is useful for *our* observers
-        # to know
-
-        $self->copy_observers( $install_task );
-
-        eval { $install_task->execute };
-        if ( $@ ) {
-            $self->_fail( 'install package',
-                          "Failed to install $package_name: $@" );
-        }
-        else {
-            $self->_add_status( $install_task->get_status );
+        next unless ( $package_file );
+        my $rv = $self->_install_package_file(
+            $package_name, $package_file, $website_dir );
+        if ( $rv ) {
             push @files, $package_file;
         }
     }
     return @files;
+}
+
+sub _install_package_file {
+    my ( $self, $package_name, $package_file, $website_dir ) = @_;
+    my $install_task = OpenInteract2::Manage->new(
+        'install_package', {
+            package_file => $package_file,
+            website_dir  => $website_dir,
+        });
+
+    # The package install fires a 'progress' observation that it's done
+    # installing the package, which is useful for *our* observers
+    # to know
+
+    $self->copy_observers( $install_task );
+
+    eval { $install_task->execute };
+    if ( $@ ) {
+        $package_name ||= $package_file;
+        $self->_fail( 'install package',
+                      "Failed to install $package_name: $@" );
+        return undef;
+    }
+    else {
+        $self->_add_status( $install_task->get_status );
+        return $package_file;
+    }
+}
+
+sub _install_packages_from_bricks {
+    my ( $self, $website_dir, $package_names ) = @_;
+    foreach my $pkg_name ( @{ $package_names } ) {
+        my $brick = OpenInteract2::Brick->new( $pkg_name );
+        foreach my $resource_name ( $brick->list_resources ) {
+            my $pkg_info = $brick->load_resource( $resource_name );
+            my $pkg_file = OpenInteract2::Util->decode_base64_and_store(
+                \$pkg_info->{content}
+            );
+            $self->_install_package_file( undef, $pkg_file, $website_dir );
+        }
+    }
 }
 
 
@@ -215,7 +240,7 @@ L<OpenInteract2::Manage|OpenInteract2::Manage>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -21,27 +21,40 @@ The manual is broken down into:
 
 =item *
 
-L<OpenInteract2::Manual::Intro|OpenInteract2::Manual::Intro>
+L<OpenInteract2::Manual::Intro>
 
-An introduction to the capabilities and architecture of OpenInteract
-2.
+An introduction to the capabilities and architecture of OpenInteract2
+-- a good starting point.
 
 =item *
 
-L<OpenInteract2::Manual::QuickStart|OpenInteract2::Manual::QuickStart>
+L<OpenInteract2::Manual::QuickStart>
 
 A quick start guide for setting up a website.
 
 =item *
 
-L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
+L<OpenInteract2::Manual::Tutorial>
 
 Create a new package and modify an existing one. Developers should
 read this first.
 
 =item *
 
-L<OpenInteract2::Manual::Conversion|OpenInteract2::Manual::Conversion>
+L<OpenInteract2::Manual::TutorialAdvanced>
+
+Add advanced features to an application.
+
+=item *
+
+L<OpenInteract2::Manual::Architecture>
+
+More in-depth discussion of the major areas of OpenInteract and a
+walk-through for a request.
+
+=item *
+
+L<OpenInteract2::Manual::Conversion>
 
 Read this if you're upgrading an existing OpenInteract 1.x site to
 OpenInteract 2, particularly if you're going to be migrating custom
@@ -49,114 +62,107 @@ packages you've developed.
 
 =item * 
 
-L<OpenInteract2::Manual::Changes|OpenInteract2::Manual::Changes>
+L<OpenInteract2::Manual::Changes>
 
 Listing of the changes between OI versions. The major architectural
 changes between 1.x and 2.x are also listed here.
 
 =item *
 
-L<OpenInteract2::Manual::Architecture|OpenInteract2::Manual::Architecture>
-
-More in-depth discussion of the major areas of OpenInteract and a
-walk-through for a request.
-
-=item *
-
-L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
+L<OpenInteract2::Manual::Templates>
 
 Using templates, focusing on the Template Toolkit.
 
 =item *
 
-L<OpenInteract2::Manual::Widgets|OpenInteract2::Manual::Widgets>
+L<OpenInteract2::Manual::Widgets>
 
 Using template widgets in the Template Toolkit.
 
 =item * 
 
-L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages>
+L<OpenInteract2::Manual::Packages>
 
 Learn about a package: how we create distributable OpenInteract2
 applications.
 
 =item *
 
-L<OpenInteract2::Manual::I18N|OpenInteract2::Manual::I18N>
+L<OpenInteract2::Manual::I18N>
 
 Internationalization and localization issues in OpenInteract2.
 
 =item *
 
-L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching>
+L<OpenInteract2::Manual::Caching>
 
 How to setup and use content caching.
 
 =item *
 
-L<OpenInteract2::Manual::Logging|OpenInteract2::Manual::Logging>
+L<OpenInteract2::Manual::Logging>
 
 How to use and configure logging.
 
 =item *
 
-L<OpenInteract2::Manual::Authentication|OpenInteract2::Manual::Authentication>
+L<OpenInteract2::Manual::Authentication>
 
 How to setup authentication and related actions.
 
 =item *
 
-L<OpenInteract2::Manual::Security|OpenInteract2::Manual::Security>
+L<OpenInteract2::Manual::Security>
 
 How task and object security works and how you can change it.
 
 =item *
 
-L<OpenInteract2::Manual::Management|OpenInteract2::Manual::Management>
+L<OpenInteract2::Manual::Management>
 
 Managing OpenInteract2 using C<oi2_manage> and the
 L<OpenInteract2::Manage|OpenInteract2::Manage> framework.
 
 =item *
 
-L<OpenInteract2::Manual::AdminDatabase|OpenInteract2::Manual::AdminDatabase>
+L<OpenInteract2::Manual::AdminDatabase>
 
 Setup databases.
 
 =item *
 
-L<OpenInteract2::Manual::AdminApache|OpenInteract2::Manual::AdminApache>
+L<OpenInteract2::Manual::AdminApache>
 
 Setup Apache/mod_perl.
 
 =item *
 
-L<OpenInteract2::Manual::Datasource|OpenInteract2::Manual::Datasource>
+L<OpenInteract2::Manual::Datasource>
 
 How to setup and use datasources.
 
 =item *
 
-L<OpenInteract2::Manual::DataImport|OpenInteract2::Manual::DataImport>
+L<OpenInteract2::Manual::DataImport>
 
 Importing data into OpenInteract datasources.
 
 =item *
 
-L<OpenInteract2::Manual::SPOPS|OpenInteract2::Manual::SPOPS>
+L<OpenInteract2::Manual::SPOPS>
 
 How OpenInteract2 enhances SPOPS objects and makes them easier for you
 to configure.
 
 =item *
 
-L<OpenInteract2::Manual::SearchResults|OpenInteract2::Manual::SearchResults>
+L<OpenInteract2::Manual::SearchResults>
 
 Serializing and retrieving search results.
 
 =item *
 
-L<OpenInteract2::Manual::LDAP|OpenInteract2::Manual::LDAP>
+L<OpenInteract2::Manual::LDAP>
 
 How to setup and use LDAP support.
 
@@ -216,6 +222,26 @@ L<OpenInteract2::Action::TemplateOnly|OpenInteract2::Action::TemplateOnly>: Base
 
 =item *
 
+L<OpenInteract2::ActionResolver|OpenInteract2::ActionResolver>: Small classes and chain of responsibility to resolve URLs to action objects
+
+=item *
+
+L<OpenInteract2::ActionResolver::NameAndTask|OpenInteract2::ActionResolver::NameAndTask>: Create an action from the URL's initial path and optional task
+
+=item *
+
+L<OpenInteract2::ActionResolver::NotFoundOrEmpty|OpenInteract2::ActionResolver::NotFoundOrEmpty>: Use the 'not_found' or 'empty' actions
+
+=item *
+
+L<OpenInteract2::ActionResolver::UserDir|OpenInteract2::ActionResolver::UserDir>: Be able to create action from user directory request
+
+=item *
+
+L<OpenInteract2::App|OpenInteract2::App>: Base class for CPAN-distributable OpenInteract application bundles
+
+=item *
+
 L<OpenInteract2::Auth|OpenInteract2::Auth>: Base class for logging in OpenInteract users
 
 =item *
@@ -232,6 +258,114 @@ L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>: Base class for creating 
 
 =item *
 
+L<OpenInteract2::Brick|OpenInteract2::Brick>: [% brick_summary %]
+
+=item *
+
+L<OpenInteract2::Brick::Apache|OpenInteract2::Brick::Apache>: All resources used for creating Apache 1.x configurations in a new website
+
+=item *
+
+L<OpenInteract2::Brick::Apache2|OpenInteract2::Brick::Apache2>: All resources used for creating Apache 2.x configurations in a new website
+
+=item *
+
+L<OpenInteract2::Brick::Base|OpenInteract2::Brick::Base>: Base-64 encoded OI2 package 'base-2.15.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseBox|OpenInteract2::Brick::BaseBox>: Base-64 encoded OI2 package 'base_box-2.21.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseError|OpenInteract2::Brick::BaseError>: Base-64 encoded OI2 package 'base_error-3.02.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseGroup|OpenInteract2::Brick::BaseGroup>: Base-64 encoded OI2 package 'base_group-2.20.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BasePage|OpenInteract2::Brick::BasePage>: Base-64 encoded OI2 package 'base_page-2.32.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseSecurity|OpenInteract2::Brick::BaseSecurity>: Base-64 encoded OI2 package 'base_security-2.22.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseTemplate|OpenInteract2::Brick::BaseTemplate>: Base-64 encoded OI2 package 'base_template-3.17.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseTheme|OpenInteract2::Brick::BaseTheme>: Base-64 encoded OI2 package 'base_theme-2.13.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::BaseUser|OpenInteract2::Brick::BaseUser>: Base-64 encoded OI2 package 'base_user-2.41.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::CGI|OpenInteract2::Brick::CGI>: Script for running OI2 as a CGI
+
+=item *
+
+L<OpenInteract2::Brick::Comments|OpenInteract2::Brick::Comments>: Base-64 encoded OI2 package 'comments-1.23.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::Daemon|OpenInteract2::Brick::Daemon>: Configuration used for creating the standalone webserver
+
+=item *
+
+L<OpenInteract2::Brick::FullText|OpenInteract2::Brick::FullText>: Base-64 encoded OI2 package 'full_text-2.61.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::Lookup|OpenInteract2::Brick::Lookup>: Base-64 encoded OI2 package 'lookup-2.09.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::Messages|OpenInteract2::Brick::Messages>: All global localization messages
+
+=item *
+
+L<OpenInteract2::Brick::News|OpenInteract2::Brick::News>: Base-64 encoded OI2 package 'news-2.25.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::ObjectActivity|OpenInteract2::Brick::ObjectActivity>: Base-64 encoded OI2 package 'object_activity-2.13.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::Package|OpenInteract2::Brick::Package>: All resources used for creating a package
+
+=item *
+
+L<OpenInteract2::Brick::PackageCPAN|OpenInteract2::Brick::PackageCPAN>: All resources used for creating a CPAN distribution from a package
+
+=item *
+
+L<OpenInteract2::Brick::PackageFromTable|OpenInteract2::Brick::PackageFromTable>: All resources used for creating a package based on a table
+
+=item *
+
+L<OpenInteract2::Brick::SystemDoc|OpenInteract2::Brick::SystemDoc>: Base-64 encoded OI2 package 'system_doc-2.10.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::WebsiteConfig|OpenInteract2::Brick::WebsiteConfig>: Various non-server-specific configuration files for OI2 website
+
+=item *
+
+L<OpenInteract2::Brick::WhatsNew|OpenInteract2::Brick::WhatsNew>: Base-64 encoded OI2 package 'whats_new-2.12.zip' shipped with distribution
+
+=item *
+
+L<OpenInteract2::Brick::Widgets|OpenInteract2::Brick::Widgets>: All global TT2 template files
+
+=item *
+
 L<OpenInteract2::Cache|OpenInteract2::Cache>: - Caches objects to avoid database hits and content to avoid template processing
 
 =item *
@@ -244,7 +378,7 @@ L<OpenInteract2::Config|OpenInteract2::Config>: - Centralized configuration info
 
 =item *
 
-L<OpenInteract2::Config::Base|OpenInteract2::Config::Base>: Represents a server base configuration
+L<OpenInteract2::Config::Bootstrap|OpenInteract2::Config::Bootstrap>: Represents a server bootstrap configuration
 
 =item *
 
@@ -277,10 +411,6 @@ L<OpenInteract2::Config::PerlFile|OpenInteract2::Config::PerlFile>: Subclass Ope
 =item *
 
 L<OpenInteract2::Config::Readonly|OpenInteract2::Config::Readonly>: Simple read/write for readonly files
-
-=item *
-
-L<OpenInteract2::Config::TransferSample|OpenInteract2::Config::TransferSample>: On website install or package creation, transfer and modify sample files
 
 =item *
 
@@ -348,6 +478,10 @@ L<OpenInteract2::Cookie|OpenInteract2::Cookie>: Generic cookie methods
 
 =item *
 
+L<OpenInteract2::CreateSecurity|OpenInteract2::CreateSecurity>: Batch create security for one or more objects or classes
+
+=item *
+
 L<OpenInteract2::Datasource::DBI|OpenInteract2::Datasource::DBI>: Create DBI database handles
 
 =item *
@@ -357,6 +491,14 @@ L<OpenInteract2::Datasource::LDAP|OpenInteract2::Datasource::LDAP>: Centralized 
 =item *
 
 L<OpenInteract2::DatasourceManager|OpenInteract2::DatasourceManager>: Base class for datasource connection managers
+
+=item *
+
+L<OpenInteract2::Error|OpenInteract2::Error>: Simple property object that knows how to un/serialize from/to a file
+
+=item *
+
+L<OpenInteract2::ErrorStorage|OpenInteract2::ErrorStorage>: Serialize serious errors to the filesystem
 
 =item *
 
@@ -412,10 +554,6 @@ L<OpenInteract2::Manage|OpenInteract2::Manage>: Provide common functions and fac
 
 =item *
 
-L<OpenInteract2::Manage::CreateSourceDirectory|OpenInteract2::Manage::CreateSourceDirectory>: Create a source directory from the OI2 distribution
-
-=item *
-
 L<OpenInteract2::Manage::Package|OpenInteract2::Manage::Package>: Parent for all package management tasks
 
 =item *
@@ -424,7 +562,15 @@ L<OpenInteract2::Manage::Package::Check|OpenInteract2::Manage::Package::Check>: 
 
 =item *
 
+L<OpenInteract2::Manage::Package::CreateCPAN|OpenInteract2::Manage::Package::CreateCPAN>: Create a CPAN distribution from a package
+
+=item *
+
 L<OpenInteract2::Manage::Package::CreatePackage|OpenInteract2::Manage::Package::CreatePackage>: Create a sample package
+
+=item *
+
+L<OpenInteract2::Manage::Package::CreatePackageFromTable|OpenInteract2::Manage::Package::CreatePackageFromTable>: Create a package with full CRUDS capability based on a database table
 
 =item *
 
@@ -440,11 +586,23 @@ L<OpenInteract2::Manage::Website::CleanExpiredSessions|OpenInteract2::Manage::We
 
 =item *
 
+L<OpenInteract2::Manage::Website::CleanOrphanedUsers|OpenInteract2::Manage::Website::CleanOrphanedUsers>: Remove users who created an account but never logged in
+
+=item *
+
 L<OpenInteract2::Manage::Website::Create|OpenInteract2::Manage::Website::Create>: Create a new website
 
 =item *
 
 L<OpenInteract2::Manage::Website::CreateSecurity|OpenInteract2::Manage::Website::CreateSecurity>: Create security for multiple SPOPS objects
+
+=item *
+
+L<OpenInteract2::Manage::Website::CreateSecurityForAction|OpenInteract2::Manage::Website::CreateSecurityForAction>: Create security for an OI2 action
+
+=item *
+
+L<OpenInteract2::Manage::Website::CreateSecurityForSPOPS|OpenInteract2::Manage::Website::CreateSecurityForSPOPS>: Create security for multiple SPOPS objects
 
 =item *
 
@@ -528,7 +686,15 @@ L<OpenInteract2::Observer|OpenInteract2::Observer>: Initialize and manage observ
 
 =item *
 
+L<OpenInteract2::Observer::Controller::GetFiltersFromRequest|OpenInteract2::Observer::Controller::GetFiltersFromRequest>: Scan parameters for filtering directives
+
+=item *
+
 L<OpenInteract2::Package|OpenInteract2::Package>: Perform actions on individual packages
+
+=item *
+
+L<OpenInteract2::ParamContainer|OpenInteract2::ParamContainer>: Base for classes that want to hold parameters
 
 =item *
 
@@ -624,7 +790,95 @@ L<OpenInteract2::SessionManager::SQLite|OpenInteract2::SessionManager::SQLite>: 
 
 =item *
 
-L<OpenInteract2::Setup|OpenInteract2::Setup>: Setup an OpenInteract2::Context object
+L<OpenInteract2::Setup|OpenInteract2::Setup>: Base/Factory class for setup actions in OpenInteract2
+
+=item *
+
+L<OpenInteract2::Setup::CheckDatasources|OpenInteract2::Setup::CheckDatasources>: Ensure datasource configurations are correct
+
+=item *
+
+L<OpenInteract2::Setup::CreateTemporaryLibraryDirectory|OpenInteract2::Setup::CreateTemporaryLibraryDirectory>: Copy package modules to a single directory tree
+
+=item *
+
+L<OpenInteract2::Setup::DependencySource|OpenInteract2::Setup::DependencySource>: Provide dependency information for Algorithm::Dependency
+
+=item *
+
+L<OpenInteract2::Setup::InitializeActions|OpenInteract2::Setup::InitializeActions>: Include and initialize all OpenInteract2 actions
+
+=item *
+
+L<OpenInteract2::Setup::InitializeCache|OpenInteract2::Setup::InitializeCache>: Initialize the cache
+
+=item *
+
+L<OpenInteract2::Setup::InitializeContentGenerators|OpenInteract2::Setup::InitializeContentGenerators>: Initialize content generator objects
+
+=item *
+
+L<OpenInteract2::Setup::InitializeControllers|OpenInteract2::Setup::InitializeControllers>: Initialize all controller classes
+
+=item *
+
+L<OpenInteract2::Setup::InitializeObservers|OpenInteract2::Setup::InitializeObservers>: Initialize action and configuration observers
+
+=item *
+
+L<OpenInteract2::Setup::InitializeSPOPS|OpenInteract2::Setup::InitializeSPOPS>: Initialize SPOPS classes
+
+=item *
+
+L<OpenInteract2::Setup::InitializeTimezone|OpenInteract2::Setup::InitializeTimezone>: Create the global timezone object
+
+=item *
+
+L<OpenInteract2::Setup::ReadActionTable|OpenInteract2::Setup::ReadActionTable>: Reads actions from all packages and stores them in context
+
+=item *
+
+L<OpenInteract2::Setup::ReadLocalizedMessages|OpenInteract2::Setup::ReadLocalizedMessages>: Find and read all localization data and create lookup tables
+
+=item *
+
+L<OpenInteract2::Setup::ReadPackages|OpenInteract2::Setup::ReadPackages>: Read all packages from the repository and register with the context
+
+=item *
+
+L<OpenInteract2::Setup::ReadRepository|OpenInteract2::Setup::ReadRepository>: Reads the package repository and stores in context
+
+=item *
+
+L<OpenInteract2::Setup::ReadSPOPSConfig|OpenInteract2::Setup::ReadSPOPSConfig>: Read SPOPS object declarations from all packages
+
+=item *
+
+L<OpenInteract2::Setup::ReadServerConfig|OpenInteract2::Setup::ReadServerConfig>: Read the server configuration
+
+=item *
+
+L<OpenInteract2::Setup::RegisterActionTypes|OpenInteract2::Setup::RegisterActionTypes>: Find action types and register them
+
+=item *
+
+L<OpenInteract2::Setup::RegisterRequestAndResponse|OpenInteract2::Setup::RegisterRequestAndResponse>: Register all request and response implementations declared in server configuration
+
+=item *
+
+L<OpenInteract2::Setup::RequireClasses|OpenInteract2::Setup::RequireClasses>: Bring in one or a set of classes
+
+=item *
+
+L<OpenInteract2::Setup::RequireIndexers|OpenInteract2::Setup::RequireIndexers>: Bring in all indexer classes
+
+=item *
+
+L<OpenInteract2::Setup::RequireSessionClasses|OpenInteract2::Setup::RequireSessionClasses>: Bring in all session implementation classes
+
+=item *
+
+L<OpenInteract2::Setup::RequireSystemClasses|OpenInteract2::Setup::RequireSystemClasses>: Bring in declared 'system_classes'
 
 =item *
 

@@ -1,9 +1,14 @@
 package OpenInteract2::Action;
 
-# $Id: Action.pm,v 1.65 2004/12/05 08:52:55 lachoy Exp $
+# $Id: Action.pm,v 1.73 2005/03/17 14:57:56 sjn Exp $
 
 use strict;
-use base qw( Class::Accessor::Fast Class::Observable Class::Factory Exporter );
+use base qw(
+    OpenInteract2::ParamContainer
+    Class::Accessor::Fast
+    Class::Observable
+    Class::Factory
+);
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log :template );
 use OpenInteract2::Context   qw( CTX );
@@ -12,7 +17,7 @@ use OpenInteract2::Util;
 use Scalar::Util             qw( blessed );
 use SPOPS::Secure            qw( :level );
 
-$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.65 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.73 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -30,14 +35,26 @@ use constant DEFAULT_ACTION_SECURITY => SEC_LEVEL_WRITE;
 
 # See 'PROPERTIES' section below for other properties used.
 
-my %PROPS = map { $_ => 1 } qw(
-    controller content_generator package_name
-    action_type class method message_name
-    task task_default task_valid task_invalid
-    security_level security_required security
-    url_alt url_none
-    template_source
-    cache_param
+my %PROPS = (
+    controller        => 'OI2::Controller object: assigned at each request',
+    content_generator => 'OI2::ContentGenerator object: assigned at each request',
+    package_name      => 'Name of package that contains this action',
+    action_type       => 'Parent action type; these are declared in the server configuration under "action_type"',
+    class             => 'Class associated with action',
+    method            => 'Method that always gets called for action no matter what task is assigned.',
+    message_name      => 'Key to use for messages deposited in request (default is action name)',
+    task              => 'Method to run when execute() called',
+    task_default      => 'Task to use if none specified in URL/invocation',
+    task_valid        => 'List of valid tasks available; if specified only these may be called',
+    task_invalid      => 'List of tasks which cannot be called (also, no task with a leading "_" may be called)',
+    security_level    => 'Security level found for this action + task invocation',
+    security_required => 'Security level required for this action + task invocation',
+    security          => 'Configured security levels',
+    url_alt           => 'Alternate URLs that can be used to lookup this action',
+    url_none          => 'Flag to indicate that this action cannot be looked up by URL (yes/no)',
+    template_source   => 'Template(s) to use to generate task content; can be specified per-task',
+    cache_param       => 'Parameters to use when caching contnent',
+    url_additional    => 'Parameter names to which additional URL parameters get assigned; may be segmented by task',
 );
 
 __PACKAGE__->mk_accessors( keys %PROPS );
@@ -253,7 +270,23 @@ sub execute {
     $log->is_debug &&
         $log->debug( "Action $item_desc security checked, continuing" );
 
-    # Check cache and return if found
+    # Assign any additional URL parameters -- do this before the cache
+    # check to ensure that's consistent (it discriminates based on
+    # param values)
+
+    my @url_params = $self->_get_url_additional_names;
+    if ( scalar @url_params ) {
+        my $request = CTX->request;
+        if ( $request ) {
+            my @url_values = $request->param_url_additional;
+            my $param_count = 0;
+            foreach my $value ( @url_values ) {
+                next unless ( $url_params[ $param_count ] );
+                $self->param( $url_params[ $param_count ], $value );
+                $param_count++;
+            }
+        }
+    }
 
     my $cached_content = $self->_check_cache;
     if ( $cached_content ) {
@@ -302,6 +335,32 @@ sub forward {
     # from one action to another, add it here
 
     return $new_action->execute;
+}
+
+sub _get_url_additional_names {
+    my ( $self ) = @_;
+    my $additional = $self->url_additional;
+    return unless ( $additional );
+    my ( @items );
+    my $task = $self->task;
+    if ( ref $additional eq 'ARRAY' ) {
+        @items = @{ $additional };
+    }
+    elsif ( ref $additional eq 'HASH' ) {
+        my $base = $additional->{ $task } ||
+                   $additional->{DEFAULT} ||
+                   $additional->{default};
+        if ( $base and ref $base eq 'ARRAY') {
+            @items = @{ $base };
+        }
+        elsif ( $base ) {
+            @items = ( $base );
+        }
+    }
+    else {
+        @items = ( $additional );
+    }
+    return @items;
 }
 
 ########################################
@@ -421,22 +480,34 @@ sub _check_security {
     return $self->security_level unless ( $self->is_secure );
 
     my $action_security = $self->security;
-    unless ( ref $action_security eq 'HASH' ) {
+    unless ( $action_security ) {
         $log->error( "Secure action, no security configuration" );
         oi_error "Configuration error: action is secured but no ",
                  "security requirements configured";
     }
+    my ( $required_level );
 
+    # NOTE: values in $action_security have already been translated to
+    # security levels by OI2::Config::Initializer::_action_security_level()
+    # at server startup.
+
+    # specify security per task...
     my $task = $self->task;
-    my $required_level = $action_security->{ $task } ||
-                         $action_security->{DEFAULT} ||
-                         $action_security->{default};
+    if ( ref $action_security eq 'HASH' ) {
+        $required_level = $action_security->{ $task } ||
+                          $action_security->{DEFAULT} ||
+                          $action_security->{default};
+    }
 
+    # specify security for entire action...
+    else {
+        $required_level = $action_security;
+    }
 
     unless ( defined $required_level ) {
         $log->is_info &&
             $log->info( "Assigned security level WRITE to task ",
-                        "'$task' since security requirement not found" );
+                        "'$task' since no security requirement found" );
         $required_level = SEC_LEVEL_WRITE;
     }
 
@@ -446,8 +517,8 @@ sub _check_security {
     if ( $required_level > $action_level ) {
         my $msg = sprintf( "Security check for '%s' '%s' failed",
                            $self->name, $task );
-        $log->error( "$msg [required: $required_level] ",
-                     "[found: $action_level]" );
+        $log->warn( "$msg [required: $required_level] ",
+                    "[found: $action_level]" );
         oi_security_error $msg,
                           { security_required => $required_level,
                             security_found    => $action_level };
@@ -578,12 +649,14 @@ sub cache_expire {
         my %new_info = ();
         foreach my $task ( keys %{ $cache_info } ) {
             my $time_spec = $cache_info->{ $task };
-            $new_info{ $task } = $self->_translate_cache_time( $time_spec );
+            $new_info{ $task } = OpenInteract2::Util
+                                     ->time_duration_as_seconds( $time_spec );
         }
         $self->{cache_expire} = \%new_info;
     }
     elsif ( $cache_info ) {
-        my $cache_time = $self->_translate_cache_time( $cache_info );
+        my $cache_time = OpenInteract2::Util
+                             ->time_duration_as_seconds( $cache_info );
         $self->{cache_expire} = { CACHE_ALL_KEY() => $cache_time };
     }
     if ( $cache_info ) {
@@ -593,20 +666,6 @@ sub cache_expire {
                                          keys %{ $self->{cache_expire} } ) );
     }
     return $self->{cache_expire};
-}
-
-sub _translate_cache_time {
-    my ( $self, $cache_time ) = @_;
-    return undef unless ( $cache_time );
-    my $cache_secs = $cache_time;
-    if ( $cache_time =~ /^\s*(\d+)(\w)\s*$/ ) {
-        my $time = $1;
-        my $spec = lc $2;
-        $cache_secs = $time * 60    if ( $spec eq 'm' );
-        $cache_secs = $time * 3600  if ( $spec eq 'h' );
-        $cache_secs = $time * 86400 if ( $spec eq 'd' );
-    }
-    return $cache_secs;
 }
 
 # Since we can't be sure what's affected by a change that would prompt
@@ -655,7 +714,7 @@ sub _is_using_cache {
     unless ( ref $expire eq 'HASH' ) {
         return;
     }
-    my $expire_time = $expire->{ $self->task } || $expire->{ CACHE_ALL_KEY() };
+    my $expire_time = $expire->{ $self->task } || $expire->{ CACHE_ALL_KEY() } || '';
     $log->is_debug &&
         $log->debug( "Action/task ", $self->name, "/", $self->task, " ",
                      "has cache expiration: ", $expire_time );
@@ -848,6 +907,15 @@ sub property_names {
     return ( keys %PROPS, 'is_secure', 'name', 'cache_expire' );
 }
 
+sub property_info {
+    return (
+        %PROPS,
+        is_secure    => 'Whether this action has security (yes/no)',
+        name         => 'Unique name of this action',
+        cache_expire => 'Time content should be cached, per-task',
+    );
+}
+
 # Clear out a property (since passing undef for a set won't work)
 
 sub property_clear {
@@ -858,74 +926,13 @@ sub property_clear {
 ########################################
 # PARAMS
 
-sub param_assign {
-    my ( $self, $params ) = @_;
-    return unless ( ref $params eq 'HASH' );
-    while ( my ( $key, $value ) = each %{ $params } ) {
-        next if ( $PROPS{ $key } );
-        next unless ( defined $value ); # TODO: Set empty values?
-        $self->param( $key, $value );
-    }
-    return $self;
-}
-
-
-sub param {
-    my ( $self, $key, $value ) = @_;
-    return \%{ $self->{params} } unless ( $key );
-    if ( defined $value ) {
-        $self->{params}{ $key } = $value;
-    }
-    if ( ref $self->{params}{ $key } eq 'ARRAY' ) {
-        return ( wantarray )
-                 ? @{ $self->{params}{ $key } }
-                 : $self->{params}{ $key };
-    }
-    return ( wantarray )
-             ? ( $self->{params}{ $key } )
-             : $self->{params}{ $key };
-}
-
-sub param_add {
-    my ( $self, $key, @values ) = @_;
-    return undef unless ( $key );
-    my $num_values = scalar @values;
-    return $self->{params}{ $key } unless ( scalar @values );
-    if ( my $existing = $self->{params}{ $key } ) {
-        my $typeof = ref( $existing );
-        if ( $typeof eq 'ARRAY' ) {
-            push @{ $self->{params}{ $key } }, @values;
-        }
-        elsif ( ! $typeof ) {
-            $self->{params}{ $key } = [ $existing, @values ];
-        }
-        else {
-            oi_error "Cannot add $num_values values to parameter [$key] ",
-                     "since the parameter is defined as a [$typeof] to ",
-                     "which I cannot reliably add values.";
-        }
-    }
-    else {
-        if ( $num_values == 1 ) {
-            $self->{params}{ $key } = $values[0];
-        }
-        else {
-            $self->{params}{ $key } = [ @values ];
-        }
-    }
-    return $self->param( $key );
-}
-
-sub param_clear {
-    my ( $self, $key ) = @_;
-    return delete $self->{params}{ $key };
-}
+sub get_skip_params { return %PROPS }
 
 sub param_from_request {
     my ( $self, @params ) = @_;
     my $req = CTX->request;
     for ( @params ) {
-        $self->{params}{ $_ } = $req->param( $_ );
+        $self->param( $_, scalar $req->param( $_ ) );
     }
 }
 
@@ -975,12 +982,12 @@ sub clear_status {
 sub message_from_key_or_param {
     my ( $self, $param_name, $message_key, @key_args ) = @_;
     $log ||= get_logger( LOG_ACTION );
-    if ( $message_key and $self->param($message_key) ) {
+    if ( $message_key and $self->param( $message_key ) ) {
         my $language_handle = CTX->request->language_handle;
         $log->is_debug
           && $log->debug( "Creating message from '$message_key' field '".
                           $self->param($message_key) ."' with args '@key_args'\n" );
-        my $msg = $language_handle->maketext( $self->param($message_key), @key_args );
+        my $msg = $language_handle->maketext( $self->param( $message_key ), @key_args );
         return $msg if ( $msg );
     }
     return $self->param( $param_name );
@@ -1228,12 +1235,13 @@ L<GENERATING CONTENT FOR ACTION> below.)
 =head2 Action Class Initialization
 
 When OpenInteract starts up it will call C<init_at_startup()> on every
-configured action class. This is useful for reading static (or rarely
-changing) information once and caching the results. Since the
-L<OpenInteract2::Context|OpenInteract2::Context> object is guaranteed
-to have been created when this is called you can grab a database
-handle and slurp all the lookup entries from a table into a lexical
-data structure.
+configured action class. (The class
+L<OpenInteract2::Setup::InitializeActions> actually does this.) This
+is useful for reading static (or rarely changing) information once and
+caching the results. Since the L<OpenInteract2::Context> object is
+guaranteed to have been created when this is called you can grab a
+database handle and slurp all the lookup entries from a table into a
+lexical data structure.
 
 Here is an example:
 
@@ -1935,6 +1943,67 @@ Example:
  url_alt  = Nouvelles
  url_alt  = Noticias
 
+B<url_additional( \@ or \% )>
+
+Action parameter names to associate with additional URL parameters
+pulled from the request's C<param_url_additional()> method. This
+association is done in C<execute()>.
+
+If specified as an arrayref we associate the parameters no matter what
+task is called on the action. If specified as a hashref you can
+specify parameter names per-task, using DEFAULT as a catch-all.
+
+Examples:
+
+ # the value of the first additional URL parameter is assigned to the
+ # action parameter 'news_id'
+ [news]
+ ...
+ url_additional = news_id
+ 
+ # Given URL:
+ URL: http://foo/news/display/22/
+ 
+ # Task implementation
+ sub display {
+     my ( $self ) = @_;
+     my $id = $self->param( 'news_id' );
+     # $id is '22' since we pulled it from the first URL parameter
+ }
+
+ # for all actions but 'archive' the value of the first additional URL
+ # parameter is assigned to the action parameter 'news_id'; for
+ # archive we assign them to 'search_year', 'search_month' and
+ # 'search_day'
+ [news]
+ ...
+ [news url_additional]
+ DEFAULT = news_id
+ archive = search_year
+ archive = search_month
+ archive = search_day
+ 
+ # Given URL:
+ http://foo/news/remove/1099/
+ 
+ # Task implementation matching 'DEFAULT'
+ sub remove {
+     my ( $self ) = @_;
+     my $id = $self->param( 'news_id' );
+     # $id is '1099' since we pulled it from the first URL parameter
+ }
+ 
+  # Given URL:
+ http://foo/news/archive/2005/7/
+ 
+ sub archive {
+     my ( $self ) = @_;
+     my $year  = $self->param( 'search_year' );
+     my $month = $self->param( 'search_month' );
+     my $day   = $self->param( 'search_day' );
+     # $year = 2005; $month = 7; $day is undef
+ }
+
 B<message_name> ($)
 
 Name used to find messages from the
@@ -2215,7 +2284,7 @@ Any action properties provided in C<\%values> will override the
 default properties set in the action table. And any items in
 C<\%values> that are not action properties will be set into the action
 parameters, also overriding the values from the action table. (See
-C<param()> below.)
+L<OpenInteract2::ParamContainer>.)
 
 =item 2.
 
@@ -2406,9 +2475,32 @@ C<property_assign()> and C<param_assign()>) before generating the
 content.
 
 Most actions do not implement this method, instead implementing a task
-and using the base class implementation of C<execute()> to lookup the
-task and perform the necessary security checks and caching. (Learn
-about caching in L<OpenInteract2::Manual::Caching>.)
+and using the base class implementation of C<execute()> to:
+
+=over 4
+
+=item *
+
+lookup the task
+
+=item *
+
+perform the necessary security checks
+
+=item *
+
+match up additional URL parameters from the request to action parameters
+
+=item *
+
+check the cache for matching content (More about caching in
+L<OpenInteract2::Manual::Caching>.)
+
+=item *
+
+after the content has been generated, store the content in the cache as necessary
+
+=back
 
 Returns: content generated by the action
 
@@ -2467,6 +2559,9 @@ TODO: fill in more: how to id content
 
 =head2 Object Property and Parameter Methods
 
+See L<OpenInteract2::ParamContainer> for discussion of the C<param()>,
+C<param_add()>, C<param_clear()> and C<param_assign()> methods.
+
 B<property_assign( \%properties )>
 
 Assigns values from properties specified in C<\%properties>. Only the
@@ -2516,68 +2611,11 @@ Returns: value previously set for the property C<$key>.
 
 See L<PROPERTIES> for the list of properties in each action.
 
-B<param_assign( \%params )>
+B<property_info()>
 
-Assigns all items from C<\%params> that are not valid properties to
-the action as parameters.
-
-Currently we only set parameters for which there is a defined value in
-C<\%params>.
-
-Returns: action object (C<$self>)
-
-B<param( [ $key, $value ] )>
-
-Get/set action parameters. This can be called in three ways:
-
- my $params  = $action->param;             # $params is hashref
- my $value   = $action->param( $name );    # $value is any type of scalar
- $action->param( $name, $new_value );
- my ( @params ) = $action->param( $name ); # ...context senstive
-
-Returns: if called without arguments, returns a copy of the hashref of
-parameters attached to the action (changes made to the hashref will
-not affect the action); if called with one or two arguments, returns
-the context-sensitve new value of the parameter C<$name>.
-
-B<param_add( $key, @values )>
-
-Adds (rather than replaces) the values C<@values> to the parameter
-C<$key>. If there is a value already set for C<$key>, or if you pass
-multiple values, it is turned into an array reference and C<@values>
-C<push>ed onto the end. If there is no value already set and you only
-pass a single value it acts like the call to C<param( $key, $value )>.
-
-This is useful for potentially multivalue parameters, such as the
-often-used 'error_msg' and 'status_msg'. You can still access the
-values with C<param()> in context:
-
- $action->param( error_msg => "Ooops I..." );
- $action->param_add( error_msg => "did it again" );
- my $full_msg = join( ' ', $action->param( 'error_msg' ) );
- # $full_msg = 'Ooops I... did it again'
- 
- $action->param( error_msg => "Ooops I..." );          # Set to value
- $action->param_add( error_msg => "did it again" );    # ...add new value to existing
- $action->param( error_msg => 'and again' );           # ...replace the earlier values entirely
- my $full_msg = join( ' ', $action->param( 'error_msg' ) );
- # $full_msg = 'and again'
- 
- $action->param( error_msg => "Ooops I..." );
- $action->param_add( error_msg => "did it again" );
- my $messages = $action->param( 'error_msg' );
- # $messages->[0] = 'Ooops I...'
- # $messages->[1] = 'did it again'
-
-Returns: Context senstive value in of C<$key>
-
-B<param_clear( $key )>
-
-Removes all parameter values defined by C<$key>. This is the only way
-to remove a parameter.
-
-Returns: value(s) previously set for the parameter C<$key>,
-non-context sensitive.
+Get a hash of all property names and descriptions -- used in a
+management task so you can easily lookup properties without jumping
+into the (fairly long) docs.
 
 B<param_from_request( @param_names )>
 
@@ -2591,13 +2629,13 @@ Returns: nothing
 
 B<add_error( @msg )>
 
-Adds message (C<join>ed C<msg>) to action parameter 'error_msg').
+Adds message (C<join>ed C<msg>) to parameter 'error_msg').
 
 Returns: added message
 
 B<add_status( @msg )>
 
-Adds message (C<join>ed C<msg>) to action parameter 'status_msg').
+Adds message (C<join>ed C<msg>) to parameter 'status_msg').
 
 Returns: added message
 
@@ -2840,7 +2878,7 @@ L<Class::Observable|Class::Observable>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 package OpenInteract2::Action::CommonUpdate;
 
-# $Id: CommonUpdate.pm,v 1.20 2004/12/05 08:52:55 lachoy Exp $
+# $Id: CommonUpdate.pm,v 1.23 2005/03/18 04:09:49 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action::Common );
@@ -8,6 +8,8 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use SPOPS::Secure            qw( SEC_LEVEL_WRITE );
+
+$OpenInteract2::Action::CommonUpdate::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -24,7 +26,7 @@ sub display_form {
         my $id = $self->param( 'c_id' );
         $object = eval { $object_class->fetch( $id ) };
         if ( $@ ) {
-            $log->error( "Failed to fetch object [$object_class: $id]: $@" );
+            $log->warn( "Failed to fetch object [$object_class: $id]: $@" );
             $self->add_error_key( 'action.error.fetch_for_update', $@ );
             return $self->execute({ task => $fail_task });
         }
@@ -55,7 +57,7 @@ sub update {
     }
 
     unless ( $object and $object->is_saved ) {
-        $log->error( "Object does not exist or is not saved, cannot update" );
+        $log->warn( "Object does not exist or is not saved, cannot update" );
         $self->add_error_key( 'action.error.update_not_saved' );
         return $self->execute({ task => $fail_task });
     }
@@ -80,6 +82,7 @@ sub update {
         $object,
         { standard        => scalar $self->param( 'c_update_fields' ),
           toggled         => scalar $self->param( 'c_update_fields_toggled' ),
+          boolean         => scalar $self->param( 'c_update_fields_boolean' ),
           date            => scalar $self->param( 'c_update_fields_date' ),
           datetime        => scalar $self->param( 'c_update_fields_datetime' ),
           date_format     => scalar $self->param( 'c_update_date_format' ),
@@ -93,19 +96,26 @@ sub update {
 
     eval { $object->save( \%save_options ) };
     if ( $@ ) {
-        $log->error( "Update of $object_spec failed: $@" );
+        $log->warn( "Update of $object_spec failed: $@" );
         $self->add_error_key( 'action.error.update', $@ );
         return $self->execute({ task => $fail_task });
     }
+    $log->is_debug && $log->debug( "object updated ok" );
+
+    $self->param( c_object_old_data => $old_data );
+
     my $title = "'" . $object->object_description->{title} . "'" || 'Object';
     $self->add_status_key( 'action.status.update', $title );
-    $self->param( c_object_old_data => $old_data );
-    $self->_update_post_action;
+    $log->is_debug && $log->debug( "generated status messge ok" );
+
+    $self->_update_post_action( $object, $old_data );
+    $log->is_debug && $log->debug( "_update_post_action() ran ok" );
+
     $self->notify_observers( 'post update', $object, $old_data );
+    $log->is_debug && $log->debug( "'post update' notification ok" );
 
     my $success_task = $self->param( 'c_update_task' );
-    $log->is_debug &&
-        $log->debug( "Update ok, executing task [$success_task]" );
+    $log->is_debug && $log->debug( "get task '$success_task' content" );
     return $self->execute({ task => $success_task });
 }
 
@@ -170,6 +180,7 @@ OpenInteract2::Action::CommonUpdate - Task to update an object
  c_update_fields                 = field_two
  c_update_fields                 = field_three
  c_update_fields_toggled         = field_yes_no
+ c_update_fields_boolean         = field_1_0
  c_update_fields_date            = field_date
  c_update_fields_date_format     = %Y-%m-%d
  c_update_fields_datetime        = field_date
@@ -296,13 +307,14 @@ someone is updating a particular book record:
      }
  }
 
-B<_update_post_action>
+B<_update_post_action( $object, \%old_data )>
 
-This method is called after the object has been successfully updated
--- you will find the object in the C<c_object> action parameter. You
-can perform any action you like after this. If you throw a C<die> with
-content it will be displayed to the user rather than moving to the
-configured C<c_update_task>.
+This method is called after the object has been successfully
+updated. You can perform any action you like after this, but be
+careful about modifying data in C<$object> since what the user sees
+and what's stored in you database may then differ. If you throw a
+C<die> its content will be displayed to the user rather than that from
+the configured C<c_update_task>.
 
 =head1 OBSERVATIONS FIRED
 
@@ -405,6 +417,14 @@ List the fields you want assigned in a toggled fashion -- if any value
 is specified, we set it to 'yes'; otherwise we set it to 'no'. (See
 L<OpenInteract2::Request/param_toggled>.)
 
+B<c_update_fields_boolean> ($ or \@)
+
+List the fields you want assigned in a boolean fashion -- if any value
+is specified, we set it to '1'; otherwise we set it to '0'. (See
+L<OpenInteract2::Request/param_boolean>.) Use this instead of
+C<c_update_fields_toggled> when your field maps to a SQL BIT or
+BOOLEAN datatype.
+
 B<c_update_fields_date> ($ or \@)
 
 List the date fields you want assigned. You can have the date read
@@ -466,7 +486,7 @@ the previous record.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

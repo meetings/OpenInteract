@@ -1,6 +1,6 @@
 package OpenInteract2::Action::Common;
 
-# $Id: Common.pm,v 1.20 2004/12/05 08:52:55 lachoy Exp $
+# $Id: Common.pm,v 1.25 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Action );
@@ -9,7 +9,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_security_error );
 
-$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::Common::VERSION   = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 $OpenInteract2::Action::Common::AUTOLOAD  = '';
@@ -154,18 +154,35 @@ sub _common_check_id {
 
     # If it's not found using that ID field, see if we've got another
     # field mapped to the given ID field in the SPOPS object
+    #
+    # For example, in 'group' using LDAP you have:
+    #
+    # id_field = cn
+    # ...
+    # [group field_map]
+    # notes    = description
+    # group_id = cn
+    # name     = cn
+
+    # If you pass in:
+    #    /group/display/?group_id=groupname
+    # this will see that 'group_id' is mapped to 'cn' and find that
+    # field value and use it
 
     unless ( defined $id ) {
         my $object_class = $self->param( 'c_object_class' );
         my $field_map = eval { $object_class->CONFIG->{field_map} } || {};
-        my %reverse_map = map { $field_map->{ $_ } => $_ } keys %{ $field_map };
-        $alt_id_field = $reverse_map{ $id_field } || $field_map->{ $id_field };
-        if ( $alt_id_field ) {
-            $log->is_debug &&
-                $log->debug( "Using mapped ID field '$alt_id_field'" );
+        while ( my ( $alt_id_field, $mapped ) = each %{ $field_map } ) {
+            next unless ( $mapped eq $id_field );
             $id = $self->param( $alt_id_field )
                   || $request->param( $alt_id_field );
-            $self->param( c_id_field => $alt_id_field );
+            if ( $id ) {
+                $log->is_debug &&
+                    $log->debug( "Using mapped ID field '$alt_id_field' ",
+                                 "got ID value '$id'" );
+                $self->param( c_id_field => $alt_id_field );
+                last;
+            }
         }
     }
 
@@ -222,59 +239,87 @@ sub _common_assign_properties {
     my $request = CTX->request;
 
     $log ||= get_logger( LOG_ACTION );
-    my @standard = ( ref $fields->{standard} eq 'ARRAY' )
-                     ? @{ $fields->{standard} } : ( $fields->{standard} );
-    foreach my $field ( @standard ) {
+    foreach my $field ( _norm( $fields->{standard} ) ) {
         next unless ( $field );
-        $log->is_debug &&
-            $log->debug( "Setting standard '$field' in object from request" );
-        eval { $object->{ $field } = $request->param( $field ) };
+        my ( $value );
+        eval {
+            $value = $request->param( $field );
+            $object->{ $field } = $value;
+        };
         if ( $@ ) {
             $log->warn( "Failed to set object value for '$field': $@" );
         }
-    }
-
-    my @toggled = ( ref $fields->{toggled} eq 'ARRAY' )
-                     ? @{ $fields->{toggled} } : ( $fields->{toggled} );
-    foreach my $field ( @toggled ) {
-        next unless ( $field );
-        $log->is_debug &&
-            $log->debug( "Setting toggled '$field' in object from request" );
-        eval { $object->{ $field } = $request->param_toggled( $field ) };
-        if ( $@ ) {
-            $log->warn( "Failed to set object toggle for '$field': $@" );
+        else {
+            $log->is_debug &&
+                $log->debug( "Set standard '$field' from request to '$value'" );
         }
     }
 
-    my @date = ( ref $fields->{date} eq 'ARRAY' )
-                     ? @{ $fields->{date} } : ( $fields->{date} );
-    foreach my $field ( @date ) {
+    foreach my $field ( _norm( $fields->{toggled} ) ) {
         next unless ( $field );
-        $log->is_debug &&
-            $log->debug( "Setting date '$field' in object from request" );
+        my ( $value );
         eval {
-            $object->{ $field }= $request->param_date(
-                                       $field, $fields->{date_format} )
+            $value = $request->param_toggled( $field );
+            $object->{ $field } = $value;
+        };
+        if ( $@ ) {
+            $log->warn( "Failed to set object toggle for '$field': $@" );
+        }
+        else {
+            $log->is_debug &&
+                $log->debug( "Set toggled '$field' from request to '$value'" );
+        };
+    }
+
+    foreach my $field ( _norm( $fields->{boolean} ) ) {
+        next unless ( $field );
+        my ( $value );
+        eval {
+            $value = $request->param_boolean( $field );
+            $object->{ $field } = $value;
+        };
+        if ( $@ ) {
+            $log->warn( "Failed to set object boolean for '$field': $@" );
+        }
+        else {
+            $log->is_debug &&
+                $log->debug( "Set boolean '$field' from request to '$value'" );
+        }
+    }
+
+    foreach my $field ( _norm( $fields->{date} ) ) {
+        next unless ( $field );
+        my ( $value );
+        eval {
+            $value = $request->param_date( $field, $fields->{date_format} );
+            $object->{ $field }= $value;
         };
         if ( $@ ) {
             $log->warn( "Failed to set object date for '$field': $@" );
         }
+        else {
+            $log->is_debug &&
+                $log->debug( "Set date '$field' from request to '$value'" );
+        }
     }
 
-    my @datetime = ( ref $fields->{datetime} eq 'ARRAY' )
-                     ? @{ $fields->{datetime} } : ( $fields->{datetime} );
-    foreach my $field ( @datetime ) {
+    foreach my $field ( _norm( $fields->{datetime} ) ) {
         next unless ( $field );
-        $log->is_debug &&
-            $log->debug( "Setting datetime '$field' in object from request" );
+        my ( $value );
         eval {
-            $object->{ $field } = $request->param_datetime(
-                                       $field, $fields->{datetime_format} )
+            $value = $request->param_datetime( $field, $fields->{datetime_format} );
+            $object->{ $field }= $value;
         };
         if ( $@ ) {
             $log->warn( "Failed to set object datetime for '$field': $@" );
         }
+        else {
+            $log->is_debug &&
+                $log->debug( "Set datetime '$field' from request to '$value'" );
+        }
     }
+    $log->is_debug &&
+        $log->debug( "Done setting fields into object from request" );
     return $object;
 }
 
@@ -285,30 +330,44 @@ sub _common_assign_properties {
 sub _common_fetch_object {
     my ( $self, $id ) = @_;
     $log ||= get_logger( LOG_ACTION );
+    my ( $object );
+    if ( $object = $self->param( 'c_object' ) ) {
+        $self->param( c_id => $object->id );
+    }
+    else {
+        my $object_class = $self->param( 'c_object_class' );
+        $id ||= $self->param( 'c_id' );
+        unless ( $id ) {
+            $log->is_info &&
+                $log->info( "No ID found, returning new object" );
+            return $object_class->new;
+        }
+        $log->is_debug &&
+            $log->debug( "Trying to fetch '$object_class': '$id'" );
+        $object = eval { $object_class->fetch( $id ) };
+        if ( $@ ) {
+            my $error = $@;
+            $log->warn( "Caught exception fetching object: $error" );
+            if ( $error->isa( 'SPOPS::Exception::Security' ) ) {
+                $self->add_error_key( 'action.error.security' );
+            }
+            else {
+                $self->add_error_key( 'action.error.fetch', $error );
+            }
+            oi_error $error;
+        }
+        $object ||= $object_class->new;
+        $self->param( c_id => $id );
+    }
+    return $object;
+}
 
-    my $object_class = $self->param( 'c_object_class' );
-    $id ||= $self->param( 'c_id' );
-    unless ( $id ) {
-        $log->is_info &&
-            $log->info( "No ID found, returning new object" );
-        return $object_class->new;
-    }
-    $log->is_debug &&
-        $log->debug( "Trying to fetch '$object_class': '$id'" );
-    my $object = eval { $object_class->fetch( $id ) };
-    if ( $@ ) {
-        my $error = $@;
-        $log->error( "Caught exception fetching object: $error" );
-        if ( $error->isa( 'SPOPS::Exception::Security' ) ) {
-            $self->add_error_key( 'action.error.security' );
-        }
-        else {
-            $self->add_error_key( 'action.error.fetch', $error );
-        }
-        oi_error $error;
-    }
-    $self->param( c_id => $id );
-    return $object || $object_class->new;
+########################################
+# MISC
+
+sub _norm {
+    my ( $item ) = @_;
+    return ( ref $item eq 'ARRAY' ) ? @{ $item } : ( $item );
 }
 
 1;
@@ -368,9 +427,11 @@ It also leaves us an option for locating future common functionality.
 B<_common_fetch_object( [ $id ] )>
 
 Fetches an object of the type defined in the C<c_object_type>
-parameter. If an ID value is not passed in it looks for the ID using
-the same algorithm found in C<_common_check_id> -- so you should run
-that methods in your task initialization before calling this.
+parameter. If an object is already in the 'c_object' parameter we just
+use it. Otherwise, if an ID value is not passed to the method it looks
+for the ID using the same algorithm found in C<_common_check_id> -- so
+you should run that method in your task initialization before calling
+this.
 
 Returns: This method returns an object or throws an exception. If we
 encounter an error while fetching the object we add to the action
@@ -409,6 +470,13 @@ B<toggled> ($ or \@)
 
 Fields that get set to 'yes' if any data passed for the field, 'no'
 otherwise. (See L<OpenInteract2::Request/param_toggled>.)
+
+=item *
+
+B<boolean> ($ or \@)
+
+Fields that get set to 'TRUE' if any data passed for the field,
+'FALSE' otherwise. (See L<OpenInteract2::Request/param_boolean>.)
 
 =item *
 
@@ -594,7 +662,7 @@ L<OpenInteract2::Action::CommonUpdate|OpenInteract2::Action::CommonUpdate>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Standalone;
 
-# $Id: Standalone.pm,v 1.13 2004/11/28 17:50:46 lachoy Exp $
+# $Id: Standalone.pm,v 1.14 2005/03/18 04:09:51 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -12,7 +12,7 @@ use OpenInteract2::Upload;
 use OpenInteract2::URL;
 use Sys::Hostname;
 
-$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -281,7 +281,7 @@ L<OpenInteract2::Response::Standalone|<OpenInteract2::Response::Standalone>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

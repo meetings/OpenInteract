@@ -1,6 +1,6 @@
 package OpenInteract2::Config::PackageChanges;
 
-# $Id: PackageChanges.pm,v 1.11 2004/09/27 04:16:06 lachoy Exp $
+# $Id: PackageChanges.pm,v 1.12 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast Exporter );
@@ -8,7 +8,7 @@ use File::Spec::Functions    qw( catfile catdir );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Wrap               qw( wrap );
 
-$OpenInteract2::Config::PackageChanges::VERSION  =  sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::PackageChanges::VERSION  =  sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 use constant CHANGES_FILE => 'Changes';
 @OpenInteract2::Config::PackageChanges::EXPORT_OK = qw( CHANGES_FILE );
@@ -404,7 +404,7 @@ version.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2004 Chris Winters. All rights reserved.
+Copyright (c) 2003-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,12 +1,12 @@
 package OpenInteract2::Filter::AllCaps;
 
-# $Id: AllCaps.pm,v 1.1 2004/09/27 12:54:15 lachoy Exp $
+# $Id: AllCaps.pm,v 1.2 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 
-$OpenInteract2::Filter::AllCaps::VERSION  = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Filter::AllCaps::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 sub update {
     my ( $class, $action, $type, $content ) = @_;
@@ -40,7 +40,7 @@ Observer that transforms all content to upper case.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004 Chris Winters. All rights reserved.
+Copyright (c) 2004-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

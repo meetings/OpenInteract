@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Apache2;
 
-# $Id: Apache2.pm,v 1.2 2004/11/28 17:50:46 lachoy Exp $
+# $Id: Apache2.pm,v 1.3 2005/03/17 14:58:04 sjn Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -10,7 +10,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 
-$OpenInteract2::Request::Apache2::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Apache2::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -183,7 +183,7 @@ Nothing known.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

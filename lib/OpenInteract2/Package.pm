@@ -1,6 +1,6 @@
 package OpenInteract2::Package;
 
-# $Id: Package.pm,v 1.41 2004/12/05 20:06:35 lachoy Exp $
+# $Id: Package.pm,v 1.56 2005/03/17 14:57:58 sjn Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor::Fast );
@@ -10,7 +10,7 @@ use Data::Dumper             qw( Dumper );
 use ExtUtils::Manifest       ();
 use File::Basename           qw( basename dirname );
 use File::Copy               qw( cp );
-use File::Path               ();
+use File::Path               qw( mkpath );
 use File::Spec::Functions    qw( :ALL );
 use File::Temp               qw( tempdir );
 use Log::Log4perl            qw( get_logger );
@@ -19,12 +19,12 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::Package;
 use OpenInteract2::Config::PackageChanges;
 use OpenInteract2::Config::Readonly;
-use OpenInteract2::Config::TransferSample;
 use OpenInteract2::Exception qw( oi_error );
+use OpenInteract2::I18N::Initializer;
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 
-$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.41 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.56 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 @OpenInteract2::Package::EXPORT_OK = qw( DISTRIBUTION_EXTENSION );
@@ -34,7 +34,7 @@ use constant DISTRIBUTION_EXTENSION => 'zip';
 # Define the subdirectories present in a default package
 
 my @PKG_SUBDIR = qw(
-    conf data doc msg struct template script html html/images
+    conf data msg struct template script html html/images
     OpenInteract2 OpenInteract2/Action OpenInteract2/SQLInstall
 );
 
@@ -66,11 +66,14 @@ sub new {
         $to_read++;
     }
     elsif ( $params->{directory} ) {
-        unless ( -d $params->{directory} ) {
+        my $full_directory = rel2abs( $params->{directory} );
+        unless ( -d $full_directory ) {
             oi_error "Cannot initialize package with non-existent package ",
                      "directory. (Given $params->{directory})";
         }
-        $self->directory( rel2abs( $params->{directory} ) );
+        $log->is_debug &&
+            $log->debug( "Reading package from directory '$full_directory'" );
+        $self->directory( $full_directory );
         $to_read++;
     }
     $self->_read_package_data if ( $to_read );
@@ -101,7 +104,7 @@ sub _read_info_from_file {
     my ( $self ) = @_;
     $log ||= get_logger( LOG_OI );
 
-    my $tmp_dir = tempdir( 'OIPKGXXXX', TMPDIR => 1, CLEANUP => 1 );
+    my $tmp_dir = tempdir( 'OIPKGXXXXXX', TMPDIR => 1, CLEANUP => 1 );
     unless ( -d $tmp_dir and -w $tmp_dir ) {
         oi_error "Cannot find writeable temp dir";
     }
@@ -112,11 +115,15 @@ sub _read_info_from_file {
     $log->is_debug &&
         $log->debug( "Reading package info from '$package_file'" );
     eval {
-        my $filename = basename( $self->package_file );
-        my $ext = '.' . DISTRIBUTION_EXTENSION;
-        my ( $subdir ) = $filename =~ /^(.*)$ext$/;
-        $self->_extract_archive( $self->package_file );
-        my $extracted_dir = catdir( $tmp_dir, $subdir );
+        my $extracted = $self->_extract_archive( $self->package_file );
+        unless ( scalar @{ $extracted } ) {
+            oi_error "Failed to extract any files from package ",
+                     "file ", $self->package_file;
+        }
+        my @sample_path = split( '/', $extracted->[0]->fileName() );
+        my $extracted_dir = catdir( $tmp_dir, $sample_path[0] );
+        $log->is_debug &&
+            $log->debug( "Package unpacked to directory '$extracted_dir'" );
         $self->_read_info_from_dir( $extracted_dir );
         $self->_read_manifest( $extracted_dir );
         $self->{_tmp_package_extract_dir} = $tmp_dir;
@@ -145,15 +152,11 @@ sub _read_info_from_dir {
         oi_error "Cannot read package information from invalid ",
                  "directory '$dir'";
     }
-
-    $log->is_debug &&
-        $log->debug( "Reading package info from '$dir'" );
     $self->config( OpenInteract2::Config::Package->new({ directory => $dir }) );
     $self->name( $self->config->name );
     $self->version( $self->config->version );
     return $self;
 }
-
 
 ########################################
 # PROPERTIES
@@ -161,6 +164,14 @@ sub _read_info_from_dir {
 sub full_name {
     my ( $self ) = @_;
     return join( '-', $self->name, $self->version );
+}
+
+sub name_as_class {
+    my ( $self, $name ) = @_;
+    $name ||= $self->name;
+    my $class_name = ucfirst $name;
+    $class_name =~ s/_(\w)/\U$1\U/g;
+    return $class_name;
 }
 
 # don't use split here since the package name might have a '-' in it
@@ -237,10 +248,17 @@ sub get_spops_files {
         my $files = $self->get_files;
         $base_files = [ grep { m|^conf/spops.*\.ini$| } @{ $files } ];
     }
-    my $dir = $self->directory;
-    my @spops_files = map { catfile( $dir, $_ ) } @{ $base_files };
-    $self->_check_file_validity( \@spops_files );
-    return $base_files
+    my @spops_files = ();
+    if ( my $rep = $self->repository ) {
+        my $dir = catdir( $rep->website_dir, 'conf', $self->name );
+        @spops_files = map { s|^conf/||; catfile( $dir, $_ ) } @{ $base_files };
+    }
+    else {
+        my $dir = $self->directory;
+        @spops_files = map { catfile( $dir, $_ ) } @{ $base_files };
+    }
+    $self->_check_file_validity( 'SPOPS configuration', \@spops_files );
+    return \@spops_files
 }
 
 sub get_action_files {
@@ -254,20 +272,17 @@ sub get_action_files {
             grep { m|^conf/action.*\.ini$| } @{ $files }
         ];
     }
-    my $dir = $self->directory;
-    my @action_files = map { catfile( $dir, $_ ) } @{ $base_files };
-    $self->_check_file_validity( \@action_files );
-    return $base_files
-}
-
-sub get_doc_files {
-    my ( $self ) = @_;
-    my $files = $self->get_files;
-    my @base_doc_files = grep { m|^doc| } @{ $files };
-    my $dir = $self->directory;
-    my @check_files = map { catfile( $dir, $_ ) } @base_doc_files;
-    $self->_check_file_validity( \@check_files );
-    return \@base_doc_files;
+    my @action_files = ();
+    if ( my $rep = $self->repository ) {
+        my $dir = catdir( $rep->website_dir, 'conf', $self->name );
+        @action_files = map { s|^conf/||; catfile( $dir, $_ ) } @{ $base_files };
+    }
+    else {
+        my $dir = $self->directory;
+        @action_files = map { catfile( $dir, $_ ) } @{ $base_files };
+    }
+    $self->_check_file_validity( 'action configuration', \@action_files );
+    return \@action_files;
 }
 
 sub get_message_files {
@@ -277,19 +292,19 @@ sub get_message_files {
     # If none returned, try to find our own
     unless ( scalar @{ $base_files } ) {
         my $files = $self->get_files;
-        $base_files = [ grep { m|^msg/.*\.msg$| } @{ $files } ];
+        $base_files = [ grep /^msg\/.*\.(mo|po|msg)$/, @{ $files } ];
     }
     my $dir = $self->directory;
     my @full_message_files = map { catfile( $dir, $_ ) } @{ $base_files };
-    $self->_check_file_validity( \@full_message_files );
-    return $base_files;
+    $self->_check_file_validity( 'localization file', \@full_message_files );
+    return \@full_message_files;
 }
 
 sub _check_file_validity {
-    my ( $self, $files ) = @_;
+    my ( $self, $type, $files ) = @_;
     foreach my $file ( @{ $files } ) {
         unless ( -f $file ) {
-            oi_error "Package file returned '$file' is invalid.";
+            oi_error "Package $type returned '$file', an invalid file.";
         }
     }
 }
@@ -345,10 +360,13 @@ sub install {
     $log->is_info &&
         $log->info( "Unpacked package into '$full_package_dir' ok" );
 
-    my $installed_package = $class->new({ directory  => $full_package_dir,
-                                          repository => $repository });
+    my $installed_package = $class->new({
+        directory  => $full_package_dir,
+        repository => $repository,
+    });
     $installed_package->installed_date( scalar( localtime ) );
-    my $copied_files = $installed_package->_install_copy_files;
+    $installed_package->_install_html_and_widget_files_to_website;
+    $installed_package->copy_configuration_to_website();
     $log->is_info &&
         $log->info( "Copied package files to website ok" );
 
@@ -361,12 +379,47 @@ sub install {
     return $installed_package;
 }
 
+sub copy_configuration_to_website {
+    my ( $self ) = @_;
+    return unless ( $self->repository );
+    my $website_dir     = $self->repository->website_dir;
+    my $package_dir     = rel2abs( $self->directory );
+    my $dest_conf_dir   = catdir( $website_dir, 'conf', $self->name );
+    my $dest_update_dir = catdir( $dest_conf_dir, 'updates' );
+
+    mkpath( $dest_conf_dir )  unless ( -d $dest_conf_dir );
+
+    my @conf_files = grep /^conf/, @{ $self->get_files };
+    my @to_checksum = ();
+    my %checksums = $self->_read_conf_checksums( $dest_conf_dir );
+FILE:
+    foreach my $src_base ( @conf_files ) {
+        my $src_path  = catfile( $package_dir, $src_base );
+        my $filename  = basename( $src_path );
+        my $dest_path = catfile( $dest_conf_dir, $filename );
+        if ( -f $dest_path ) {
+            my $md5 = OpenInteract2::Util->digest_file( $src_path );
+            next FILE if ( $checksums{ $filename } eq $md5 );
+            my $update_path =
+                catfile( $dest_update_dir, $filename . '-' . $self->version );
+            $self->_create_full_path( $update_path );
+            cp( $src_path, $update_path )
+                || oi_error "Cannot copy $src_path -> $update_path: $!";
+        }
+        else {
+            cp( $src_path, $dest_path )
+                || oi_error "Cannot copy $src_path -> $dest_path: $!";
+            push @to_checksum, $filename;
+        }
+    }
+    $self->_write_conf_checksums( $dest_conf_dir, @to_checksum );
+}
 
 ########################################
 # PACKAGE SKELETON (CLASS)
 
 # Creates a package directories using our base subdirectories
-# along with a package.conf file and some other goodies (?)
+# along with a package.ini file and some other goodies (?)
 
 # Currently we're taking the strategy that exceptions from the action
 # subroutines will bubble up to the caller
@@ -378,9 +431,7 @@ sub create_skeleton {
         oi_error "Must pass in package name to create in 'name'";
     }
 
-    # Both of these will throw an error on failure
-
-    my $sample_dir = $class->_skel_get_sample_dir( $params );
+    # dies on failure
     $name = $class->_skel_clean_package_name( $name );
 
     # Ensure the package dir doesn't already exist
@@ -398,18 +449,19 @@ sub create_skeleton {
     }
 
     eval {
-        $class->_skel_create_subdirectories(
-            $full_skeleton_dir );
-        $class->_skel_copy_sample_files(
-            $name, $sample_dir, $full_skeleton_dir );
+        $class->_skel_create_subdirectories( $full_skeleton_dir );
+        $class->_skel_copy_resources(
+            $name, $full_skeleton_dir,
+            $params->{brick_name}, $params->{brick_vars}
+        );
         $class->_skel_create_changelog(
             $name, $full_skeleton_dir, 'Changes' );
-        $class->_skel_create_manifest(
-            $full_skeleton_dir );
+        $class->_skel_create_manifest( $full_skeleton_dir );
     };
     if ( $@ ) {
+        my $error = $@;
         $class->_remove_directory_tree( $full_skeleton_dir );
-        oi_error $@;
+        oi_error $error;
     }
     my $created_package = $class->new({ directory => $full_skeleton_dir });
     return $created_package;
@@ -429,13 +481,36 @@ sub export {
     }
     $self->config->check_required_fields;
     $self->_export_check_manifest;
-    my $archive_filename = eval { $self->_export_archive_package };
-    if ( $@ ) {
-        oi_error $@;
-    }
-    return $archive_filename;
+    return $self->_export_archive_package;
 }
 
+
+########################################
+# COPY PACKAGE FILES
+
+sub copy_contents_to {
+    my ( $self, $dest_dir ) = @_;
+    my $src_dir = $self->directory;
+    my @copied = ();
+    my @same   = ();
+    foreach my $file ( @{ $self->get_files } ) {
+        my $src_path  = catfile( $src_dir, $file );
+        my $dest_path = catfile( $dest_dir, $file );
+        if ( OpenInteract2::Util->is_same_file( $src_path, $dest_path ) ) {
+            push @same, $file;
+        }
+        else {
+            $self->_create_full_path( $dest_path );
+            cp( $src_path, $dest_path )
+                || oi_error "Cannot copy '$src_path' -> '$dest_path': $!";
+            push @copied, $file;
+        }
+    }
+    return {
+        copied => \@copied,
+        same   => \@same,
+    };
+}
 
 
 ########################################
@@ -465,19 +540,32 @@ sub check {
     my $pkg_files = $self->get_files;
 
     push @status, $self->_check_manifest;
-    push @status, $self->_check_package_config;
+    my ( $c_required, $c_modules ) = $self->_check_package_config;
+    push @status, $c_required, $c_modules;
 
     my @ini_files = grep /^conf.*\.ini$/, @{ $pkg_files };
     push @status, $self->_check_ini_files( \@ini_files );
 
-    my @pm_files = grep /\.pm$/, @{ $pkg_files };
-    push @status, $self->_check_pm_files( \@pm_files );
+    if ( $c_modules->{is_ok} eq 'no' ) {
+        push @status, {
+            action  => 'Check package modules',
+            is_ok   => 'no',
+            message => 'Skipped module checks since dependencies failed',
+        };
+    }
+    else {
+        my @pm_files = grep /\.pm$/, @{ $pkg_files };
+        push @status, $self->_check_pm_files( \@pm_files );
+    }
 
     my @data_files = grep /^data\/.*\.dat$/, @{ $pkg_files };
     push @status, $self->_check_data_files( \@data_files );
 
     my @template_files = grep /^(template\/.*\.tmpl|widget)/, @{ $pkg_files };
     push @status, $self->_check_templates( \@template_files );
+
+    my $message_files = $self->get_message_files;
+    push @status, $self->_check_message_files( $message_files );
 
     chdir( $pwd );
     return @status;
@@ -565,7 +653,7 @@ sub _create_full_path {
     # NOTE: At least on 5.6.1, File::Path automatically dies when the
     # operation fails -- you don't need '|| die $!'
 
-    File::Path::mkpath( $dirname, undef, 0755 );
+    mkpath( $dirname, undef, 0755 );
     return 1;
 
 }
@@ -644,131 +732,112 @@ sub _install_check_dest_dir {
     return $full_package_dir;
 }
 
-sub _install_copy_files {
+sub _install_html_and_widget_files_to_website {
     my ( $self ) = @_;
-    unless ( $self->repository ) {
-        my $pkg_dir = rel2abs( $self->directory );
-        warn "Cannot copy files from package '", $self->name, "' to ",
-             "website because there is no repository set in package. ",
-             "You will need to copy the files from '$pkg_dir/html' and ",
-             "'$pkg_dir/widget' (if they exist) to the website manually.\n";
-        return;
+    my @pkg_files = @{ $self->get_files };
+    my %copy_files = ();
+    for ( grep /^html/, @pkg_files ) {
+        $log->is_debug && $log->debug( "Will copy HTML '$_' -> '$_'" );
+        $copy_files{ $_ } = $_;
+    }
+    foreach my $src ( grep /^widget/, @pkg_files ) {
+        my $dest = $src;
+        $dest =~ s|^widget|template|;
+        $log->is_debug && $log->debug( "Will copy widget '$_' -> '$_'" );
+        $copy_files{ $src } = $dest;
     }
 
-    my %file_map = map { $_ => 1 } @{ $self->get_files };
-
-    my @html_files = grep /^html/, keys %file_map;
-    my @html_dest_full = $self->_install_package_files_to_website(
-                                   \@html_files );
-
-    my @widget_files = grep /^widget/, keys %file_map;
-    my @widget_dest_files = @widget_files;
-    s|^widget|template| for ( @widget_dest_files );
-    my @widget_dest_full = $self->_install_package_files_to_website(
-                                   \@widget_files, \@widget_dest_files );
-    return [ @html_dest_full, @widget_dest_full ];
-}
-
-
-sub _install_package_files_to_website {
-    my ( $self, $base_files, $dest_files ) = @_;
-    $log ||= get_logger( LOG_OI );
-
-    $dest_files ||= [];
-    my $website_dir = $self->repository->website_dir;
-    my $package_dir = rel2abs( $self->directory );
-    my $BACKUP_EXT = 'pkg_install_backup';
-    my ( @copy_files );
+    my ( @copied );
     eval {
-        my $count = 0;
-        my %ro_by_dir = ();
-BASE_FILE:
-        foreach my $from_base ( @{ $base_files } ) {
-
-            # By default we copy relpath/filename -> relpath/filename
-            # from $base_files unless something specified in
-            # corresponding \@dest_files entry
-
-            my $to_base = $dest_files->[ $count ] || $from_base;
-
-            my $full_source_path = catfile( $package_dir, $from_base );
-            my $full_dest_path = catfile( $website_dir, $to_base );
-            $self->_create_full_path( $full_dest_path );
-
-            my $full_dest_dir = dirname( $full_dest_path );
-            my $ro = $ro_by_dir{ $full_dest_dir };
-            unless ( $ro ) {
-                $ro_by_dir{ $full_dest_dir } =
-                    OpenInteract2::Config::Readonly->new( $full_dest_dir );
-                $ro = $ro_by_dir{ $full_dest_dir };
-            }
-
-            # If file already exists check if we can write, and if so
-            # backup the file
-
-            if ( -f $full_dest_path ) {
-                unless ( $ro->is_writeable( $to_base ) ) {
-                    $log->is_debug &&
-                        $log->debug( "Will not copy '$full_source_path' ",
-                                 "to '$full_dest_path': marked readonly" );
-                    next BASE_FILE;
-                }
-                rename( $full_dest_path, "$full_dest_path.$BACKUP_EXT" )
-                    || die "Cannot backup '$full_dest_path': $!";
-            }
-            cp( $full_source_path, $full_dest_path )
-                    || die "Cannot copy '$full_source_path' -> '$full_dest_path': $!";
-            chmod( 0666, $full_dest_path ); # let umask work...
-            push @copy_files, $full_dest_path;
-            $count++;
-        }
+        $self->_install_do_copy_files_to_website( \%copy_files, \@copied );
     };
     if ( $@ ) {
         $log->error( "Caught error copying files to website: $@" );
-        foreach my $filename ( @copy_files ) {
+        foreach my $filename ( @copied ) {
             unlink( $filename )
-                    || warn "Cannot cleanup '$filename': $!";
-            if ( -f "$filename.$BACKUP_EXT" ) {
-                rename( "$filename.$BACKUP_EXT", $filename )
+                || warn "Cannot cleanup '$filename': $!";
+            if ( -f "$filename.backup" ) {
+                rename( "$filename.backup", $filename )
                     || warn "Cannot activate backup for '$filename': $!";
-                unlink( "$filename.$BACKUP_EXT" )
+                unlink( "$filename.backup" )
                     || warn "Cannot remove stale backup for '$filename': $!";
             }
         }
-        @copy_files = ();
+        @copied = ();
     }
-    return \@copy_files;
+    return @copied;
+}
+
+sub _install_do_copy_files_to_website {
+    my ( $self, $copy_files, $track ) = @_;
+    my $website_dir = $self->repository->website_dir;
+    my $package_dir = rel2abs( $self->directory );
+    my $count = 0;
+
+BASE_FILE:
+    while ( my ( $src_base, $dest_base ) = each %{ $copy_files } ) {
+        my $src_path  = catfile( $package_dir, $src_base );
+        my $dest_path = catfile( $website_dir, $dest_base );
+        my $dest_dir  = dirname( $dest_path );
+        $self->_create_full_path( $dest_path );
+
+        if ( -f $dest_path ) {
+            my $dest_file = basename( $dest_path );
+            my $dest_dir  = dirname( $dest_path );
+            my $ro = OpenInteract2::Config::Readonly->new( $dest_dir );
+            unless ( $ro->is_writeable( $dest_file ) ) {
+                $log->is_info
+                    && $log->info( "Skipping '$dest_path' because it's marked as readonly" );
+                next BASE_FILE;
+            }
+            rename( $dest_path, "$dest_path.backup" )
+                || die "Cannot backup '$dest_path': $!\n";
+        }
+        $log->is_debug &&
+            $log->debug( "Copying '$src_path' -> '$dest_path'" );
+        $self->_create_full_path( $dest_path );
+        cp( $src_path, $dest_path )
+            || die "Cannot copy '$src_path' -> '$dest_path': $!\n";
+        chmod( 0666, $dest_path ); # let umask work...
+        push @{ $track }, $dest_path;
+        $count++;
+    }
+}
+
+sub _read_conf_checksums {
+    my ( $self, $conf_dir ) = @_;
+    my $checksum_file = catfile( $conf_dir, 'CHECKSUMS' );
+    return () unless ( -f $checksum_file );
+    open( CSUM, '<', $checksum_file )
+        || oi_error "Cannot read from $checksum_file: $!";
+    my %sums = ();
+    while ( <CSUM> ) {
+        chomp;
+        next if ( /^#/ or /^\s*$/ );
+        my ( $md5, $file ) = split /\s+/, $_, 2;
+        $sums{ $file } = $md5;
+    }
+    close( CSUM );
+    return %sums;
+}
+
+sub _write_conf_checksums {
+    my ( $self, $conf_dir, @files ) = @_;
+    return unless ( scalar @files );
+    my $checksum_file = catfile( $conf_dir, 'CHECKSUMS' );
+    my $oper = ( -f $checksum_file ) ? '>>' : '>';
+    open( CSUM, $oper, $checksum_file )
+        || oi_error "Cannot write to $checksum_file: $!";
+    foreach my $file ( @files ) {
+        my $md5 = OpenInteract2::Util->digest_file( catfile( $conf_dir, $file ) );
+        print CSUM "$md5  $file\n";
+    }
+    close( CSUM );
 }
 
 
 ########################################
 # PACKAGE SKELETON HELPERS
-
-# Must specify one of:
-#   source_dir = /usr/local/src/OpenInteract-2.01
-#   sample_dir = /usr/local/src/OpenInteract-2.01/sample/package
-
-sub _skel_get_sample_dir {
-    my ( $class, $params ) = @_;
-    my $sample_dir = $params->{sample_dir};
-    my $source_dir = $params->{source_dir};
-
-    # If the source_dir is specified and the sample_dir isn't, build
-    # the sample dir from the source dir
-
-    if ( $source_dir && -d $source_dir &&
-         ( ! $sample_dir || ! -d $sample_dir ) ) {
-        $sample_dir = catdir( $source_dir, 'sample', 'package' );
-    }
-    if ( $sample_dir ) {
-        $sample_dir = rel2abs( $sample_dir );
-    }
-    unless ( $sample_dir && -d $sample_dir ) {
-        oi_error "Specified sample directory '$sample_dir' is ",
-                 "not a valid directory";
-    }
-    return $sample_dir;
-}
 
 # Ensure a package name is ok and that it can be used as a namespace
 # when necessary.
@@ -827,20 +896,22 @@ sub _skel_create_subdirectories {
 }
 
 
-# Copies over the sample skeleton files from the sample directory in
-# the OI2 source to a new package directory, making some simple
-# variable substitutions along the way.
+# Copies over all resources from the 'package' brick; you can also
+# specify your own brick and pass in any extra variables you want to
+# replace.
 
-sub _skel_copy_sample_files {
-    my ( $class, $name, $sample_dir, $dest_dir ) = @_;
-    my $class_name = ucfirst $name;
-    $class_name =~ s/_(\w)/\U$1\U/g;
-    my %vars = ( package_name => $name,
-                 class_name   => $class_name );
-
-    return OpenInteract2::Config::TransferSample
-                         ->new( $sample_dir )
-                         ->run( $dest_dir, \%vars );
+sub _skel_copy_resources {
+    my ( $class, $name, $dest_dir, $brick_name, $brick_vars ) = @_;
+    require OpenInteract2::Brick;
+    $brick_name ||= 'package';
+    $brick_vars ||= {};
+    my $brick = OpenInteract2::Brick->new( $brick_name );
+    my $class_name = $class->name_as_class( $name );
+    return $brick->copy_all_resources_to( $dest_dir, {
+        %{ $brick_vars },
+        package_name => $name,
+        class_name   => $class_name,
+    });
 }
 
 # Create a 'Changes' file
@@ -934,7 +1005,9 @@ sub _export_archive_package {
         $self->_create_archive( $pwd, $package_id, @archive_files )
     };
     my $error = $@;
-    $self->_remove_directory_tree( $export_dir );
+    eval {
+        $self->_remove_directory_tree( $export_dir )
+    };
     oi_error $error if ( $error );
     return $filename;
 }
@@ -950,13 +1023,13 @@ sub _export_archive_package {
 sub _create_archive {
     my ( $self, $dir, $base_filename, @files ) = @_;
     unless ( -d $dir and $base_filename and scalar @files ) {
-        oi_error "Insufficient parameters to create archive ",
-                 "[Dir: $dir] [File: $base_filename] [@files]";
+        die "Insufficient parameters to create archive ",
+            "in directory '$dir', file '$base_filename'\n";
     }
 
-    my $zip_filename = catfile( $dir, join( '.', $base_filename, 'zip' ) );
+    my $zip_filename = catfile( $dir, "$base_filename.zip" );
     if ( -f $zip_filename ) {
-        oi_error "Cannot create ZIP archive: '$zip_filename' already exists";
+        die "Cannot create ZIP archive: file '$zip_filename' already exists\n";
     }
 
     my $zip = Archive::Zip->new();
@@ -969,7 +1042,7 @@ sub _create_archive {
         $msg = 'There is a format error in a ZIP file being read.'      if ( $rv == AZ_FORMAT_ERROR );
         $msg = 'There was an IO error.'                                 if ( $rv == AZ_IO_ERROR );
         $msg ||= 'Unknown error';
-        oi_error "Failed to create ZIP archive '$zip_filename': $msg";
+        die "Failed to create ZIP archive '$zip_filename': $msg\n";
     }
     return $zip_filename;
 }
@@ -1136,6 +1209,27 @@ sub _check_templates {
     return @status;
 }
 
+sub _check_message_files {
+    my ( $self, $message_files ) = @_;
+    my @status = ();
+    my $action = 'Check localization filename';
+    foreach my $message_file ( @{ $message_files } ) {
+        $log->is_debug && $log->debug( "Checking message file '$message_file'" );
+        my $lang = OpenInteract2::I18N::Initializer
+                        ->is_valid_message_file( $message_file );
+        my $msg = ( $lang ) 
+                    ? "Extracted language '$lang' from '$message_file'"
+                    : "File '$message_file' is invalid";
+        push @status, {
+            action   => $action,
+            is_ok    => ( $lang ) ? 'yes' : 'no',
+            message  => $msg,
+            filename => $message_file,
+        };
+    }
+    return @status;
+}
+
 
 # Ensure that the package config has all necessary fields
 
@@ -1266,17 +1360,18 @@ OpenInteract2::Package - Perform actions on individual packages
  # L<OpenInteract2::Manage::Website::InstallPackage|OpenInteract2::Manage::Website::InstallPackage).
  # You get back a reference to the installed package.
   
- my $package = OpenInteract2::Package->install(
-                         { package_file => '/home/perlguy/trivia-game-1.07.zip',
-                           website_dir  => '/home/httpd/mysite' });
+ my $package = OpenInteract2::Package->install({
+     package_file => '/home/perlguy/trivia-game-1.07.zip',
+     website_dir  => '/home/httpd/mysite'
+ });
   
  # Create a new skeleton package for development (for the real world,
  # see C<oi2_manage>). You get back a reference to the newly created
  # package.
  
- my $package = OpenInteract2::Package->create_skeleton(
-                         { name       => 'mynewpackage',
-                           sample_dir => '/usr/local/src/OpenInteract-2.00/sample/package' });
+ my $package = OpenInteract2::Package->create_skeleton({
+     name => 'mynewpackage',
+ });
  
  # Export package in the given directory for distribution
  
@@ -1293,7 +1388,8 @@ OpenInteract2::Package - Perform actions on individual packages
  # Read information about a package distribution
  
  my $package = OpenInteract2::Package->new({
-                    package_file => '/home/cwinters/pkg/mynewpackage-1.02.zip' });
+     package_file => '/home/cwinters/pkg/mynewpackage-1.02.zip'
+ });
  my $config = $package->config;
  print "Package ", $package->name, " ", $package->version, "\n",
        "Author ", join( ", ", @{ $config->author } ), "\n";
@@ -1305,7 +1401,8 @@ OpenInteract2::Package - Perform actions on individual packages
  # Check validity of a package
  
  my $package = OpenInteract2::Package->new({
-                    directory => '/home/cwinters/pkg/mynewpackage' });
+     directory => '/home/cwinters/pkg/mynewpackage'
+ });
  my @status = $package->check;
  foreach my $status ( @status ) {
     print "Action: $status->{action}   OK? $status->{is_ok}\n";
@@ -1314,7 +1411,8 @@ OpenInteract2::Package - Perform actions on individual packages
  # Remove package
  
  my $package = OpenInteract2::Package->new({
-                    directory => '/home/cwinters/pkg/mynewpackage' });
+     directory => '/home/httpd/mysite/pkg/mynewpackage-1.13',
+ });
  $package->remove;
  
  # Get an object representing the changelog of a package and print out
@@ -1429,19 +1527,6 @@ Parameters:
 B<name>: Name of your package. It should be all alphanumberic
 lower-case with no spaces. If not an exception is thrown.
 
-=item *
-
-B<sample_dir>: The directory from where we pull our skeleton files
-from. This is normally in the OpenInteract source distribution
-directory, although you may elect to copy these files elsewhere so
-developers can have access.
-
-=item *
-
-B<source_dir>: You can use this instead of C<sample_dir> as long as
-the directory 'sample/package' exists underneath. (It should unless
-you have mucked with the source distribution.)
-
 =back
 
 Returns: package created from the new directory. Any failures throw an
@@ -1468,6 +1553,19 @@ Returns a string with the package name and version:
  print "Name: ", $package->full_name;
  # Name: foo-1.52
 
+B<name_as_class()>
+
+Displays the package name as suitable for a class: leading uppercase
+with camel-case internally replacing all underscores. For instance:
+
+ $package->name( 'foo' );
+ print "Class name: ", $package->name_as_class;
+ # Class name: Foo
+ 
+ $package->name( 'music_listener' );
+ print "Class name: ", $package->name_as_class;
+ # Class name: MusicListener
+
 B<get_files( [ $force_read ] )>
 
 Reads list of files from package C<MANIFEST> file. These results are
@@ -1490,6 +1588,25 @@ process will throw an exception. Similarly, if a directory of the name:
 already exists in the current directory an exception will be thrown.
 
 Returns: the full path to the distribution file created.
+
+See also: L<OpenInteract2::Manage::Package::CreateCPAN> for creating a
+CPAN distribution from your package.
+
+B<copy_contents_to( $destination_dir )>
+
+Copies all files from this package (those identified in 'MANIFEST') to
+C<$destination_dir>. If C<$destination_dir> does not exist we create
+it; if it does exist we overwrite any different files that match the
+paths from the source package. ('Different' means the files must be of
+a different size and have a different MD5 digest.)
+
+You typically want to use this for copying a package installed to a
+website to another package -- for syncing up a directory it would
+probably be faster to just use L<Archive::Zip>.
+
+Returns: hashref with two keys, 'copied' and 'same', each pointing to
+an arrayref of relative files appropriate to the key. ('Relative'
+means the path from MANIFEST, e.g. 'OpenInteract2/Action/MyAction.pm').
 
 B<check( \%params )>
 
@@ -1553,28 +1670,28 @@ Returns: array of status hashrefs, with a single member.
 
 B<get_spops_files()>
 
-Retrieves SPOPS configuration files from the package. You can either
-specify the files yourself in the package configuration (see
+Retrieves SPOPS configuration files used by this package. If the
+package object has an assigned C<repository> you'll get the files from
+C<$WEBSITE_DIR/conf/$PACKAGE>, otherwise they'll be from
+C<$PACKAGE_DIR/conf>. You can either specify the files yourself in the
+package configuration (see
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
 this routine will pick up all files that match C<^conf/spops.*\.ini$>.
 
-Returns: arrayref of relative SPOPS configuration files.
+Returns: arrayref of fully-qualified SPOPS configuration files.
 
 B<get_action_files()>
 
-Retrieves action configuration files from the package. You can either
-specify the files yourself in the package configuration (see
+Retrieves action configuration files from the package. If the package
+object has an assigned C<repository> you'll get the files from
+C<$WEBSITE_DIR/conf/$PACKAGE>, otherwise they'll be from
+C<$PACKAGE_DIR/conf>. You can either specify the files yourself in the
+package configuration (see
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
-this routine will pick up all files that match C<^conf/action.*\.ini$>.
+this routine will pick up all files that match
+C<^conf/action.*\.ini$>.
 
-Returns: arrayref of relative action configuration files.
-
-B<get_doc_files()>
-
-Retrieves all documentation from the package. This includes all files
-in C<doc/>.
-
-Returns: arrayref of relative documentation files.
+Returns: arrayref of fully-qualified configuration files.
 
 B<get_message_files()>
 
@@ -1583,9 +1700,9 @@ keys and values for use in templates and elsewhere. You can either
 specify the files yourself in the package configuration (see
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>), or
 this routine will pick up all files that match
-C<^msg/*\.msg$>.
+C<^msg/.*\.(mo|po|msg)$>.
 
-Returns: arrayref of relative message files.
+Returns: arrayref of fully-qualified message files.
 
 B<get_changes()>
 
@@ -1599,6 +1716,10 @@ Finds the a file from the list C<@relative_files>.
 
 Returns: the full path to the first existing filename; if no file is
 found, C<undef>.
+
+NOTE: If you're looking for a configuration file use the
+C<get_spops_files()> or C<get_action_files()> instead as you'll get
+the most current version from the website with those.
 
 B<read_file( $relative_file )>
 
@@ -1632,53 +1753,6 @@ B<config>: The
 L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>
 object associated with this package.
 
-=head1 TO DO
-
-B<Automatically create objects for HTML pages>
-
-NEW WAY:
-
-In the relevant OI2::Manage class, just run the page scanner after a
-package has been installed.
-
-OLD WAY:
-
-For each file copied over to the /html directory, create a 'page'
-object in the system for it. Note that we might have to hook this up
-with the system that ensures we do not overwrite certain files. So we
-might need to either remove it from the _copy_package_files() routine,
-or add an argument to that routine that lets us pass in a coderef to
-execute with every item copied over.
-
-ACK -- here is the problem. We do not know if we can even create an $R
-yet, because (1) the base_page package might not have even been
-installed yet (when creating a website) and (2) the user has not yet
-configured the database (etc.)
-
-We can get around this whenever we rewrite
-Package/PackageRepository/oi_manage, but until then we will tell
-people to include the relevant data inserts with packages that include
-HTML documents.
-
-Until then, here is what this might look like :-)
-
- # Now do the HTML files, but also create records for each of the HTML
- # files in the 'page' table
-
-   my $copied = $class->_copy_package_files( "$info->{website_dir}/html",
-                                             'html',
-                                             $pkg_file_list );
-   my @html_locations = map { s/^html//; $_ } @{ $copied };
-   foreach my $location ( @html_locations ) {
-       my $page = $R->page->fetch( $location, { skip_security => 1 } );
-       next if ( $page );
-       eval {
-           $R->page->new({ location => $location,
-                                      ... })
-                   ->save({ skip_security => 1 });
-       };
-   }
-
 =head1 SEE ALSO
 
 L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages>
@@ -1689,7 +1763,7 @@ L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

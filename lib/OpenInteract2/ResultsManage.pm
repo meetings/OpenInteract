@@ -1,6 +1,6 @@
 package OpenInteract2::ResultsManage;
 
-# $Id: ResultsManage.pm,v 1.12 2004/10/05 03:08:25 lachoy Exp $
+# $Id: ResultsManage.pm,v 1.14 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -15,7 +15,7 @@ use OpenInteract2::ResultsIterator;
 use Scalar::Util             qw( blessed );
 use SPOPS::Utility;
 
-$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ResultsManage::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -563,7 +563,8 @@ OpenInteract2::ResultsManage - Save and retrieve generic search results
  ... another request from this user ...
  
  my $results = OpenInteract2::ResultsManage->new({
-                              search_id => $request->session->{this_search_id} });
+     search_id => $request->session->{this_search_id}
+ });
  my $result_list = $results->retrieve();
  
  # Use with paged results
@@ -571,7 +572,7 @@ OpenInteract2::ResultsManage - Save and retrieve generic search results
  my $results = OpenInteract2::ResultsManage->new();
  $results->save( \@id_list );
  $request->session->{this_search_id} = $results->{search_id};
- my $page_num = $R->apache->param( 'pagenum' );
+ my $page_num = $request->param( 'pagenum' );
  my ( $min, $max ) = $results->find_page_boundaries( $page_num, $HITS_PER_PAGE );
  my ( $results, $total_count ) = $results->retrieve({ min => $min, max => $max } );
  my $total_pages = $results->find_total_page_count( $HITS_PER_PAGE );
@@ -905,7 +906,7 @@ more use out of this module.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

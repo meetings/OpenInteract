@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: 00_manage_create_website.t,v 1.2 2004/12/05 18:50:11 lachoy Exp $
+# $Id: 00_manage_create_website.t,v 1.5 2005/02/28 01:03:59 lachoy Exp $
 
 # Odd name rationale: we try to run this test first to get the test
 # site created and available for other tests that need it.
@@ -15,21 +15,18 @@ use Test::More  tests => 45;
 require_ok( 'OpenInteract2::Manage' );
 
 my $website_dir = get_test_site_dir();
+my $db_file     = get_test_site_db_file();
 
-# Delete the testing site if it already exists
-if ( -d $website_dir ) {
-    rmtree( $website_dir );
-}
-
-my $source_dir = get_source_dir();
+# Delete the testing site and db if they already exist
+rmtree( $website_dir ) if ( -d $website_dir );
+unlink( $db_file )     if ( -f $db_file );
 
 create_tmp_dir();
 
 my $task = eval {
     OpenInteract2::Manage->new(
         'create_website', {
-            website_dir => $website_dir,
-            source_dir  => $source_dir
+            website_dir => $website_dir
         })
 };
 ok( ! $@, 'Task created' ) || diag "Error: $@";
@@ -42,8 +39,8 @@ is( ref $task, 'OpenInteract2::Manage::Website::Create',
 warn "\nCreating website... this may take a while\n";
 
 my @status = eval { $task->execute };
-ok( ! $@, 'Task executed' ) || diag "Error: $@";
-is( scalar @status, 109,
+ok( ! $@, 'Task executed' ) || diag "Execution error: $@";
+is( scalar @status, 110,
     'Number of status messages' );
 
 # Look at the directories we should have created and see they're there
@@ -74,7 +71,7 @@ is( count_dirs( catdir( $website_dir, 'cache' ) ), 4,
 my $site_conf_dir = catdir( $website_dir, 'conf' );
 is( count_files( $site_conf_dir ), 16,
     "Number of files in conf/" );
-is( first_file( $site_conf_dir ), 'base.conf',
+is( first_file( $site_conf_dir ), 'bootstrap.ini',
     "First file in conf/" );
 is( last_file( $site_conf_dir ), 'startup_mp2.pl',
     "Last file in conf/" );

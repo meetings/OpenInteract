@@ -1,6 +1,6 @@
 package Apache::OpenInteract2;
 
-# $Id: OpenInteract2.pm,v 1.16 2004/11/09 13:28:08 sjn Exp $
+# $Id: OpenInteract2.pm,v 1.18 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Apache::Constants        qw( OK );
@@ -10,6 +10,8 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Request;
 use OpenInteract2::Response;
+
+$Apache::OpenInteract2::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -76,7 +78,7 @@ the proper error code to make Apache happy.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

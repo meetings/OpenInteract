@@ -1,6 +1,6 @@
 package OpenInteract2::SessionManager;
 
-# $Id: SessionManager.pm,v 1.8 2004/11/27 22:56:51 lachoy Exp $
+# $Id: SessionManager.pm,v 1.9 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use OpenInteract2::Constants qw( :log SESSION_COOKIE );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -434,7 +434,7 @@ user or calling process.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,12 +1,14 @@
 package Apache::OpenInteract2::HttpAuth;
 
-# $Id: HttpAuth.pm,v 1.9 2004/02/22 04:41:48 lachoy Exp $
+# $Id: HttpAuth.pm,v 1.12 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
 use Apache::Constants        qw( FORBIDDEN AUTH_REQUIRED OK );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
+
+$Apache::OpenInteract2::HttpAuth::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -15,8 +17,8 @@ sub handler {
     $log ||= get_logger( LOG_AUTH );
 
     unless ( $r->some_auth_required ) {
-        $log->error( "Asked to process authentication request ",
-                              "but no authentication configured" );
+        $log->warn( "Asked to process authentication request ",
+                    "but no authentication configured" );
         $r->log_reason( "No authentication has been configured" );
         return FORBIDDEN;
     }
@@ -25,14 +27,12 @@ sub handler {
 
     # e.g., HTTP_UNAUTHORIZED
     if ( $res ) {
-        $log->is_info &&
-            $log->info( "Got result [$res] from auth" );
+        $log->is_debug && $log->debug( "Got result '$res' from auth" );
         return $res;
     }
 
     my $user_sent = $r->connection->user;
-    $log->is_debug &&
-        $log->debug( "Trying to authenticate [$user_sent]" );
+    $log->is_debug && $log->debug( "Trying to authenticate '$user_sent'" );
     unless ( $user_sent ) {
         return AUTH_REQUIRED;
     }
@@ -40,21 +40,18 @@ sub handler {
     my $user = CTX->lookup_object( 'user' )
                   ->fetch_by_login_name( $user_sent, { skip_security => 1 } );
     unless ( $user ) {
-        $log->is_info &&
-            $log->info( "User [$user_sent] is not in OI" );
-        $r->log_reason( "User [$user_sent] is not in OI" );
+        my $msg = "User '$user_sent' is not an OpenInteract user.";
+        $log->is_info && $log->info( $msg );
+        $r->log_reason( $msg );
         return AUTH_REQUIRED;
     }
     unless ( $user->check_password( $password_sent ) ) {
-        $log->is_info &&
-            $log->info( "User [$user->{login_name}] found but password ",
-                             "mismatch" );
-        $r->log_reason( "User [$user->{login_name}] exists, but password ",
-                        "does not match" );
+        my $msg = "User '$user_sent' found but password does not match";
+        $log->is_info && $log->info( $msg );
+        $r->log_reason( $msg );
         return AUTH_REQUIRED;
     }
-    $log->is_debug &&
-        $log->debug( "User [$user->{login_name}] auth ok" );
+    $log->is_debug && $log->debug( "User '$user_sent' auth ok" );
     $r->pnotes( 'login_user', $user );
     return OK;
 }
@@ -102,7 +99,7 @@ C<pnotes>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

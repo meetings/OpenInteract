@@ -64,15 +64,14 @@ interfaces.
 =head1 CONCEPTS
 
 For more information about these concepts see
-L<OpenInteract2::Manual::Architecture|OpenInteract2::Manual::Architecture>.
+L<OpenInteract2::Manual::Architecture>.
 
 =head2 Context
 
 Holds all application configuration information and provides a central
 lookup mechanism. This is a singleton (there's only one in the system
-at any time) and can be imported from the
-L<OpenInteract2::Context|OpenInteract2::Context> class since it's used
-fairly often.
+at any time) and can be imported from the L<OpenInteract2::Context>
+class since it's used fairly often.
 
 =head2 Adapter
 
@@ -80,35 +79,34 @@ This is the tool that sits between your interface (e.g.,
 Apache/mod_perl, CGI, etc.) and the OpenInteract server. The adapter
 translates parameters from the user, information about the request
 (hostname, URL, referer, cookies, etc.) and other data into the
-relevant L<OpenInteract2::Request|OpenInteract2::Request> subclass.
+relevant L<OpenInteract2::Request> subclass.
 
 Once the OpenInteract cycle is complete it translates OpenInteract
 data (content, headers, etc.) into a response to send back to the user
-via the relevant L<OpenInteract2::Response|OpenInteract2::Response>
-subclass. For an example see
-L<Apache::OpenInteract2|Apache::OpenInteract2>.
+via the relevant L<OpenInteract2::Response> subclass. For an example
+see L<Apache::OpenInteract2>.
 
 =head2 Controller
 
 Once the adapter has created the request and response it hands off the
-processing to the
-L<OpenInteract2::Controller|OpenInteract2::Controller> object. This
-reads the URL and creates the relevant action object that will
-generate the content. It knows which action object to create through a
-URL-to-action mapping created at server startup. The controller places
-the generated content in a larger scope so you can control common
-graphical elements (sidebars, menus, etc.) from one place.
+processing to the L<OpenInteract2::Controller> object. This reads the
+URL and asks a set of small objects called action resolvers to create
+an B<Action> from the URL. Once that action is created it executes the
+action which generates the primary content for the request. The
+controller places that content in a larger content scope so you can
+control common graphical elements (sidebars, menus, etc.) from one
+place.
 
 =head2 Action
 
 Actions are the core of OpenInteract2. Each action provides a discrete
 set of functionality. What "discrete set" means is up to the
-developer, but typically this is a set of SCRUD (Search - CReate -
-Update - Delete) operations on a class of objects.
+developer, but typically this is a set of CRUDS (Create - Remove -
+Update - Display - Search) operations on a class of objects.
 
 Each action is represented by zero or more URLs, and each operation is
-specified by a task referenced in that URL. So if I created a 'news'
-action my URLs might look like:
+typically specified by a B<task> referenced in that URL. So if I
+created a 'news' action my URLs might look like:
 
  /news/search/
  /news/create/
@@ -116,9 +114,8 @@ action my URLs might look like:
  /news/remove/
 
 Every task returns some sort of content, generally by passing data to
-a Content Generator which marries it with a template. See
-L<OpenInteract2::Action|OpenInteract2::Action> for much more
-information.
+a B<Content Generator> which marries it with a template. See
+L<OpenInteract2::Action> for much more information.
 
 =head2 Content Generator
 
@@ -126,9 +123,8 @@ As mentioned above tasks in an Action return content. They normally
 generate that content by assembling a set of data and passing that
 data off to a content generator. A content generator is a wrapper
 around some sort of templating system, such as the L<Template
-Toolkit|Template>, L<HTML::Template|HTML::Template> or
-L<Text::Template|Text::Template> or even your own homegrown
-system. (Admit it, you've written your own.)
+Toolkit|Template>, L<HTML::Template> or L<Text::Template> or even your
+own homegrown system. (Admit it, you've written your own.)
 
 Each action is associated with a content generator. And you can even
 associate an action with multiple content generators so you can settle
@@ -138,10 +134,9 @@ a bet as to which templating system is easiest to use.
 
 These are the major configuration files at the server level. Each
 package has its own configuration files -- see
-L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages> for
-more information about packages, and
-L<OpenInteract2::Manual::QuickStart|OpenInteract2::Manual::QuickStart>
-for how to modify some of these files to get a server started quickly.
+L<OpenInteract2::Manual::Packages> for more information about
+packages, and L<OpenInteract2::Manual::QuickStart> for how to modify
+some of these files to get a server started quickly.
 
 B<server configuration> - C<conf/server.ini>
 
@@ -157,9 +152,8 @@ B<logging configuration> - C<conf/log4perl.conf>
 This controls logging for the application server. Here you can
 determine the logging level for the whole server or discrete parts of
 it, which logfiles get written, when/if they're rolled over, etc. See
-L<OpenInteract2::Manual::Logging|OpenInteract2::Manual::Logging> for a
-quick intro to logging and read up about
-L<Log::Log4perl|Log::Log4perl> for details.
+L<OpenInteract2::Manual::Logging> for a quick intro to logging and
+read up about L<Log::Log4perl> for details.
 
 B<interface configuration: Apache> - C<conf/httpd_modperl_solo.conf>
 
@@ -168,7 +162,7 @@ inside Apache/mod_perl without a front-end proxy server. It's useful
 for development but in real life you'd probably want the proxy server
 (see C<conf/httpd_static.conf> for a proxy configuration and
 C<conf/httpd_modperl.conf> for the corresponding proxied backend
-configuration).
+configuration). See L<OpenInteract2::Manual::AdminApache> for more.
 
 B<interface configuration: standalone> - C<conf/oi2_daemon.ini>
 
@@ -177,7 +171,7 @@ port to run on.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Chris Winters. All rights reserved.
+Copyright (c) 2002-2005 Chris Winters. All rights reserved.
 
 =head1 AUTHORS
 

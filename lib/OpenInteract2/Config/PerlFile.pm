@@ -1,6 +1,6 @@
 package OpenInteract2::Config::PerlFile;
 
-# $Id: PerlFile.pm,v 1.7 2004/02/18 05:25:27 lachoy Exp $
+# $Id: PerlFile.pm,v 1.8 2005/03/18 04:09:50 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Config );
@@ -11,7 +11,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::PerlFile::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -139,7 +139,7 @@ L<OpenInteract2::Config|OpenInteract2::Config>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2004 Chris Winters. All rights reserved.
+Copyright (c) 2001-2005 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: repository.t,v 1.10 2004/06/06 06:13:40 lachoy Exp $
+# $Id: repository.t,v 1.11 2005/02/28 01:02:38 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -45,14 +45,14 @@ my ( $repository_file );
         '...repository filename set' );
 }
 
-# Then from base config
+# Then from bootstrap
 {
-    my $base_config = CTX->base_config();
+    my $bootstrap = CTX->bootstrap();
     my $rep_base = eval {
-        OpenInteract2::Repository->new( $base_config )
+        OpenInteract2::Repository->new( $bootstrap )
     };
     ok( ! $@,
-        'Repository created from base config' ) || diag "Error: $@";
+        'Repository created from bootstrap' ) || diag "Error: $@";
     is( ref $rep_base, 'OpenInteract2::Repository',
         '...object of correct class' );
     is( $rep_base->website_dir, $website_dir,

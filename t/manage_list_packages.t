@@ -1,11 +1,11 @@
 # -*-perl-*-
 
-# $Id: manage_list_packages.t,v 1.13 2004/05/25 00:13:30 lachoy Exp $
+# $Id: manage_list_packages.t,v 1.15 2005/03/04 03:46:21 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 37;
+use Test::More  tests => 21;
 
 require_ok( 'OpenInteract2::Manage' );
 
@@ -25,14 +25,9 @@ ok( ! $@, 'Task executed ok' ) || diag "Error: $@";
 is( scalar @status, 16,
     'Correct number of packages listed' );
 
-my %package_versions = get_package_versions();
-
 my $count = 0;
-foreach my $package_name ( sort keys %package_versions ) {
+foreach my $package_name ( get_packages() ) {
     is( $status[$count]->{name}, $package_name,
         "Package " . ($count + 1) . " name correct ($package_name)" );
-    my $version = $package_versions{ $package_name };
-    is( $status[$count]->{version}, $version,
-        "Package " . ($count + 1) . " version correct ($version)" );
     $count++;
 }
