@@ -1,6 +1,6 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.28 2002/01/16 13:01:40 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.30 2002/02/26 03:07:22 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
@@ -8,7 +8,7 @@ use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = 1.37;
+$OpenInteract::VERSION  = 1.38;
 
 
 # Generic separator used in display
@@ -312,6 +312,18 @@ sub setup_authentication {
 sub setup_theme {
     my ( $class, $R ) = @_;
     my $C = $R->CONFIG;
+    my $theme_refresh = $R->CONFIG->{session_info}{cache_theme};
+    if ( $theme_refresh > 0 ) {
+        if ( my $theme = $R->{session}{_oi_cache}{theme} ) {
+            if ( time < $R->{session}{_oi_cache}{theme_refresh_on} ) {
+                $R->DEBUG && $R->scrib( 1, "Got theme from session ok" );
+                $R->{theme} = $theme;
+                return;
+            }
+            $R->DEBUG && $R->scrib( 1, "Theme session cache expired; refreshing from db" );
+        }
+    }
+
     $R->{theme} = ( $R->{auth}{user} and $R->{auth}{user}{theme_id} )
                     ? eval { $R->{auth}{user}->theme }
                     : eval { $R->theme->fetch( $C->{default_objects}{theme} ) };
@@ -328,6 +340,16 @@ system administrator (<a href="mailto:$admin_email">$admin_email</a>).
 THEMERR
         $class->send_html( $R->apache, $error_msg, $R );
         die OK . "\n";
+    }
+
+    # Find all the properties before we potentially cache
+
+    $R->{theme}->discover_properties;
+    elsif ( $theme_refresh > 0 ) {
+        $R->{session}{_oi_cache}{theme} = $R->{theme};
+        $R->{session}{_oi_cache}{theme_refresh_on} = time + ( $theme_refresh + 60 );
+        $R->DEBUG && $R->scrib( 1, "Set theme to session cache, expires ",
+                                   "in [$theme_refresh] minutes" );
     }
     return undef;
 }

@@ -1,6 +1,6 @@
 package OpenInteract::Template::Process;
 
-# $Id: Process.pm,v 1.21 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Process.pm,v 1.22 2002/02/16 15:09:30 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
@@ -10,7 +10,7 @@ use OpenInteract::Template::Provider;
 use Template;
 
 $OpenInteract::Template::Process::VERSION  = '1.2';
-$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
 use constant DEFAULT_CACHE_SIZE  => 75;
@@ -31,11 +31,24 @@ sub initialize {
 
     # Default configuration -- this can be modified by each site
 
+    my $cache_size  = ( defined $oi_tt_config->{cache_size} )
+                        ? $oi_tt_config->{cache_size} : DEFAULT_CACHE_SIZE;
     my $compile_ext = $oi_tt_config->{compile_ext} || DEFAULT_COMPILE_EXT;
-    my $cache_size  = $oi_tt_config->{cache_size}  || DEFAULT_CACHE_SIZE;
+    my $compile_dir = $CONFIG->get_dir( 'cache_tt' );
+
+    # If the compile_dir isn't specified, be sure to set it **and**
+    # the extension to undef, otherwise TT will try to compile/save
+    # the templates into the directory we find them (maybe: the custom
+    # provider might override, but whatever)
+
+    unless ( defined $compile_dir ) {
+        $compile_ext = undef;
+        $compile_dir = undef;
+    }
+
     my %tt_config = ( PLUGINS     => { OI => 'OpenInteract::Template::Plugin' },
                       CACHE_SIZE  => $cache_size,
-                      COMPILE_DIR => $CONFIG->get_dir( 'cache_tt' ),
+                      COMPILE_DIR => $compile_dir,
                       COMPILE_EXT => $compile_ext );
 
     # Install various template configuration items (currently plugins

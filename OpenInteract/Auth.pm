@@ -1,12 +1,11 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.15 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Auth.pm,v 1.17 2002/02/24 06:47:06 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
-@OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -16,9 +15,31 @@ $OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.
 sub user {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    my $uid = $class->fetch_user_id;
+
+    my ( $uid );
+
+    # Check to see if the user is in the session
+
+    my $user_refresh = $R->CONFIG->{session_info}{cache_user};
+    if ( $user_refresh > 0 ) {
+        if ( my $user = $R->{session}{_oi_cache}{user} ) {
+            if ( time < $R->{session}{_oi_cache}{user_refresh_on} ) {
+                $R->DEBUG && $R->scrib( 1, "Got user from session ok" );
+                $R->{auth}{user} = $user;
+                $R->{auth}{logged_in} = 1;
+                return;
+            }
+
+            # If we need to refresh the user object, pull the $uid out
+            # so we know what to refresh...
+            $R->DEBUG && $R->scrib( 1, "User session cache expired; refreshing from db" );
+            $uid = $user->id;
+        }
+    }
+
+    $uid ||= $class->fetch_user_id;
     if ( $uid ) {
-        $R->DEBUG && $R->scrib( 1, "Found session and uid ($uid); fetching user" );
+        $R->DEBUG && $R->scrib( 1, "Found uid [$uid]; fetching user" );
 
         $R->{auth}{user} = eval { $class->fetch_user( $uid ) };
 
@@ -30,24 +51,27 @@ sub user {
             return $class->fetch_user_failed( $uid );
         }
 
-        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}{user}{login_name}" );
+        $R->DEBUG && $R->scrib( 1, "User found [$R->{auth}{user}{login_name}]" );
         $R->{auth}{logged_in} = 1;
 
         $class->check_first_login;
-        return undef;
+        if ( $user_refresh > 0 ) {
+            $class->set_cached_user;
+        }
+        return;
     }
     $R->DEBUG && $R->scrib( 1, "No uid found in session. Finding login info." );
 
     # If no user info found, check to see if the user logged in
 
-    $R->{auth}{user} = $class->login_user;
+    $class->login_user;
 
     # If not, create an 'empty' user and we're done
 
     unless ( $R->{auth}{user} ) {
         $R->DEBUG && $R->scrib( 1, "Creating the not-logged-in user." );
         $class->create_nologin_user;
-        return undef;
+        return;
     }
 
     $R->{auth}{logged_in} = 1;
@@ -64,7 +88,7 @@ sub user {
         }
     }
 
-    return undef;
+    return;
 }
 
 # Just grab the user_id from somewhere
@@ -94,7 +118,7 @@ sub fetch_user_failed {
     OpenInteract::Error->set( SPOPS::Error->get );
     $R->throw({ code => 311 });
     $R->{session}{user_id} = undef;
-    return undef;
+    return;
 }
 
 
@@ -128,18 +152,16 @@ sub check_first_login {
 sub login_user {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-
-    my $apr    = $R->apache;
     my $CONFIG = $R->CONFIG;
 
     my $login_field    = $CONFIG->{login}{login_field};
     my $password_field = $CONFIG->{login}{password_field};
     unless ( $login_field and $password_field ) {
         $R->throw({ code => 205, type => 'system' });
-        return undef;
+        return;
     }
 
-    my $login_name = $apr->param( $login_field );
+    my $login_name = $R->apache->param( $login_field );
     return undef unless ( $login_name );
     $R->DEBUG && $R->scrib( 1, "Found login name from form: ($login_name)" );
 
@@ -155,7 +177,7 @@ sub login_user {
         $R->throw({ code  => 401,
                     type  => 'authenticate',
                     extra => { login_name => $login_name } });
-        return undef;
+        return;
     }
 
     # Check the password
@@ -167,7 +189,7 @@ sub login_user {
         $R->throw({ code  => 402,
                     type  => 'authenticate',
                     extra => { login_name => $login_name } });
-        return undef;
+        return;
     }
     $R->DEBUG && $R->scrib( 1, "Passwords matched; UID ($user->{user_id})" );
 
@@ -175,7 +197,22 @@ sub login_user {
     # transient is handled in 'remember_login()')
 
     $R->{session}{user_id} = $user->id;
-    return $user;
+    $R->{auth}{user} = $user;
+    $class->set_cached_user;
+
+    return $R->{auth}{user};
+}
+
+
+sub set_cached_user {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    my $user_refresh = $R->CONFIG->{session_info}{cache_user};
+    return unless ( $user_refresh > 0 );
+    $R->{session}{_oi_cache}{user} = $R->{auth}{user};
+    $R->{session}{_oi_cache}{user_refresh_on} = time + ( $user_refresh * 60 );
+    $R->DEBUG && $R->scrib( 1, "Set user to session cache, expires ",
+                               "in [$user_refresh] minutes" );
 }
 
 
@@ -217,19 +254,39 @@ sub group {
     my $R = OpenInteract::Request->instance;
     unless ( $R->{auth}{logged_in} ) {
         $R->DEBUG && $R->scrib( 1, "No logged-in user found, not retrieving groups." );
-        return undef;
+        return;
     }
     $R->DEBUG && $R->scrib( 1, "Authenticated user exists; getting groups." );
+
+    # Check to see if the group is in the session
+    my $group_refresh = $R->CONFIG->{session_info}{cache_group};
+    if ( $group_refresh > 0 ) {
+        if ( my $groups = $R->{session}{_oi_cache}{group} ) {
+            if ( time < $R->{session}{_oi_cache}{group_refresh_on} ) {
+                $R->DEBUG && $R->scrib( 1, "Got groups from session ok" );
+                $R->{auth}{group} = $groups;
+                return;
+            }
+            $R->DEBUG && $R->scrib( 1, "Group session cache expired; refreshing from db" );
+        }
+    }
+
     $R->{auth}{group} = eval { $R->{auth}{user}->group };
     if ( $@ ) {
         OpenInteract::Error->set( SPOPS::Error->get );
         $R->throw({ code => 309 });
     }
     else {
+        if ( $group_refresh > 0 ) {
+            $R->{session}{_oi_cache}{group} = $R->{auth}{group};
+            $R->{session}{_oi_cache}{group_refresh_on} = time + ( $group_refresh * 60 );
+            $R->DEBUG && $R->scrib( 1, "Set groups to session cache, expires ",
+                                       "in [$group_refresh] minutes" );
+        }
         $R->DEBUG && $R->scrib( 2, "Retrieved groups: ",
                                    join( ', ', map { "($_->{name})" } @{ $R->{auth}{group} } ) );
     }
-    return undef;
+    return;
 }
 
 
@@ -451,7 +508,9 @@ application might use a different means to track the user.
 Default: Look at the 'login_field' and 'password_field' as set in the
 server configuration under 'login' for the username and password.
 
-Returns: A user object. If you cannot create one, just return undef.
+Returns: A user object, along with setting the user object to
+C<{auth}{user}> in the L<OpenInteract::Request|OpenInteract::Request>
+object. If you cannot create one, just return undef.
 
 B<remember_login()>
 

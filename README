@@ -128,7 +128,8 @@ comments, thoughts, diatribes, e-mail them to Chris Winters
 COPYRIGHT AND DISCLAIMERS
 =========================
 
-OpenInteract is Copyright (c) 2001 intes.net, inc.. All rights reserved.
+OpenInteract is Copyright (c) 2001-2002 intes.net, inc.. All rights
+reserved.
 
 The OpenInteract library(**) is free software; you can redistribute it
 and/or modify it under the terms of the Perl Artistic License or the
@@ -141,6 +142,7 @@ your option) any later version.
  OpenInteract
  OpenInteract::ApacheStartup
  OpenInteract::Auth
+ OpenInteract::CommonHandler
  OpenInteract::Config
  OpenInteract::Config::PerlFile
  OpenInteract::Cookies::Apache
@@ -168,23 +170,25 @@ your option) any later version.
  OpenInteract::UI::Main
  OpenInteract::Utility
 
-Along with the core packages:
+along the default configuration and documentation, etc. This also
+includes the core packages:
 
  base
  base_box
  base_component
  base_error
  base_group
+ base_page
  base_security
  base_template
  base_theme
  base_user
  lookup
+ object_activity
  results_manage
- static_page
  system_doc
 
-And the following application packages:
+and the following application packages:
 
  classified
  full_text
@@ -194,4 +198,4 @@ Every other package, whether developed by intes.net, inc. or other
 party, is licensed under its own terms.
 
 =========================
-$Id: README,v 1.5 2001/10/15 05:26:05 lachoy Exp $
+$Id: README,v 1.6 2002/02/26 03:02:40 lachoy Exp $

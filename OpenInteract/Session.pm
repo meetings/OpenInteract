@@ -1,12 +1,12 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.9 2002/01/16 16:26:08 lachoy Exp $
+# $Id: Session.pm,v 1.10 2002/02/24 06:29:57 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
@@ -68,6 +68,8 @@ sub is_session_valid {
 sub save {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
+    my $CONFIG = $R->CONFIG;
+
     if ( tied %{ $R->{session} } ) {
         $R->{session}{timestamp} = $R->{time};
         $R->DEBUG && $R->scrib( 2, "Saving tied session\n", Dumper( $R->{session} ) );
@@ -95,7 +97,7 @@ sub save {
                 delete $R->{session}{expiration};
             }
             else {
-                $expiration = $R->CONFIG->{session_info}{expiration};
+                $expiration = $CONFIG->{session_info}{expiration};
                 $R->DEBUG && $R->scrib( 1, "Expiration for new session set to default from config ($expiration)" );
             }
 

@@ -59,6 +59,21 @@ check here to see what updates there have been between the versions.
 
 
 ==============================
+UPGRADING TO 1.38
+==============================
+
+Added the configuration keys:
+
+   - 'session_info'->'cache_user'
+   - 'session_info'->'cache_group'
+   - 'session_info'->'cache_theme'
+     optional: leaving them out won't affect operation
+
+   The value for each is the number of minutes the relevant object can
+   be cached in the user session.
+
+
+==============================
 UPGRADING TO 1.37
 ==============================
 
@@ -433,4 +448,4 @@ process to have the changes take effect.
 
 
 ========================================
-$Id: UPGRADE,v 1.11 2002/01/18 22:48:17 lachoy Exp $
+$Id: UPGRADE,v 1.12 2002/02/24 06:36:03 lachoy Exp $

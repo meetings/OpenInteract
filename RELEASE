@@ -1,6 +1,16 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.38  Mon Feb 25 22:27:22 EST 2002
+
+  - You can now tell OI to store user/group/theme objects in the
+  session, saving database hits with every request
+
+  - Small flexbility changes to CommonHandler
+
+  - General bugfixes and updates
+
+
 1.37  Fri Jan 18 17:34:59 EST 2002
 
   - The 'base_page' package now supports directory handlers, which let
@@ -165,4 +175,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.16 2002/01/18 22:48:06 lachoy Exp $
+$Id: RELEASE,v 1.17 2002/02/26 03:02:40 lachoy Exp $

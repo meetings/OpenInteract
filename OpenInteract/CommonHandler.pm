@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.35 2002/01/15 13:29:18 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.37 2002/02/04 13:06:35 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.35 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.37 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -200,10 +200,12 @@ sub _search_build_and_run {
 
     $R->DEBUG && $R->scrib( 1, "RUN SEARCH (before): ", scalar localtime );
     my $order = $class->MY_SEARCH_RESULTS_ORDER;
+    my $additional_params = $class->MY_SEARCH_ADDITIONAL_PARAMETERS || {};
     my $iter = eval { $object_class->fetch_iterator({
                                          from       => $tables,  where => $where,
                                          value      => $values,  limit => $limit,
-                                         order      => $order }) };
+                                         order      => $order,
+                                         %{ $additional_params } }) };
     $R->DEBUG && $R->scrib( 1, "RUN SEARCH (after): ", scalar localtime );
 
     return ( $iter, undef ) unless ( $@ );
@@ -565,6 +567,8 @@ sub edit {
         return $class->$fail_method( \%show_params );
     }
 
+    $class->_edit_post_action_customize( $object, $old_data );
+
     $show_params{status_msg} = ( $is_new )
                                  ? 'Object created properly.'
                                  : 'Object saved properly with changes.';
@@ -720,6 +724,8 @@ sub remove {
         $show_params{error_msg} = "Cannot remove object! See error log.";
         return $class->$fail_method( \%show_params );
     }
+
+    $class->_remove_post_action_customize( $object );
 
     $show_params{status_msg} = 'Object successfully removed.';
     my $method = $class->MY_REMOVE_DISPLAY_TASK;
@@ -968,6 +974,7 @@ sub MY_SEARCH_FIELDS_EXACT       { return () }
 sub MY_SEARCH_FIELDS_LEFT_EXACT  { return () }
 sub MY_SEARCH_FIELDS_RIGHT_EXACT { return () }
 sub MY_SEARCH_TABLE_LINKS        { return () }
+sub MY_SEARCH_ADDITIONAL_PARAMETERS { return {} }
 sub MY_SEARCH_FAIL_TASK          { return 'search_form' }
 sub MY_SEARCH_RESULTS_CAP        { return 0 }
 sub MY_SEARCH_RESULTS_CAP_FAIL_TASK { return 'search_form' }
@@ -1033,7 +1040,9 @@ sub _search_criteria_customize    { return $_[1] }
 sub _search_build_where_customize { return 1 }
 sub _fetch_object_customize       { return $_[1] }
 sub _edit_customize               { return ( OK, undef ) }
+sub _edit_post_action_customize   { return 1 }
 sub _remove_customize             { return 1 }
+sub _remove_post_action_customize { return 1 }
 
 
 1;
@@ -1495,6 +1504,16 @@ SELECT statement, since many databases will complain about their
 absence.
 
 No default.
+
+B<MY_SEARCH_ADDITIONAL_PARAMS()> (\%) (optional)
+
+If you want to pass additional parameters directly to the SPOPS
+C<fetch_iterator()> call, return them here. For instance, if you want
+to skip security for a particular search you would create:
+
+ sub MY_SEARCH_ADDITIONAL_PARAMS { return { skip_security => 1 } }
+
+Default: An empty hashref (no parameters)
 
 =head2 Customization
 

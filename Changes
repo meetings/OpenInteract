@@ -1,5 +1,96 @@
 Revision history for Perl extension OpenInteract.
 
+1.38  Mon Feb 25 22:27:22 EST 2002
+
+Overall:
+
+ - You can now tell OI to cache the user, group and theme objects in
+ the user session. The objects will get refreshed based on the
+ settings in the server config. Thanks to Andreas Nolte
+ <Andreas.Nolte@bertelsmann.de> for the idea and a sample
+ implementation.
+
+ - Small changes to the CommonHandler to add more flexibility
+
+ - The deprecated 'static_page' package is no longer distributed with
+ OI.
+
+
+Individual:
+
+ * conf/sample-server.ini:
+
+   - Added configuration keys session_info->cache_user,
+   session_info->cache_group, session_info->cache_theme. The value for
+   each key is the length of time (in minutes) the object can be
+   cached in the user session.
+
+ * OpenInteract.pm:
+
+   - If session_info->cache_theme set to a positive value, cache the
+   theme in the user's session
+
+ * OpenInteract/Auth.pm:
+
+   - If session_info->cache_user set to a positive value, cache the
+   user object in the user session (only if logged in, etc.)
+
+   - If session_info->cache_group set to a positive value, cache the
+   group object in the user session (only if logged in, etc.)
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Added _edit_post_action_customize() and
+   _remove_post_action_customize() to perform actions after a
+   successful edit or remove.
+
+   - Added MY_SEARCH_ADDITIONAL_PARAMETERS to pass additional
+   information to the SPOPS fetch_iterator() call. Thanks to Ewald
+   Hinrichs <Ewald.Hinrichs@applied.de> for the suggestion.
+
+ * OpenInteract/Template/Process.pm:
+
+   - Changed how the $template object gets initialized: if the
+   'cache_tt' directory is undefined, we ensure that the COMPILE_DIR
+   and COMPILE_EXT settings in $template are also undefined so TT does
+   no compiling to disk. Thanks to John Sequeira <jseq@mediaone.net>
+   for pointing out that compiling couldn't be turned off.
+
+ * script/oi_manage:
+
+   - In test_db_connection(), swap the $@ check and $db check around
+   after the initial connect, and instead of the simple test for
+   existence of $db, check to see that it's a valid DBI handle -- that
+   is, isa('DBI::db') (Thanks to John Sequeira <jseq@mediaone.net> for
+   prompting.)
+
+
+Packages Changed:
+
+The 'Changes' file in each package has details.
+
+   OpenInteract     1.37 -> 1.38
+   ----------------------------
+   base:            1.63 -> 1.63
+   base_box:        0.42 -> 0.42
+   base_component:  1.30 -> 1.30
+   base_error:      1.39 -> 1.39
+   base_group:      1.32 -> 1.32
+   base_page:       0.77 -> 0.89
+   base_security:   1.54 -> 1.54
+   base_template:   1.27 -> 1.27
+   base_theme:      1.29 -> 1.29
+   base_user:       1.47 -> 1.49
+   lookup:          0.20 -> 0.20
+   object_activity: 0.10 -> 0.11
+   results_manage:  0.07 -> 0.07
+   system_doc:      1.29 -> 1.29
+   classified:      1.32 -> 1.32
+   full_text:       1.30 -> 1.30
+   news:            1.33 -> 1.33
+   static_page:     1.53 -> removed
+
+
 1.37  Fri Jan 18 17:34:59 EST 2002
 
 Overall:
@@ -53,8 +144,8 @@ Individual:
  * conf/sample-server.perl:
 
    - Updated default actions to refer to 'page' instead of 'basicpage'
-   (Thanks to Andreas nolte <andreas.nolte@bertelsmann.de> for
-   poitning this out.
+   (Thanks to Andreas Nolte <andreas.nolte@bertelsmann.de> for
+   pointing this out.)
 
    - Added configuration key 'session_info'->'expires_in' so you can
    control session inactivity expiration

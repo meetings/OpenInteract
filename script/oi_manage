@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.57 2002/01/11 14:35:22 lachoy Exp $
+# $Id: oi_manage,v 1.58 2002/02/06 13:17:22 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.57 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.58 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -2554,14 +2554,6 @@ DBKEY:
             next DBKEY;
         }
         my $db = eval { OpenInteract::DBI->connect( $C->{db_info}{ $db_key } ) };
-        unless ( $db ) {
-            push @msg, "-- Basic connect: failed (no error, but no database handle returned)",
-                       "-- Use database: not attempted",
-                       "-- Create table: not attempted";
-            $status->{ok} = 0;
-            next DBKEY;
-        }
-
         if ( $@ ) {
             my ( $error ) = $@ =~ /failed:\s*(.*)$/;
             $error ||= $@;
@@ -2581,6 +2573,15 @@ DBKEY:
             $status->{ok}   = 0;
             next DBKEY;
         }
+
+        unless ( $db and UNIVERSAL::isa( $db, 'DBI::db' ) ) {
+            push @msg, "-- Basic connect: failed (no error, but no database handle returned)",
+                       "-- Use database: not attempted",
+                       "-- Create table: not attempted";
+            $status->{ok} = 0;
+            next DBKEY;
+        }
+
         my $test_table = 'oi_test_create';
         push @msg, "-- Basic connect: ok",
                    "-- Use database: ok";
@@ -4057,6 +4058,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.57 $
+Revision: $Revision: 1.58 $
 
 =cut
