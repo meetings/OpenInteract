@@ -1,28 +1,36 @@
 package OpenInteract::Session::DBI;
 
-# $Id: DBI.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: DBI.pm,v 1.4 2001/08/27 04:39:56 lachoy Exp $
 
 use strict;
+use OpenInteract::Session;
 
 @OpenInteract::Session::DBI::ISA     = qw( OpenInteract::Session );
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 sub _create_session { 
     my ( $class, $session_id ) = @_;
     my $R = OpenInteract::Request->instance;
-    my $session_class = $R->CONFIG->{session_info}->{class};
+    my $session_class  = $R->CONFIG->{session_info}->{class};
     my $session_params = $R->CONFIG->{session_info}->{params} || {};
+    $session_params->{Handle} = $R->db;
+
+    # Detect Apache::Session::MySQL and modify parameters
+    # appropriately
+
+    if ( $session_class =~ /MySQL$/ ) {
+        $session_params->{LockHandle} = $R->db;
+        $R->DEBUG && $R->scrib( 2, "Using MySQL session store, with LockHandle parameter" );
+    }
     my %session = ();
     $R->DEBUG && $R->scrib( 1, "Trying to fetch session $session_id" );
-    eval { 
-        tie %session, $session_class, $session_id, 
-                      { Handle => $R->db, %{ $session_params } }
-    };
+    eval { tie %session, $session_class, $session_id, $session_params };
     if ( $@ ) {
-        $R->throw( { code       => 310, type => 'session',
-                     system_msg => $@,
-                     extra      => { class      => $session_class, 
-                                     session_id => $session_id } } );
+        $R->throw({ code       => 310,
+                    type       => 'session',
+                    system_msg => $@,
+                    extra      => { class      => $session_class,
+                                    session_id => $session_id } });
         $R->scrib( 0, "Error thrown. Now clear the cookie" );
         return undef;
     }
@@ -49,13 +57,41 @@ Note that failure to create the session throws a '310' error, which
 clears out the session cookie so it does not keep happening. (See
 L<OpenInteract::Error::System> for the code.)
 
+Note that former users of C<OpenInteract::Session::MySQL> (now
+defunct) should have no problems using this class -- just specify the
+'session_class' as C<Apache::Session::MySQL> and everything should
+work smoothly.
+
 =head1 METHODS
 
 B<_create_session( $session_id )>
 
 Overrides the method from parent C<OpenInteract::Session>.
 
-=head1 BUGS 
+=head1 CONFIGURATION
+
+The following configuration keys are used:
+
+=over 4
+
+=item *
+
+B<session_info::class> ($)
+
+Specify the session serialization implementation class -- e.g.,
+C<Apache::Session::MySQL>, C<Apache::Session::Postgres>,
+C<Apache::Session::File>.
+
+=item *
+
+B<session_info::params> (\%) (optional)
+
+Parameters that get passed directly to the session serialization
+implementation class.
+
+=back
+
+=head1 BUGS
 
 None known.
 

@@ -1,15 +1,14 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Session.pm,v 1.3 2001/08/13 05:05:00 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
-
 
 sub parse { 
     my ( $class, $session_id ) = @_;
@@ -48,14 +47,15 @@ sub save {
         unless ( scalar keys %{ $R->{session} } ) {
             $R->DEBUG && $R->scrib( 1, "No session information saved. Exiting..." );
             return 1;
-        }   
+        }
         my $session = $class->_create_session;
         if ( $session ) {
 
-            # Set the expiration. If the key 'expiration' is defined then
-            # use that, even if the value in the session is blank or
-            # undef. This allows you to set sessions that expire when the
-            # browser is closed.
+            # Set the expiration. If the key 'expiration' is defined
+            # then use that, even if the value in the session is blank
+            # or undef. This allows you to set sessions that expire
+            # when the browser is closed when a user requests (see
+            # OpenInteract::Auth).
 
             my ( $expiration );
             if ( exists $R->{session}->{expiration} ) {
@@ -73,9 +73,9 @@ sub save {
             foreach my $key ( keys %{ $R->{session} } ) {
                 $session->{ $key } = $R->{session}->{ $key };
             }
-            $R->cookies->create_cookie({ name    => $OpenInteract::Session::COOKIE_NAME, 
+            $R->cookies->create_cookie({ name    => $OpenInteract::Session::COOKIE_NAME,
                                          value   => $session->{_session_id},
-                                         path    => '/', 
+                                         path    => '/',
                                          expires => $expiration });
             $R->DEBUG && $R->scrib( 2, "Saving new session\n", Dumper( $session ) );
             untie %{ $session };
@@ -110,15 +110,15 @@ OpenInteract::Session - Implement session handling in the framework
 
  $R->{session}->{my_stateful_data} = "oogle boogle";
  $R->{session}->{favorite_colors}->{red} += 5;
- 
+
  # And from any template
 
  <p>The weight of your favorite colors are:
- [% FOREACH color = keys session.favorite_colors %]
-   * [% color %] -- [% session.favorite_colors.color %]
+ [% FOREACH color = keys OI.session.favorite_colors %]
+   * [% color %] -- [% OI.session.favorite_colors.color %]
  [% END %]
 
- # In pkg/base/OpenInteract.pm
+ # in the main content handler, OpenInteract.pm
  # Only call once you're done accessing the data
 
  $R->session->save;
@@ -135,14 +135,13 @@ order they are meant to be called?
 This class also requires you to implement a subclass that overrides
 the _create_session method with one that returns a valid
 C<Apache::Session> tied hashref. OpenInteract provides
-C<OpenInteract::Session::MySQL> for MySQL databases and
-C<OpenInteract::Session::DBI> for other DBI databases. Implementations
-using DB_File, GDBM, NFS, etc. are left as an exercise for the reader.
+C<OpenInteract::Session::DBI> for DBI databases. Implementations using
+DB_File, GDBM, NFS, etc. are left as an exercise for the reader.
 
 Subclasses should refer to the package variable
-$OpenInteract::Session::COOKIE for the name of the cookie to create,
-and should throw a '310' error of type 'session' if unable to connect
-to the session data source to create a session.
+C<$OpenInteract::Session::COOKIE_NAME> for the name of the cookie to
+create, and should throw a '310' error of type 'session' if unable to
+connect to the session data source to create a session.
 
 =head1 METHODS
 
@@ -156,7 +155,22 @@ then. Otherwise we will not bother.
 B<save()>
 
 Save the session off for later. If we did not initially create one do
-so now if there is information in {session}
+so now if there is information in {session}.
+
+=head1 CONFIGURATION
+
+The following configuration keys are used:
+
+=over 4
+
+=item *
+
+B<session_info::expiration> (optional)
+
+Used to set the time a session lasts. See L<CGI> for an explanation of
+the relative date strings accepted.
+
+=back
 
 =head1 TO DO
 

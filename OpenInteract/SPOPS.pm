@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.9 2001/07/13 15:34:29 lachoy Exp $
+# $Id: SPOPS.pm,v 1.13 2001/08/22 04:48:50 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -8,31 +8,19 @@ use Digest::MD5     qw( md5_hex );
 use HTML::Entities  ();
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
 
 ########################################
-# RULESET METHODS
+# RULESET
 ########################################
 
 sub ruleset_add {
     my ( $class, $rs_table ) = @_;
-    push @{ $rs_table->{post_save_action} }, \&save_object_key;    
+    push @{ $rs_table->{post_save_action} }, \&save_object_key;
     return __PACKAGE__;
-}
-
-
-########################################
-# OBJECT KEY METHODS
-########################################
-
-# Create a unique key based on the class and ID
-
-sub generate_object_key {
-    my ( $self ) = @_;
-    return md5_hex( ref( $self ) . $self->id );
 }
 
 
@@ -40,6 +28,10 @@ sub generate_object_key {
 
 sub save_object_key {
     my ( $self, $p ) = @_;
+
+    # Don't create an object key if we're explicitly told not to
+    return 1 if ( $self->CONFIG->{skip_object_key} );
+
     $p ||= {};
     my $obj_key = $self->fetch_object_key;
     unless ( $obj_key ) {
@@ -56,12 +48,25 @@ sub save_object_key {
 }
 
 
+########################################
+# OBJECT KEY
+########################################
+
+# Create a unique key based on the class and ID
+
+sub generate_object_key {
+    my ( $self ) = @_;
+    return md5_hex( ref( $self ) . $self->id );
+}
+
+
 # Retrieve the object key based on the class and ID
 
 sub fetch_object_key {
     my ( $self, $p ) = @_;
     $p ||= {};
-    my $row = $self->db_select({ %{ $p }, from   => OBJECT_KEY_TABLE,
+    my $row = $self->db_select({ %{ $p }, 
+                                 from   => OBJECT_KEY_TABLE,
                                  select => [ 'object_key' ],
                                  where  => 'class = ? AND object_id = ?',
                                  value  => [ ref $self, $self->id ],
@@ -78,7 +83,8 @@ sub fetch_object_info_by_key {
     $p ||= {};
     $p->{db} ||= $class->global_db_handle;
     die "Cannot retrieve object info without key!" unless ( $key );
-    my $row = SPOPS::SQLInterface->db_select({ %{ $p }, from   => OBJECT_KEY_TABLE,
+    my $row = SPOPS::SQLInterface->db_select({ %{ $p }, 
+                                               from   => OBJECT_KEY_TABLE,
                                                select => [ 'class', 'object_id' ],
                                                where  => 'object_key = ?',
                                                value  => [ $key ],
@@ -177,7 +183,11 @@ sub is_creator {
     my $R = OpenInteract::Request->instance;
     $uid ||= $R->{auth}->{user}->{user_id};
     return undef unless ( $uid );
-    return 1     if ( $uid == 1 ); # the great and powerful superuser sees all
+
+    # the great and powerful superuser sees all
+
+    return 1     if ( $uid eq $R->CONFIG->{default_objects}->{superuser} );
+
     my $creator_list = eval { $self->fetch_creator } || [];
     foreach my $creator ( @{ $creator_list } ) {
         return 1 if ( $uid eq $creator->{user_id} );
@@ -192,16 +202,16 @@ sub is_creator {
 
 sub fetch_updates {
     my ( $self, $opt ) = @_;
-  
+
     # Bail if it's not an already-saved object
 
     return []  unless ( ref $self and $self->id );
     my $return = ( $opt eq 'last' ) ? 'single' : 'list';
     my $R = OpenInteract::Request->instance;
-    my $data = eval { $self->db_select({ 
-                               db     => $R->db, 
+    my $data = eval { $self->db_select({
+                               db     => $R->db,
                                select => [ qw/ action_by  action_on  notes / ],
-                               from   => [ 'object_track' ], 
+                               from   => [ 'object_track' ],
                                where  => 'class = ? AND object_id = ? and ( action = ? OR action  = ? )',
                                value  => [ ref $self, $self->id, 'create', 'update' ],
                                order  => 'action_on DESC', return => $return } ); };
@@ -224,9 +234,60 @@ sub fetch_updates {
 
 
 ########################################
+# SECURITY
+########################################
+
+# Let SPOPS::Secure know what the IDs are for the superuser and
+# supergroup
+
+sub get_superuser_id  { return $_[0]->global_config->{default_objects}{superuser} }
+sub get_supergroup_id { return $_[0]->global_config->{default_objects}{supergroup} }
+
+
+########################################
+# GLOBAL OBJECTS/CLASSES
+########################################
+
+# These are used so that subclasses (and other classes in the
+# inheritance hierarchy, particularly within SPOPS) are able to have
+# access to the various objects and resources
+
+sub global_cache                 { return OpenInteract::Request->instance->cache           }
+sub global_config                { return OpenInteract::Request->instance->config          }
+sub global_secure_class          { return OpenInteract::Request->instance->secure          }
+sub global_security_object_class { return OpenInteract::Request->instance->security        }
+sub global_user_class            { return OpenInteract::Request->user                      }
+sub global_group_class           { return OpenInteract::Request->group                     }
+sub global_user_current          { return OpenInteract::Request->instance->{auth}->{user}  }
+sub global_group_current         { return OpenInteract::Request->instance->{auth}->{group} }
+
+
+########################################
+# HTML ENCODE/DECODE (keep?)
+########################################
+
+# Use this to translate from
+# <font size="-1"...
+#   to
+# &lt;font size=&quot;-1&quot...
+# Params: 0: class; 1: text
+
+sub html_encode { return HTML::Entities::encode( $_[1] ); }
+
+
+# Use this to translate from
+# &lt;font size=&quot;-1&quot...
+#   to
+# <font size="-1"...
+# Params: 0: class; 1: text
+
+sub html_decode { return HTML::Entities::decode( $_[1] ); }
+
+
+########################################
 # OTHER METHODS
 ########################################
- 
+
 
 # Send an email with one or more objects as the body.
 
@@ -260,45 +321,13 @@ sub notify {
                                     from    => $R->CONFIG->{admin_email},
                                     subject => $subject,
                                     message => $msg }) };
-    if ( $@ ) {   
+    if ( $@ ) {
         $R->throw({ code => 203 });
         return undef;
     }
     return 1;
 }
 
-
-# Use this to translate from
-# <font size="-1"...
-#   to
-# &lt;font size=&quot;-1&quot...
-# Params: 0: class; 1: text
-
-sub html_encode { return HTML::Entities::encode( $_[1] ); }
-
-
-# Use this to translate from
-# &lt;font size=&quot;-1&quot...
-#   to
-# <font size="-1"...
-# Params: 0: class; 1: text
-
-sub html_decode { return HTML::Entities::decode( $_[1] ); }
-
-
-# These are used so that subclasses (and other classes in the
-# inheritance hierarchy, particularly within SPOPS) are able to have
-# access to the various objects and resources
-
-sub global_cache          { return OpenInteract::Request->instance->cache;  }
-sub global_config         { return OpenInteract::Request->instance->config; }
-sub global_db_handle      { return OpenInteract::Request->instance->db;     }
-sub global_secure_class   { return OpenInteract::Request->secure;           }
-sub global_security_object_class { return OpenInteract::Request->security;  }
-sub global_user_class     { return OpenInteract::Request->user;             }
-sub global_group_class    { return OpenInteract::Request->group;            }
-sub global_user_current   { return OpenInteract::Request->instance->{auth}->{user} }
-sub global_group_current  { return OpenInteract::Request->instance->{auth}->{group} }
 
 1;
 
@@ -314,7 +343,7 @@ OpenInteract::SPOPS - Define common behaviors for all SPOPS objects in the OpenI
 
  # In configuration file
  'myobj' => {
-    'isa'   => [ qw/ ... OpenInteract::SPOPS ... / ],
+    'isa'   => [ qw/ ... OpenInteract::SPOPS::DBI ... / ],
  }
 
 =head1 DESCRIPTION
@@ -324,6 +353,10 @@ not implmented within the data abstraction layer itself. Since we want
 to continue using both separately we cannot embed ideas like a
 configuration object or a particular cache implementation within
 SPOPS. Think of this class as a bridge between the two.
+
+Note that while most of the functionality is in this class, you will
+always want to use one of the implementations-specific child classes
+-- see L<OpenInteract::SPOPS::DBI> and L<OpenInteract::SPOPS::LDAP>.
 
 =head1 OBJECT TRACKING METHODS
 

@@ -1,12 +1,12 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Auth.pm,v 1.5 2001/08/27 22:09:48 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -16,95 +16,100 @@ $OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(
 sub user {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    if ( my $uid = $R->{session}->{user_id} ) {
+    if ( my $uid = $R->{session}{user_id} ) {
         $R->DEBUG && $R->scrib( 1, "Found session and uid ($uid); creating user." );
-    
+
         # You MUST skip security here as a bootstrapping maneuver,
         # otherwise the superuser can never login (since WORLD has
         # SEC_LEVEL_NONE to the record)
-    
-        $R->{auth}->{user} = eval { $R->user->fetch( $uid, 
+
+        $R->{auth}{user} = eval { $R->user->fetch( $uid,
                                                      { skip_security => 1 } ) };
-    
+
         # If there's a failure fetching the user, we need to ensure that
         # this user_id is not passed back to us again so we don't keep
         # going through this process...
-    
-        if ( $@ or ! $R->{auth}->{user} ) { 
+
+        if ( $@ or ! $R->{auth}{user} ) {
             OpenInteract::Error->set( SPOPS::Error->get );
             $R->throw({ code => 311 });
-            $R->{session}->{user_id} = undef;
+            $R->{session}{user_id} = undef;
             return undef;
         }
-      
+
         # We use this to note that the user is logged in, since we'll
         # shortly modify OI to create a record for a 'not-logged-in' user
         # instead of leaving it empty.
-    
-        $R->{auth}->{logged_in} = 1;
+
+        $R->{auth}{logged_in} = 1;
 
         $R->DEBUG && $R->scrib( 2, "User: ", Dumper( $R->{auth}->{user} ) );
-        $R->DEBUG && $R->scrib( 1, "User $R->{auth}->{user}->{login_name}" );
-    
+        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}->{user}->{login_name}" );
+
         # If there's a removal date, then this is the user's first
         # login
 
-        if ( $R->{auth}->{user}->{removal_date} ) {
+        # TODO: Check if this is working, if it's needed, ...
+
+        if ( $R->{auth}{user}{removal_date} ) {
             $R->DEBUG && $R->scrib( 1, "First login for user! Do some cleanup." );
-            $R->{auth}->{user}->{removal_date} = undef;
-        
+            $R->{auth}{user}{removal_date} = undef;
+
             # blank out the removal date -- note that this doesn't seem to
             # work properly, and put the user in the public group
-        
-            eval { 
-                $R->{auth}->{user}->save;         
-                $R->{auth}->{user}->make_public;  
+
+            eval {
+                $R->{auth}{user}->save;
+                $R->{auth}{user}->make_public;
             };
+
             # need to check for save/security errors here
-        }     
+        }
         return undef;
     }
     $R->DEBUG && $R->scrib( 1, "No uid found in session. Finding login info." );
-  
+
     # If the user didn't previously exist, try to create
     # from the fields login_name and password
 
-    my $login_field    = $R->CONFIG->{login}->{login_field};
-    my $password_field = $R->CONFIG->{login}->{password_field};
-    my $remember_field = $R->CONFIG->{login}->{remember_field};
+    my $login_field    = $R->CONFIG->{login}{login_field};
+    my $password_field = $R->CONFIG->{login}{password_field};
+    my $remember_field = $R->CONFIG->{login}{remember_field};
     unless ( $login_field and $password_field ) {
         $R->throw({ code => 205, type => 'system' });
         return undef;
     }
 
-    my $login_name = $R->apache->param( $login_field ); 
-    return undef if ( ! $login_name );
-    $R->DEBUG && $R->scrib( 1, "Found login name: <<$login_name>>" );
-    my $user = eval { $R->user->fetch_by_login_name( $login_name, 
+    my $login_name = $R->apache->param( $login_field );
+    return undef unless ( $login_name );
+    $R->DEBUG && $R->scrib( 1, "Found login name from form: <<$login_name>>" );
+    my $user = eval { $R->user->fetch_by_login_name( $login_name,
                                                      { return_single => 1,
                                                        skip_security => 1 } ) };
     if ( $@ ) {
       my $ei = SPOPS::Error->get;
-      $R->scrib( 0, "Error when fetching by username: $ei->{system_msg}\n" );
+      $R->scrib( 0, "Error when fetching by login name: $ei->{system_msg}\n" );
     }
     unless ( $user ) {
-        $R->throw({ code  => 401, 
+        $R->scrib( 0, "User with login ($login_name) not found. Throwing auth error" );
+        $R->throw({ code  => 401,
                     type  => 'authenticate', 
                     extra => { login_name => $login_name } });
         return undef;
     }
-  
+
     # Check the password
-  
+
     my $password   = $R->apache->param( $password_field );
     $R->DEBUG && $R->scrib( 5, "Password entered: <<$password>>" );
-    if ( ! $user->check_password( $password ) ) {
-        $R->throw({ code  => 402, 
-                    type  => 'authenticate', 
+    unless ( $user->check_password( $password ) ) {
+        $R->scrib( 0, "Password check for ($login_name) failed. Throwing auth error" );
+        $R->throw({ code  => 402,
+                    type  => 'authenticate',
                     extra => { login_name => $login_name } });
         return undef;
     }
-    $R->DEBUG && $R->scrib( 1, "Passwords matched; creating new user." );
+    $R->DEBUG && $R->scrib( 1, "Passwords matched; UID ($user->{user_id})" );
 
     # If the user was matched up to a login_name and the password
     # matched, put the user_id into the session and put the user into
@@ -112,11 +117,11 @@ sub user {
     # closes) unless the user clicked the 'Remember Me' checkbox
 
     unless ( $R->apache->param( $remember_field ) ) {
-        $R->{session}->{expiration} = '';
+        $R->{session}{expiration} = '';
     }
-    $R->{auth}->{logged_in} = 1;
-    $R->{session}->{user_id} = $user->{user_id};
-    $R->{auth}->{user} = $user; 
+    $R->{auth}{logged_in} = 1;
+    $R->{session}{user_id} = $user->id;
+    $R->{auth}{user} = $user;
     return undef;
 }
 
@@ -126,15 +131,19 @@ sub user {
 sub group {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    unless ( $R->{auth}->{logged_in} ) {
+    unless ( $R->{auth}{logged_in} ) {
         $R->DEBUG && $R->scrib( 1, "No logged-in user found, not retrieving groups." );
         return undef;
     }
     $R->DEBUG && $R->scrib( 1, "Authenticated user exists; getting groups." );
-    $R->{auth}->{group} = eval { $R->{auth}->{user}->group };
+    $R->{auth}{group} = eval { $R->{auth}{user}->group };
     if ( $@ ) {
         OpenInteract::Error->set( SPOPS::Error->get );
         $R->throw({ code => 309 });
+    }
+    else {
+        $R->DEBUG && $R->scrib( 2, "Retrieved groups: ",
+                                   join( ', ', map { "($_->{name})" } @{ $R->{auth}{group} } ) );
     }
     return undef;
 }
@@ -185,7 +194,7 @@ it into:
 
  $R->{auth}->{user}
 
-where it can be retrieved by all other handlers, modules, etc. 
+where it can be retrieved by all other handlers, modules, etc.
 
 The class also creates an arrayref of groups the user belongs to.
 
@@ -249,7 +258,9 @@ None known.
 
 =head1 SEE ALSO
 
-L<OpenInteract::User>, L<OpenInteract::Group>
+L<OpenInteract::User>
+
+L<OpenInteract::Group>
 
 =head1 COPYRIGHT
 

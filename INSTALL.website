@@ -1,4 +1,5 @@
 INSTALLING AN OPENINTERACT WEBSITE
+========================================
 
 This document should help you install an OpenInteract website. (Think
 of OpenInteract as two parts: the installation and any number of
@@ -15,10 +16,10 @@ Assuming that the directory you specified for the scripts packaged
 with OpenInteract is in your path, you can then install a new
 website:
 
- oi_manage --base_dir=%%INTERACT_DIR%% \
-           --website_name=%%WEBSITE_NAME%% \
-           --website_dir=%%WEBSITE_DIR%% \
-           create_website
+ $ oi_manage --base_dir=%%INTERACT_DIR%% \
+             --website_name=%%WEBSITE_NAME%% \
+             --website_dir=%%WEBSITE_DIR%% \
+             create_website
 
 This creates a new website in the 'website_dir' you specified
 and installs all the packages necessary to run OpenInteract. (If the
@@ -53,22 +54,51 @@ Change the following values:
 
        ...
        'db_info' => {
-         'db_owner'    => '',
-         'username'    => 'dbuser',
-         'password'    => 'dbpassword',
-         'dsn'         => 'mysql',
-         'db_name'     => 'MyAppDB',
-         'driver_name' => 'mysql',
+             'main' => {
+                   'db_owner'    => '',
+                   'username'    => 'dbuser',
+                   'password'    => 'dbpassword',
+                   'dsn'         => 'mysql',
+                   'db_name'     => 'MyAppDB',
+                   'driver_name' => 'mysql',
+             },
        },
-       ...
+
+   Note that you can configure multiple datasources -- 'main' is the
+   default and is used when you don't specify a 'dataource'
+   configuration value in your SPOPS object.
+
+ 'ldap_info'
+
+   Skip this step if you're not using LDAP.
+
+   This tells OpenInteract how to connect to your LDAP
+   directories. Here are some sample values:
+
+       'ldap_info' => {
+             'main' => {
+                   host          => 'localhost',
+                   port          => '389',
+                   bind_dn       => '',
+                   bind_password => '',
+                   base_dn       => 'dc=mycompany,dc=com',
+                   timeout       => 120,
+                   version       => 2,
+                   sasl          => 0,
+                   debug         => 0,
+             },
+       },
+
+   Note that you can configure multiple datasources -- 'main' is the
+   default and is used when you don't specify a 'dataource'
+   configuration value in your SPOPS object.
 
  'session_info' 
 
    If you're using MySQL as your SQL database, you can leave this
-   alone. Otherwise you'll probably want to change it to either
-   'Apache::Session::Sybase' (if you're using a Sybase database) or
-   'Apache::Session::DBI' for most other SQL databases.
-
+   alone. Otherwise you'll probably want to change it to whatever is
+   relevant for you (e.g., 'Apache::Session::Postgres',
+   'Apache::Session::File', ...)
 
 That's it!
 
@@ -86,9 +116,13 @@ administrator to perform the action.)
 Once the database is created, you can test the database connection
 from OpenInteract's point of view:
 
- oi_manage --website_dir=%%WEBSITE_DIR%% test_db
+ $ oi_manage --website_dir=%%WEBSITE_DIR%% test_db
 
 If everything comes back marked 'ok', then you're in good shape.
+
+Similarly, if you're also using LDAP you can run:
+
+ $ oi_manage --website_dir=%%WEBSITE_DIR%% test_ldap
 
 
 (4) Change SPOPS classes (optional)
@@ -117,8 +151,8 @@ SPOPS database driver. Otherwise you'll get lots of messages like:
 Below is a mapping of databases to parameters. Use the appropriate
 parameter when running the following command:
 
- oi_manage --website_dir=%%WEBSITE_DIR%% \
-           --driver=? change_spops_driver
+ $ oi_manage --website_dir=%%WEBSITE_DIR%% \
+             --driver=? change_spops_driver
 
 Database        Command
 ==============  ===========================
@@ -130,7 +164,7 @@ MySQL           --driver=SPOPS::DBI::MySQL
 (MySQL given just in case you need to change it back!)
 
 
-(5) Install SQL files
+(5) Install SQL files and data
 
 If you'd like, go into the 'pkg/' directory and explore the files in
 each package's 'data/' and 'struct' directories. These will be
@@ -139,9 +173,9 @@ ahead.
 
 Run the command:
 
- oi_manage --website_dir=%%WEBSITE_DIR%% \
-           --package=INITIAL \
-           install_sql
+ $ oi_manage --website_dir=%%WEBSITE_DIR%% \
+             --package=INITIAL \
+             install_sql
 
 (Note: capitalization of 'INITIAL' is important!)
 
@@ -161,16 +195,23 @@ for the superuser. If this happens, you'll have to just remove the
 directory tree with your website and reinstall. Yuck.
 
 
-(6) Import templates
+(6) Import templates (optional)
 
-Bring the templates used in the various packages into your
+OpenInteract will work fine if you do not run this step.
+
+You can now bring the templates used in the various packages into your
 database. Once this is done you can edit them via the web browser.
 
-Run the command:
+OpenInteract will work with the templates in the filesystem, but you
+won't be able to edit them via the browser. Additionally, some
+databases may provide a speed improvement with templates in the
+database. It's up to you.
 
- oi_manage --website_dir=%%WEBSITE_DIR%% \ 
-           --package=INITIAL \
-           install_template
+To import them, run the command:
+
+ $ oi_manage --website_dir=%%WEBSITE_DIR%% \ 
+             --package=INITIAL \
+             install_template
 
 This installs the templates from the packages listed into you SQL
 database. Note that you can make changes to the templates at any time
@@ -205,6 +246,13 @@ Edit the files:
 
 And follow the directions there.
 
+If you want to run OpenInteract without a proxy server in front, just
+edit the file:
+
+ %%WEBSITE_DIR%%/conf/httpd_modperl_solo.conf
+
+And only bring that in (see next step).
+
 If you're not using virtual hosts, then copy the information within
 the <VirtualHost></VirtualHost> tags into your main config file and
 skip the next step.
@@ -212,14 +260,19 @@ skip the next step.
 
 (8) Edit Apache configuration
 
-In your static httpd server configuration, add the line:
+If you're using the proxy server setup:
 
- Include %%WEBSITE_DIR%%/conf/httpd_static.conf
+  In your static httpd server configuration, add the line:
 
-and in your mod_perl httpd server configuration, add the line:
+    Include %%WEBSITE_DIR%%/conf/httpd_static.conf
 
- Include %%WEBSITE_DIR%%/conf/httpd_modperl.conf
+  and in your mod_perl httpd server configuration, add the line:
 
+    Include %%WEBSITE_DIR%%/conf/httpd_modperl.conf
+
+If you're using the solo mod_perl setup:
+
+    Include %%WEBSITE_DIR%%/conf/httpd_modperl_solo.conf
 
 (9) Run Apache!
 
@@ -238,8 +291,7 @@ Admin Tools box), and then assign the user to the 'site admin' group
 (click on 'Groups - list' in the Admin Tools box and then the 'Detail'
 link next to the site admin group.)
 
-Now you can start having fun!
+Now: have some fun!
 
-
-=========================
-$Id: INSTALL.website,v 1.3 2001/05/30 05:39:30 lachoy Exp $
+========================================
+$Id: INSTALL.website,v 1.7 2001/08/28 21:30:25 lachoy Exp $

@@ -1,5 +1,256 @@
 Revision history for Perl extension OpenInteract.
 
+1.2  Tue Aug 28 17:20:44 EDT 2001
+
+Overall:
+
+This release has a number of substantial changes. If you're upgrading,
+please read 'UPGRADE' in the distribution directory.
+
+ * Multiple datastore handles:
+
+   - You can now setup and use multiple datastore (including DBI)
+   handles for objects, so your data can be in as many databases as
+   you require. This entails changes to your server configuration file
+   even if you're not using this feature, please see the entry for
+   'conf/sample-server.perl' below.
+
+ * Tighter Template Toolkit support:
+
+   - OpenInteract now includes a Template Toolkit provider to deliver
+   templates from the filesystem or database, as well as a TT Plugin
+   to provide more consistent (and extensible) template behavior
+   functions. If you're upgrading you need to run a script to
+   translate old templates to new.
+
+ * LDAP support:
+
+   - LDAP can now be used as a datastore. Thanks to MSN Marketing
+   Service Nordwest GmbH for funding development! See doc/LDAP.html
+   for more information about setting up and using LDAP.
+
+ * DBI session support consolidated:
+
+   - All DBI session management uses one class now; if you're
+   upgrading, see the entry for 'conf/sample-server.perl' below for a
+   configuration modification
+
+Individual:
+
+ * conf/sample-httpd_static.conf:
+
+   - Allow the front-end proxy server to deal with '/robots.txt'
+   requests. (Also with '/default.ida' Code Red requests...)
+
+ * conf/sample-httpd_modperl.conf:
+
+   - Add pointer to the standalone mod_perl configuration file
+
+ * conf/sample-httpd_modperl_solo.conf:
+
+   - Create new configuration file for running OpenInteract in a
+   standalone mod_perl environment (no proxy frontend). Thanks to
+   Stephen Adkins <stephen.adkins@officevision.com> for pointing out
+   the usefulness of this.
+
+ * conf/sample-server.perl:
+
+   - Overall: Lots of changes were made to the sample
+   configuration. If you're upgrading it might be a good idea to open
+   the sample configuration and your existing configuration
+   side-by-side, copying values from your existing configuration to
+   the sample as appropriate.
+
+   - See UPGRADE for specific changes.
+
+ * eg/template_translate.pl:
+
+   - Added standalone script to translate old templates to new
+   templates. This only works on files in the filesystem, and you
+   shouldn't need to run it for system packages.
+
+ * OpenInteract.pm:
+
+   - allow users to put OI under different location root -- note that
+   we DO NOT rewrite outbound URLs yet; this just ensures that if OI
+   is under <Location /oi> that a request for '/oi/User/' gets mapped
+   to the '/User/' action
+
+   - paranoid inclusion of stash/other module 'require' calls
+
+   - removed method _connect_to_database(). Datastore (DBI and LDAP)
+   connections are now made on demand (in OpenInteract::Request)
+   rather than all at the beginning of a request. The first time a
+   handle is needed the connection is made, thereafter it's kept in
+   the stash class.
+
+   - removed method _setup_context() since it was a relic of a
+   group_context scheme attempted a while ago. We might bring it back
+   but there's no reason to have it around now.
+
+ * OpenInteract/Auth.pm:
+
+   - Set the result of $user->id rather than $user->{user_id} into the
+   session after a successful login. (Thanks to Andreas Nolte.)
+
+ * OpenInteract/Error/System.pm:
+
+   - Put 'package' with all templates being called.
+
+ * OpenInteract/LDAP.pm:
+
+   - Created central class to connect/bind to LDAP directories
+
+ * OpenInteract/Package.pm:
+
+   - Updated 'check()' -- called from 'oi_manage check_package' -- to
+   determine if data import files are valid Perl data structures (also
+   added 'read_data_file()' for this purpose)
+
+   - Modified 'check()' to pass the right directory to read the
+   package configuration
+
+   - Updated 'check()' -- called from 'oi_manage check_package' -- to
+   determine if the templates in a package are syntactically
+   valid. This doesn't mean they'll do what you want, only that
+   they'll parse.
+
+ * OpenInteract/Request.pm:
+
+   - Updated to enable both DBI and LDAP handles to be requested (and
+   stored in the stash) by a connection key.
+
+   - Moved connection logic from OpenInteract.pm to here so we can
+   return DBI and LDAP connections on demand rather than creating them
+   all at once.
+
+ * OpenInteract/Session/DBI.pm:
+
+   - Added functionality to detect when we're using MySQL as a session
+   store and put the extra parameter ('LockHandle') in.
+
+ * OpenInteract/Session/MySQL.pm:
+
+   - Removed. Use 'OpenInteract::Session::DBI' for all DBI session
+   management now.
+
+ * OpenInteract/SPOPS.pm:
+
+   - Removed 'global_db_handle()' and moved to OI/SPOPS/DBI.pm. Note
+   that ALL objects previously using 'OpenInteract::SPOPS' should now
+   use 'OpenInteract::SPOPS::DBI'.
+
+ * OpenInteract/SPOPS/DBI.pm:
+
+   - Created subclass of OI::SPOPS specifically for objects using
+   SPOPS::DBI
+
+ * OpenInteract/SPOPS/LDAP.pm:
+
+   - Created subclass of OI::SPOPS specifically for objects using
+   SPOPS::LDAP
+
+ * OpenInteract/SQLInstall.pm:
+
+   - Created new data transformation 'transform_default_to_id' that
+   allows you to tag fields in your data import and specify values for
+   these fields that are keys in the 'default_objects' hash in your
+   server configuration. See
+   pkg/base_group-x.xx/data/install_security.dat for an example.
+
+ * OpenInteract/Template.pm:
+
+   - Added deprecation warnings (will remove the class soon).
+
+ * OpenInteract/Template/Toolkit.pm:
+
+   - Added deprecation warnings (will remove the class soon).
+
+ * OpenInteract/Template/Context.pm:
+
+   - Added new class: Added custom context so we can avoid the TT
+   template naming syntax of 'prefix::thingy'
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - Added new class: Take all the behaviors out of OI::T::Toolkit,
+   add some new ones, revisit the old ones, add lots of documentation.
+
+ * OpenInteract/Template/Process.pm:
+
+   - Added new class: Port the 'handler()' and 'initialize()' methods
+   from OI::T::Toolkit
+
+ * OpenInteract/Template/Provider.pm:
+
+   - Added new class: Move all the file-or-object finding stuff from
+   OI::Template here, plus take advantage of TT caching, compiling,
+   etc.
+
+ * OpenInteract/UI/Main.pm:
+
+   - Updated to use base template name in 'package::name' format. This
+   way your base template doesn't need to be in the 'base_theme'
+   package.
+
+ * script/oi_manage
+
+   - Added (and documented!) new action 'update_object', which simply
+   fetches all instances of a particular object class and saves
+   them. This is useful if you've implemented a schema change that
+   needs a 'save()' to activate a trigger which fills data. For
+   instance, a 'last_update' field gets triggered by a save -- by
+   running this action you automatically set all objects to a known
+   value. Another example would be if your objects use the indexing
+   feature of the full_text package -- just run this action and the
+   index will be automatically updated.
+
+   - Modified 'test_db' action to check multiple datasources
+
+   - Added (and documented!) new action 'test_ldap' which tests all
+   LDAP connections configured for a particular website.
+
+   - Ensure that 'check_package' can check multiple packages at once
+   (using the '--package_dir' parameter to specify the root of a
+   series of packages)
+
+   - You can now run separate actions with 'install_sql' using the new
+   '--sql_action' parameter. This allows people who need to do so to
+   run the 'structure', 'data' and 'security' steps
+   individually. (Docs added for this too!)
+
+   - Added (and documented!) new action 'list_objects' which lists all
+   the objects that can be created in a website.
+
+ * script/template_translate.pl
+
+   - Created script to translate old templates (using
+   OpenInteract::Template and OpenInteract::Template::Toolkit) to new
+   templates (OpenInteract::Template::Plugin). You must run this to
+   make your templates work properly.
+
+
+   Many packages have changed between versions 1.1 and 1.2. Please see
+   the 'Changes' file in each to find out what was modified.
+
+   OpenInteract    1.1  -> 1.2
+   ----------------------------
+   base:           1.52 -> 1.60
+   base_box:       0.23 -> 0.30
+   base_component: 1.23 -> 1.25
+   base_error:     1.22 -> 1.30
+   base_group:     1.16 -> 1.25
+   base_security:  1.33 -> 1.45
+   base_template:  1.18 -> 1.27
+   base_theme:     1.18 -> 1.26
+   base_user:      1.23 -> 1.34
+   results_manage: 0.02 -> 0.02
+   static_page:    1.40 -> 1.49
+   system_doc:     1.19 -> 1.24
+   classified:     1.19 -> 1.28
+   full_text:      1.25 -> 1.26
+   news:           1.27 -> 1.33
+
 1.1  Fri Jul 20 07:00:48 EDT 2001
 
  * Shuffled lots of modules out of the 'base' package and into the
@@ -162,7 +413,7 @@ Revision history for Perl extension OpenInteract.
    - tiny change so that you can call use the action name
    'install-template' and 'install_template' synonymously (anyplace
    you see a '_' you can also use a '-'. Note that this ONLY APPLIES
-   TO COMMANDS.
+   TO COMMANDS, not to parameters.
 
    - added the command 'change_spops_driver' so you can modify the
    drivers (e.g., 'SPOPS::DBI::MySQL' -> 'SPOPS::DBI::Sybase') for

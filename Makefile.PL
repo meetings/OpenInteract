@@ -8,10 +8,10 @@ my %opts = (
     'VERSION_FROM' => 'VERSION',
     'EXE_FILES'    => [ qw( script/oi_manage ) ],
     'PREREQ_PM'    => {
-      'SPOPS'            => 0.41,
+      'SPOPS'            => 0.50,
       'Digest::MD5'      => undef,
       'Mail::Sendmail'   => 0.77,
-      'Template'         => 2.00,
+      'Template'         => 2.04,
       'Pod::Usage'       => 1.12,
       'Archive::Tar'     => undef,
       'Compress::Zlib'   => 1.08,
@@ -23,6 +23,8 @@ my %opts = (
       'Email::Valid'     => 0.12,
       'Apache::Session'  => 1.50,
       'Apache::Request'  => 0.31,
+      'Class::Date'      => 1.00,
+      'Pod::POM'         => undef,
     },
 );
 

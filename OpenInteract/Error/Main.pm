@@ -1,6 +1,6 @@
 package OpenInteract::Error::Main;
 
-# $Id: Main.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Main.pm,v 1.3 2001/08/27 05:19:30 lachoy Exp $
 
 use strict;
 require Exporter;
@@ -11,7 +11,7 @@ use Data::Dumper qw( Dumper );
 $ERROR_HOLD = 'error_hold';
 
 @OpenInteract::Error::Main::ISA       = qw( Exporter );
-$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Error::Main::EXPORT_OK = qw( $ERROR_HOLD );
 
 
@@ -41,30 +41,41 @@ sub catch {
 }
 
 
-# Just initialize the module info and the default error handler 
+# Just initialize the module info and the default error handler
 
 sub initialize {
     my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
     my $handler_info = {};
-    my $action_info = $p->{config}->{action};
+    my $action_info = $p->{config}{action};
     foreach my $action ( keys %{ $action_info } ) {
-        $handler_info->{ lc $action } = $action_info->{ lc $action }->{error};
+        $handler_info->{ lc $action } = $action_info->{ lc $action }{error};
     }
-    $handler_info->{'_DEFAULT_HANDLER'} = $p->{config}->{default_error_handler};
-    my $stash_class = $p->{config}->{stash_class};
+    $handler_info->{'_DEFAULT_HANDLER'} = $p->{config}{default_error_handler};
+    $class->require_error_handlers( $handler_info );
+    my $stash_class = $p->{config}{stash_class};
     $stash_class->set_stash( 'error_handlers', $handler_info );
     $R->DEBUG && $R->scrib( 1, "Initialized DEFAULT_HANDLER for app ",
                                "$p->{stash_class} to $handler_info->{'_DEFAULT_HANDLER'}" );
 }
 
 
+sub require_error_handlers {
+    my ( $class, $handlers ) = @_;
+    foreach my $h ( values %{ $handlers } ) {
+        my $handler_list = ( ref $h ) ? $h : [ $h ];
+        foreach my $error_handler ( @{ $handler_list } ) {
+            eval "require $error_handler";
+        }
+    }
+}
+
 
 sub save_error {
     my ( $class, $err ) = @_;
     eval { $err->save() };
     if ( $@ ) { carp " Cannot save error $err->{code}: $@"; }
-    else      { carp " Error saved ok."; }
+    else      { carp " Error saved ok (ID: $err->{error_id})."; }
     return $err->id;
 }
 

@@ -1,6 +1,24 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.2  Tue Aug 28 17:20:44 EDT 2001
+
+  - Requires SPOPS version 0.50 and Class::Date
+
+  - OpenInteract now supports LDAP for object storage as well as
+  authentication.
+
+  - Tighter Template Toolkit support requires translating old
+  templates to new templates.
+
+  - Multiple datastore handles for both LDAP and DBI available.
+
+  - See UPGRADE for extensive changes to configuration file and
+  specifics about template translation.
+
+  - Lots of smaller changes -- see 'Changes' file for more info
+
+
 1.1  Fri Jul 20 07:00:55 EDT 2001
 
   - Requires SPOPS version 0.41
@@ -91,4 +109,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.7 2001/07/20 09:48:34 lachoy Exp $
+$Id: RELEASE,v 1.10 2001/08/28 21:30:25 lachoy Exp $

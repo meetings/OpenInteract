@@ -1,6 +1,6 @@
 package OpenInteract::Error::System;
 
-# $Id: System.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: System.pm,v 1.2 2001/08/24 20:35:33 lachoy Exp $
 
 use strict;
 use Carp                   qw( cluck );
@@ -8,7 +8,7 @@ use Data::Dumper           qw( Dumper );
 use OpenInteract::Error::Main;
 
 @OpenInteract::Error::System::ISA     = ();
-$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 my $ERROR_HOLD = $OpenInteract::Error::Main::ERROR_HOLD;
 
@@ -222,7 +222,8 @@ sub file_not_found {
     OpenInteract::Error::Main->save_error( $err );
     my $R = OpenInteract::Request->instance;
     $R->{page}->{title} = 'Sorry: File not found';
-    my $html = $R->template->handler( {}, { err => $err }, { db => 'err_not_found' } );
+    my $html = $R->template->handler( {}, { err => $err }, { db      => 'err_not_found',
+                                                             package => 'base_error' } );
     die "$html\n";
 }
 
@@ -241,7 +242,8 @@ sub task_is_forbidden {
     my $html = $R->template->handler( {}, 
                                       { err => $err, 
                                         admin_email => $R->CONFIG->{admin_email} },
-                                      { db => 'err_task_forbidden' } );
+                                      { db      => 'err_task_forbidden',
+                                        package => 'base_error' } );
     die "$html\n";
 }
 
@@ -268,7 +270,8 @@ sub task_no_default {
     my $html = $R->template->handler( {}, 
                                       { err => $err, 
                                         author_email => $err->{tmp_email} },
-                                      { db => 'err_task_no_default' } );
+                                      { db      => 'err_task_no_default',
+                                        package => 'base_error' } );
     die "$html\n";
 }
 
@@ -280,7 +283,8 @@ sub task_not_allowed_security {
     my $html = $R->template->handler( {}, 
                                       { err => $err,
                                         admin_email => $R->CONFIG->{admin_email}  },
-                                      { db => 'err_task_forbidden' } );
+                                      { db      => 'err_task_forbidden',
+                                        package => 'base_error' } );
     die "$html\n";
 }
 

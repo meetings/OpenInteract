@@ -21,7 +21,7 @@ installation rules apply.
 Without changing directories from the directory where you unpacked the
 OpenInteract distribution, run:
 
- oi_manage --base_dir=/path/to/installation install
+ oi_manage install --base_dir=/path/to/installation
 
 The 'oi_manage' script should have been installed to a publically
 accessible place (e.g., '/usr/local/bin' or '/usr/bin') for you when
@@ -54,4 +54,4 @@ building/configuring Apache.
 
 
 =========================
-$Id: INSTALL,v 1.2 2001/02/25 20:47:02 lachoy Exp $
+$Id: INSTALL,v 1.3 2001/08/27 05:27:15 lachoy Exp $

@@ -138,16 +138,35 @@ your option) any later version.
 
 **"OpenInteract library" includes the core 'OpenInteract::' files: 
 
+ OpenInteract
  OpenInteract::ApacheStartup
+ OpenInteract::Auth
  OpenInteract::Config
  OpenInteract::Config::PerlFile
+ OpenInteract::Cookies::Apache
+ OpenInteract::Cookies::CGI
  OpenInteract::DBI
  OpenInteract::Error
+ OpenInteract::Error::Main
+ OpenInteract::Error::System
+ OpenInteract::Handler::GenericDispatcher
+ OpenInteract::LDAP
  OpenInteract::Package
+ OpenInteract::PackageRepository
  OpenInteract::Request
+ OpenInteract::Session
+ OpenInteract::Session::DBI
  OpenInteract::SPOPS
+ OpenInteract::SPOPS::DBI
+ OpenInteract::SPOPS::LDAP
  OpenInteract::SQLInstall
  OpenInteract::Startup
+ OpenInteract::Template::Context
+ OpenInteract::Template::Plugin
+ OpenInteract::Template::Process
+ OpenInteract::Template::Provider
+ OpenInteract::UI::Main
+ OpenInteract::Utility
 
 Along with the core packages:
 
@@ -157,11 +176,12 @@ Along with the core packages:
  base_error
  base_group
  base_security
- base_system_documentation
  base_template
  base_theme
  base_user
+ results_manage
  static_page
+ system_doc
 
 And the following application packages:
 
@@ -174,4 +194,4 @@ party, is licensed under its own terms.
 
 
 =========================
-$Id: README,v 1.3 2001/02/25 20:47:02 lachoy Exp $
+$Id: README,v 1.4 2001/08/28 21:30:25 lachoy Exp $

@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.10 2001/07/11 12:26:27 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.14 2001/08/21 12:41:23 lachoy Exp $
 
 use strict;
 use Data::Dumper           qw( Dumper );
@@ -8,7 +8,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -32,6 +32,8 @@ sub require_package_installer {
 }
 
 
+# TODO: This whole status thing sucks. We should create an
+# OpenInteract::Manage::Status object that can hold all this crap
 
 # Use this to apply a particular action
 #
@@ -39,12 +41,16 @@ sub require_package_installer {
 #   action:  action you want to do (create_structure|install_data|install_security)
 #   db:      DBI database handle (in correct db, RaiseError on)
 #   config:  config object/hashref
-#   package: package for which you're installing 
+#   package: package for which you're installing
 #   status:  'raw' (get back arrayref of raw status items) (optional)
 
 sub apply {
     my ( $class, $p ) = @_;
-    my $driver_name = $class->find_database_driver( $p->{config} );
+
+    # TODO: we assume the db driver is the one from the 'main'
+    # datasource for now -- we'll probably have to revisit this
+
+    my $driver_name = $class->find_database_driver( $p->{config}, 'main' );
     my $action = $p->{action_code};
     unless ( $action ) {
         DEBUG && _w( 1, "Finding coderef for $p->{action}" );
@@ -53,12 +59,12 @@ sub apply {
     }
     unless ( $action ) {
         my $msg = "$p->{action} for $driver_name: no action taken";
-        return ( $p->{status} eq 'raw' ) 
-                 ? [ { ok => 1, msg => $msg } ] 
+        return ( $p->{status} eq 'raw' )
+                 ? [ { ok => 1, msg => $msg } ]
                  : $msg;
     }
 
-    my $status = []; 
+    my $status = [];
 
     # Do this when the first item in the handler definition is the
     # subroutine, next is the hashref of arguments
@@ -67,7 +73,7 @@ sub apply {
         my $routine = shift @{ $action };
         my $extra_args = ( ref $action->[0] eq 'HASH' ) ? $action->[0] : {};
         my $args = { package => $p->{package},
-                     db      => $p->{db}, 
+                     db      => $p->{db},
                      config  => $p->{config},
                      %{ $extra_args } };
         $status = $class->$routine( $args );
@@ -82,8 +88,8 @@ sub apply {
     }
     else {
         my $msg = 'Action is not of expected type, so nothing run.';
-        return ( $p->{status} eq 'raw' ) 
-                 ? [ { ok => 1, msg => $msg } ] 
+        return ( $p->{status} eq 'raw' )
+                 ? [ { ok => 1, msg => $msg } ]
                  : $msg;
     }
     return $status if ( $p->{status} eq 'raw' );
@@ -106,7 +112,11 @@ sub create_structure {
     }
 
     my $pkg_info = $p->{package};
-    my $driver_name = $class->find_database_driver( $p->{config} );
+
+    # TODO: we assume the db driver is the one from the 'main'
+    # datasource for now -- we'll probably have to revisit this
+
+    my $driver_name = $class->find_database_driver( $p->{config}, 'main' );
     my $struct_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'struct' );
     my @status = ();
     foreach my $table_file ( @{ $p->{table_file_list} } ) {
@@ -119,7 +129,9 @@ sub create_structure {
         }
         else {
             $table_sql = $class->sql_modify_increment( $driver_name, $table_sql );
-            $table_sql = $class->sql_increment_type( $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_increment_type( $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_usertype( $driver_name, $table_sql );
+            $table_sql = $class->sql_modify_grouptype( $driver_name, $table_sql );
             eval { $p->{db}->do( $table_sql ) };
             if ( $@ ) {
                 $this_status->{ok} = 0;
@@ -144,8 +156,9 @@ sub create_structure {
 sub install_data {
     my ( $class, $p ) = @_;
     unless ( ref $p->{data_file_list} eq 'ARRAY' ) {
-        return [ { type => $p->{type}, ok => 0, 
-                   msg => 'No files given from which to read data!' } ];
+        return [ { type => $p->{type},
+                   ok   => 0,
+                   msg  => 'No files given from which to read data!' } ];
     }
 
     my $pkg_info = $p->{package};
@@ -154,13 +167,14 @@ sub install_data {
     my %args = ( db => $p->{db}, config => $p->{config} );
     foreach my $data_file ( @{ $p->{data_file_list} } ) {
         my $this_status = { type => $p->{type}, name => $data_file, ok => 1 };
-        my $process_status = eval { $class->process_data_file( { %args, filename => "$data_dir/$data_file" } ) };
+        my $process_status = eval { $class->process_data_file({ %args,
+                                                                filename => "$data_dir/$data_file" }) };
         if ( $@ ) {
             $this_status->{ok}  = 0;
             $this_status->{msg} = "Error: $@";
         }
         else {
-            $this_status->{msg} = ( $process_status->{msg} ) 
+            $this_status->{msg} = ( $process_status->{msg} )
                                     ? "$process_status->{msg} (from $data_file): ok"
                                     : "Processed data (from $data_file): ok";
         }
@@ -173,6 +187,10 @@ sub install_data {
 
 # Processes a single .dat data file
 
+# TODO: Split out the actual processing so we can feed the data and
+# action in and get the same result whether we generate the data
+# ourselves or read it from a file
+
 sub process_data_file {
     my ( $class, $p ) = @_;
     unless ( -f $p->{filename} ) {
@@ -182,7 +200,7 @@ sub process_data_file {
     my $info = $class->read_perl_file( $p->{filename} );
     return {} unless ( ref $info eq 'ARRAY' and ref $info->[0] eq 'HASH' );
     my $action = shift @{ $info };
-  
+
     # Transform all the data at once
 
     my $trans_data = $class->transform_data( $action, $info, $p );
@@ -198,8 +216,8 @@ sub process_data_file {
         foreach my $data ( @{ $trans_data } ) {
             eval {
                 if ( $sql_type eq 'insert' ) {
-                    SPOPS::SQLInterface->db_insert({ 
-                         db => $p->{db}, 
+                    SPOPS::SQLInterface->db_insert({
+                         db    => $p->{db},
                          table => $action->{sql_table},
                          field => $action->{field_order},
                          value => $data,
@@ -207,8 +225,8 @@ sub process_data_file {
                     $process_sql++;
                 }
                 if ( $sql_type eq 'update' ) {
-                    SPOPS::SQLInterface->db_update({ 
-                         db => $p->{db}, 
+                    SPOPS::SQLInterface->db_update({
+                         db    => $p->{db},
                          table => $action->{sql_table},
                          where => $action->{sql_where},
                          value => $data,
@@ -216,18 +234,17 @@ sub process_data_file {
                     $process_sql++;
                 }
                 if ( $sql_type eq 'delete' ) {
-                    SPOPS::SQLInterface->db_delete({ 
-                         db => $p->{db}, 
+                    SPOPS::SQLInterface->db_delete({
+                         db => $p->{db},
                          table => $action->{sql_table},
                          where => $action->{sql_where},
                          value => $data,
                          dbi_type_info => $action->{field_type} });
                     $process_sql++;
                 }
-        
             };
             if ( $@ ) {
-                die "Error executing SQL statement type $sql_type\n", 
+                die "Error executing SQL statement type $sql_type\n",
                     "Data: ((", join( ', ', @{ $data } ), "))\nError: $@\n";
             }
         }
@@ -246,15 +263,15 @@ sub process_data_file {
             foreach my $i ( 0 .. ( $num_fields - 1 ) ) {
                 $obj->{ $fields->[ $i ] } = $data->[ $i ];
             }
-            eval { $obj->save({ db            => $p->{db}, 
-                                is_add        => 1, 
-                                skip_log      => 1, 
-                                skip_security => 1, 
-                                skip_cache    => 1, 
-                                DEBUG         => DEBUG }) };      
+            eval { $obj->save({ db            => $p->{db},
+                                is_add        => 1,
+                                skip_log      => 1,
+                                skip_security => 1,
+                                skip_cache    => 1,
+                                DEBUG         => DEBUG }) };
             if ( $@ ) {
                 my $ei = SPOPS::Error->get;
-                die "Cannot create SPOPS object!\nBasic: $@\n",  
+                die "Cannot create SPOPS object!\nBasic: $@\n",
                     "Error: $ei->{system_msg}\n";
             }
             else {
@@ -272,6 +289,37 @@ sub process_data_file {
 }
 
 
+# Find the driver to use
+
+sub find_database_driver {
+    my ( $class, $config, $connect_key ) = @_;
+    my $driver = $config->{db_info}{ $connect_key }{sql_install} ||
+                 $config->{db_info}{ $connect_key }{driver_name};
+    unless ( $driver ) {
+        die "Cannot find database driver given connection key ($connect_key)";
+    }
+    return $driver;
+}
+
+
+# Get the hash of handlers from an installer class
+
+sub read_db_handlers {
+    my ( $class, $driver_name ) = @_;
+    no strict 'refs';
+    my %handlers = %{ $class . '::HANDLERS' };
+    my $db_handlers = {};
+    foreach my $action ( keys %handlers ) {
+        $db_handlers->{ $action } = $handlers{ $action }->{ $driver_name } ||
+                                    $handlers{ $action }->{'_default_'};
+    }
+    return $db_handlers;
+}
+
+
+########################################
+# DATA TRANSFORMATION
+########################################
 
 # Transform all of the data from whatever source
 
@@ -294,6 +342,13 @@ sub transform_data {
 
     if ( ref $action->{transform_class_to_oi} eq 'ARRAY' ) {
         $data_list = $class->_transform_class_to_oi( $action, $data_list, $p );
+    }
+
+    # If an action specifies lookup a field in the 'default_objects'
+    # server configuration key
+
+    if ( ref $action->{transform_default_to_id} eq 'ARRAY' ) {
+        $data_list = $class->_transform_default_to_id( $action, $data_list, $p );
     }
 
     return $data_list;
@@ -328,27 +383,31 @@ sub _transform_class_to_oi {
 }
 
 
-sub find_database_driver {
-    my ( $class, $config ) = @_;
-    return $config->{db_info}->{sql_install} ||
-           $config->{db_info}->{driver_name};
-}
-
-
-# Get the hash of handlers from an installer class
-
-sub read_db_handlers {
-    my ( $class, $driver_name ) = @_;
-    no strict 'refs';
-    my %handlers = %{ $class . '::HANDLERS' };
-    my $db_handlers = {};
-    foreach my $action ( keys %handlers ) {
-        $db_handlers->{ $action } = $handlers{ $action }->{ $driver_name } || 
-                                    $handlers{ $action }->{'_default_'};
+sub _transform_default_to_id {
+    my ( $class, $action, $data_list, $p ) = @_;
+    my $CONFIG = OpenInteract::Request->instance->CONFIG;
+    foreach my $data ( @{ $data_list } ) {
+        foreach my $field ( @{ $action->{transform_default_to_id} } ) {
+            my $idx = $p->{field_order}->{ $field };
+            $data->[ $idx ] =  $class->sql_default_to_id( $CONFIG->{default_objects}, $data->[ $idx ] );
+        }
     }
-    return $db_handlers;
+    return $data_list;
 }
 
+
+########################################
+# SQL MODIFICATIONS
+########################################
+
+sub sql_default_to_id {
+    my ( $class, $default, @text ) = @_;
+    my @modified = ();
+    foreach my $field ( @text ) {
+        push @modified, ( $default->{ $field } ) ? $default->{ $field } : $field;
+    }
+    return wantarray ? @modified : $modified[0];
+}
 
 
 # Translate OpenInteract::Blah::Blah -> MyWebsite::Blah::Blah
@@ -388,9 +447,9 @@ sub sql_modify_increment {
         elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
             s/%%INCREMENT%%/NUMERIC( 10, 0 ) IDENTITY NOT NULL/g;
         }
-        elsif ( $driver_name eq 'Pg' ) { 
-            s/%%INCREMENT%%/SERIAL/g; 
-        } 
+        elsif ( $driver_name eq 'Pg' ) {
+            s/%%INCREMENT%%/SERIAL/g;
+        }
     }
     return wantarray ? @sql : $sql[0];
 }
@@ -399,7 +458,7 @@ sub sql_modify_increment {
 # Translate %%INCREMENT_TYPE%% to a db-specific datatype -- note that
 # NULL/NOT NULL are not handled here
 
-sub sql_increment_type {
+sub sql_modify_increment_type {
     my ( $class, $driver_name, @to_change ) = @_;
     foreach ( @to_change ) {
         if ( $driver_name eq 'mysql' ) {
@@ -408,15 +467,51 @@ sub sql_increment_type {
         elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
             s/%%INCREMENT_TYPE%%/NUMERIC( 10, 0 )/g;
         }
-        elsif ( $driver_name eq 'Pg' ) { 
-            s/%%INCREMENT_TYPE%%/INT/g; 
-        } 
+        elsif ( $driver_name eq 'Pg' ) {
+            s/%%INCREMENT_TYPE%%/INT/g;
+        }
     }
     return wantarray ? @to_change : $to_change[0];
 }
 
 
-# This is pretty generic
+# Translate %%USERID_TYPE%% to a datatype specified in the server
+# configuration. This is so we can have user IDs as characters or
+# integers.
+
+sub sql_modify_usertype {
+    my ( $class, $driver_name, @to_change ) = @_;
+    my $CONFIG = OpenInteract::Request->instance->CONFIG;
+    my $type = $CONFIG->{id}{user_type} || 'int';
+    foreach ( @to_change ) {
+        if ( $type eq 'char' ) {
+            s/%%USERID_TYPE%%/VARCHAR(25)/g;
+        }
+        elsif ( $type eq 'int' ) {
+            s/%%USERID_TYPE%%/INT/g;
+        }
+    }
+    return wantarray ? @to_change : $to_change[0];
+}
+
+
+sub sql_modify_grouptype {
+    my ( $class, $driver_name, @to_change ) = @_;
+    my $CONFIG = OpenInteract::Request->instance->CONFIG;
+    my $type = $CONFIG->{id}{group_type} || 'int';
+    foreach ( @to_change ) {
+        if ( $type eq 'char' ) {
+            s/%%GROUPID_TYPE%%/VARCHAR(25)/g;
+        }
+        elsif ( $type eq 'int' ) {
+            s/%%GROUPID_TYPE%%/INT/g;
+        }
+    }
+    return wantarray ? @to_change : $to_change[0];
+}
+
+
+# This is pretty generic (and not used yet)
 
 sub sql_default {
     my ( $class, @to_change ) = @_;
@@ -430,7 +525,7 @@ sub sql_default {
 }
 
 
-# This is pretty generic
+# This is pretty generic (and not used yet)
 
 sub sql_primary_key {
     my ( $class, @to_change ) = @_;
@@ -444,7 +539,7 @@ sub sql_primary_key {
 }
 
 
-# This is pretty generic
+# This is pretty generic (and not used yet)
 
 sub sql_unique {
     my ( $class, @to_change ) = @_;
@@ -457,6 +552,10 @@ sub sql_unique {
     return wantarray ? @to_change : $to_change[0];
 }
 
+
+########################################
+# I/O
+########################################
 
 # Read in a file and evaluate it as perl.
 
@@ -488,6 +587,9 @@ sub read_file {
 }
 
 
+########################################
+# STATUS
+########################################
 
 # Format a status information hashref:
 #
@@ -534,7 +636,7 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
 
  use strict;
  use vars qw( %HANDLERS );
- %HANDLERS = ( 
+ %HANDLERS = (
    'create_structure' => { Sybase => \&structure_sybase,
                            Oracle => \&structure_oracle,
                            mysql  => \&structure_mysql },
@@ -551,8 +653,8 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
  use OpenInteract::Startup;
  use OpenInteract::DBI;
 
- my $C   = OpenInteract::Startup->create_config({ 
-                base_config_file => "$WEBSITE_DIR/conf/base.conf" 
+ my $C   = OpenInteract::Startup->create_config({
+                base_config_file => "$WEBSITE_DIR/conf/base.conf"
            });
  my $dbh = eval { OpenInteract::DBI->connect( $C->{db_info} ) };
  die "Cannot open database handle: $@"  if ( $@ );
@@ -633,7 +735,7 @@ used to install SQL for this package.
 
 B<apply( \%params )>
 
-Performs a particular SQL action for a particular package. 
+Performs a particular SQL action for a particular package.
 
 Returns: 'ok' if no errors were returned, or the text of the error if
 an error occurred.
@@ -705,8 +807,8 @@ Returns the strings with the substitution done in the same order.
 
 Example:
 
- my @classes = sql_class_to_website( 'MyWebsite', 
-                                 qw( OpenInteract::News::Handler 
+ my @classes = sql_class_to_website( 'MyWebsite',
+                                 qw( OpenInteract::News::Handler
                                      OpenInteract::News ) );
  # @classes is now: MyWebsite::News::Handler MyWebsite::News
 
@@ -757,7 +859,7 @@ B<read_file( $filename )>
 Reads in the file $filename and returns a scalar with all the text of
 the file.
 
-B<format_status( \%info, \@status )> 
+B<format_status( \%info, \@status )>
 
 =head1 PROCESSING DATA FILES
 
@@ -821,7 +923,7 @@ they were done in code:
    my $object = $object_class->new();
    $object->{group_id} = $row->[ $field_num{group_id} ];
    $object->{name}     = $row->[ $field_num{name} ];
-   $object->save({ is_add => 1, skip_security => 1, 
+   $object->save({ is_add => 1, skip_security => 1,
                    skip_log => 1, skip_cache => 1 });
  }
 
@@ -831,7 +933,7 @@ You can also specify operations to perform on the data before they are
 saved with the object. The most common operation of this is in
 security data:
 
-  $security = [ 
+  $security = [
                 { spops_class => 'OpenInteract::Security',
                   field_order => [ qw/ class object_id scope scope_id security_level / ],
                   transform_class_to_website => [ qw/ class / ] },
@@ -842,7 +944,7 @@ security data:
                 [ 'OpenInteract::Group', 3, 'g', '3', 8 ],
                 [ 'OpenInteract::Group', 2, 'g', '3', 8 ],
                 [ 'OpenInteract::Handler::Group', 0, 'w', 'world', 4 ],
-                [ 'OpenInteract::Handler::Group', 0, 'g', '3', 8 ] 
+                [ 'OpenInteract::Handler::Group', 0, 'g', '3', 8 ]
   ];
 
 So these steps would look like:
@@ -850,7 +952,7 @@ So these steps would look like:
  my $website_name = 'MyWebsite';
  my $object_class = 'OpenInteract::Security';
  $object_class =~ s/OpenInteract/$website_name/;
- my %field_num = { class => 0, object_id => 1, scope => 2, 
+ my %field_num = { class => 0, object_id => 1, scope => 2,
                    scope_id => 3, security_level => 4 };
  foreach my $row ( @{ $data_rows } ) {
    my $object = $object_class->new();
@@ -860,7 +962,7 @@ So these steps would look like:
    $object->{scope_id} = $row->[ $field_num{scope_id} ];
    $object->{level}    = $row->[ $field_num{security_level} ];
    $object->{class} =~ s/OpenInteract/$website_name/;
-   $object->save({ is_add => 1, skip_security => 1, 
+   $object->save({ is_add => 1, skip_security => 1,
                    skip_log => 1, skip_cache => 1 });
  }
 
@@ -896,9 +998,9 @@ However, if you do find it necessary you can use the following simple
 type -> DBI type mappings:
 
  'int'   -> DBI::SQL_INTEGER(),
- 'num'   -> DBI::SQL_NUMERIC(), 
+ 'num'   -> DBI::SQL_NUMERIC(),
  'float' -> DBI::SQL_FLOAT(),
- 'char'  -> DBI::SQL_VARCHAR(), 
+ 'char'  -> DBI::SQL_VARCHAR(),
  'date'  -> DBI::SQL_DATE(),
 
 Here is a sample usage:
@@ -906,9 +1008,9 @@ Here is a sample usage:
   $data_link = [ { sql_type => 'insert',
                    sql_table => 'sys_group_user',
                    field_order => [ qw/ group_id user_id link_date priority_level / ],
-                   field_type => { group_id       => 'int', 
+                   field_type => { group_id       => 'int',
                                    user_id        => 'int',
-                                   link_date      => 'date', 
+                                   link_date      => 'date',
                                    priority_level => 'char' },
                   },
                  [ 1, 1, '2000-02-14', 'high' ]
@@ -928,7 +1030,7 @@ Or:
 
   $cleanup = [ { sql_type => 'delete',
                  sql_table => 'sys_security',
-                 transform_class_to_website => [ 1, 2 ] },                 
+                 transform_class_to_website => [ 1, 2 ] },
                  where  => "class = ? OR class = ?" },
                  [ 'OpenInteract::Group', 'OpenInteract::Handler::Group' ]
   ];
@@ -953,7 +1055,7 @@ B<Dumping data for transfer>
 
 It would be nice if you could do something like:
 
- oi_manage dump_sql --website_dir=/home/httpd/myOI --package=mypkg 
+ oi_manage dump_sql --website_dir=/home/httpd/myOI --package=mypkg
 
 And get in your C<data/dump> directory a series of files that can be
 read in by another OpenInteract website for installation. This is

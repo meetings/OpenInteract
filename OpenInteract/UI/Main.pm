@@ -1,13 +1,13 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: Main.pm,v 1.3 2001/08/10 12:57:25 lachoy Exp $
 
 use strict;
 
 sub handler {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-  
+
     # Put the Popup and other directives here. A 'directive' exists
     # before the actual url and should have been parsed out in the main
     # Apache handler (see pkg/base/OpenInteract.pm). The value for the
@@ -25,16 +25,16 @@ sub handler {
             $R->DEBUG && $R->scrib( 1, "Using template key from directive: ($R->{page}->{_template_key_})" );
         }
     }
-  
+
     # Parse the URL and the information for our first action
-  
+
     my ( $action_class, $action_method ) = $R->lookup_action;
     $R->DEBUG && $R->scrib( 1, "Action info: $action_class / $action_method" );
 
     # Capture any die() commands thrown; note that any error handler that
     # throws a die() needs to also return content to display; otherwise
     # it will be a pretty boring (empty) page :)
-    
+
     $R->{page}->{content} = eval { $action_class->$action_method({ 
                                         path => $R->{path}->{current} }) };
     if ( $@ ) {
@@ -46,24 +46,29 @@ sub handler {
 
     return undef                 if ( $R->{page}->{send_file} );
     return $R->{page}->{content} if ( $R->{page}->{_no_template_} );
-  
+
     # $template_key here is being used to lookup a template name within a
-    # theme 
-  
+    # theme
+
     my $template_key  = $R->{page}->{_template_key_};
     $template_key   ||= 'simple_template' if ( $R->{page}->{_simple_} );
     $template_key   ||= 'main_template';
     my $db_template_name = $R->{page}->{_template_name_} || 
                            $R->{theme}->property_value( $template_key );
+    my ( $template_pkg, $template_name ) = $R->site_template->parse_name( $db_template_name );
+    unless ( $template_pkg and $template_name ) {
+        $template_name = $db_template_name;
+        $template_pkg  = 'base_theme';
+    }
 
     $R->DEBUG && $R->scrib( 1, "Using template <<$db_template_name>> for full page" );
     $R->{main_template_vars} ||= {};
-  
+
     return $R->template->handler( {}, 
                                   { %{ $R->{main_template_vars} }, 
                                     page => $R->{page} }, 
-                                  { db      => $db_template_name, 
-                                    package => 'base_theme' } );
+                                  { db      => $template_name, 
+                                    package => $template_pkg } );
 }
 
 1;
@@ -90,7 +95,7 @@ the template that surrounds the content on every page.
 The action has already been parsed from the URL for us so we look up
 the class/method used to generate the content and call them. We then
 put that content into the main template which is specified in our
-theme, unless we've received another directive to use a separate
+theme, unless we have received another directive to use a separate
 template or no template at all.
 
 Another alternative is that the content handler needs to return a file
@@ -110,7 +115,7 @@ You can also set a template that might vary by theme. This is not the
 name of the template directly but rather a placeholder within the
 theme which holds the name of the template. For instance, say you
 created a 'spooky_template' and implemented it in multiple
-themes. Even though you as an author don't know what theme will be
+themes. Even though you as an author do not know what theme will be
 used, you can still pick the right template by setting:
 
  $R->{page}->{_template_key_}

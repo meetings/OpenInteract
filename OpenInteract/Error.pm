@@ -1,8 +1,10 @@
 package OpenInteract::Error;
 
-# $Id: Error.pm,v 1.3 2001/07/11 12:26:27 lachoy Exp $
+# $Id: Error.pm,v 1.4 2001/08/28 21:38:07 lachoy Exp $
 
 use strict;
+
+$OpenInteract::Error::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 

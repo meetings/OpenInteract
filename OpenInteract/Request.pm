@@ -1,13 +1,13 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.5 2001/07/11 12:26:27 lachoy Exp $
+# $Id: Request.pm,v 1.11 2001/08/18 19:17:06 lachoy Exp $
 
 use strict;
 use Class::Singleton  ();
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -26,6 +26,11 @@ sub _new_instance {
 }
 
 
+# Alias so people can do ->new() as well as ->instance()
+
+sub new { my $class = shift; return $class->instance( @_ ); }
+
+
 # Dummy method for subclasses to override
 
 sub initialize { return 1; }
@@ -35,19 +40,79 @@ sub initialize { return 1; }
 
 sub cgi             { return $_[0]->get_stash( 'cgi' )    }
 sub apache          { return $_[0]->get_stash( 'apache' ) }
-sub db              { return $_[0]->get_stash( 'db' )     }
 sub cache           { return $_[0]->get_stash( 'cache' )  }
 sub config          { return $_[0]->get_stash( 'config' ) }
 sub CONFIG          { return $_[0]->get_stash( 'config' ) }
 sub uri             { return $_[0]->get_stash( 'uri' )    }
 sub error_handlers  { return $_[0]->get_stash( 'error_handlers' )  }
-sub template_object { return $_[0]->get_stash( 'template_object' ) }
+
+
+sub template_object {
+    my ( $self ) = @_;
+    my $tt_object = $self->get_stash( 'template_object' );
+    return $tt_object if ( $tt_object );
+    $tt_object = $self->template->initialize;
+    $self->stash( 'template_object', $tt_object );
+    return $tt_object;
+}
+
+
+sub db {
+    my ( $self, $connect_key ) = @_;
+    $connect_key ||= $self->CONFIG->{default_connection_db};
+    my $db = $self->get_stash( "db-$connect_key" );
+    return $db if ( $db );
+    require OpenInteract::DBI;
+    $db = eval { OpenInteract::DBI->connect( $self->CONFIG->{db_info}{ $connect_key } ) };
+    if ( $@ ) {
+        OpenInteract::Error->set({ system_msg => $@,
+                                   type       => 'db',
+                                   extra      => $self->CONFIG->{db_info}{ $connect_key } });
+        $self->scrib( 0, "Cannot connect to database! Immediately exiting process!" );
+        my $error_msg = $self->throw({ code => 11 });
+        die $error_msg;
+    }
+    return $self->db_stash( $db, $connect_key );
+}
+
+
+sub db_stash {
+    my ( $self, $dbh, $connect_key ) = @_;
+    $connect_key ||= $self->CONFIG->{default_connection_db};
+    return $self->stash( "db-$connect_key", $dbh );
+}
+
+
+sub ldap {
+    my ( $self, $connect_key ) = @_;
+    my $ldap = $self->get_stash( "ldap-$connect_key" );
+    return $ldap if ( $ldap );
+    require OpenInteract::LDAP;
+    $ldap = eval { OpenInteract::LDAP->connect_and_bind(
+                                                  $self->CONFIG->{ldap_info}{ $connect_key } ) };
+    if ( $@ ) {
+        OpenInteract::Error->set({ system_msg => $@,
+                                   type       => 'db',
+                                   extra      => $self->CONFIG->{db_info}{ $connect_key } });
+        $self->scrib( 0, "Cannot connect to LDAP directory with connection ($connect_key)! Error: $@" );
+        die $self->throw({ code => 11 });
+    }
+    return $self->ldap_stash( $ldap, $connect_key );
+
+}
+
+
+sub ldap_stash {
+    my ( $self, $ldap, $connect_key ) = @_;
+    $connect_key ||= $self->CONFIG->{default_connection_ldap};
+    return $self->stash( "ldap-$connect_key", $ldap );
+}
 
 
 # A shortcut, but we put the caller info in there so every error
 # thrown doesn't appear to be coming from this location :)
 
-sub throw  { 
+sub throw {
     my ( $self, $p ) = @_; 
     ( $p->{package}, $p->{filename}, $p->{line} ) = caller;
     $p->{action} = $self->{current_context}->{action};
@@ -61,7 +126,8 @@ sub stash {
     my ( $self, $name, $obj ) = @_;
     return {} unless ( ref $self );
     my $stash_class = $self->{stash_class};
-    return $stash_class->set_stash( $name, $obj ) if ( $stash_class );
+    die "No stash class defined in OpenInteract::Request object!\n" unless ( $stash_class );
+    return $stash_class->set_stash( $name, $obj );
 }
 
 
@@ -82,7 +148,6 @@ my %ALIAS           = ();
 my $ALIASES_SETUP   = 0;
 
 sub ALIAS           { return \%ALIAS }
-
 sub lookup_alias    { return $ALIAS{ $_[1] }->{ $_[0]->{stash_class} } }
 
 
@@ -95,8 +160,9 @@ sub lookup_alias    { return $ALIAS{ $_[1] }->{ $_[0]->{stash_class} } }
 
 sub setup_aliases {
     my ( $class ) = @_;
+    return if ( $ALIASES_SETUP );
+    $class->scrib( 1, "Aliases not yet setup. Setting up aliases for process ($$)" );
     no strict 'refs';
-    return if ( $ALIASES_SETUP ); 
     foreach my $alias ( keys %ALIAS ) {
         *{ $class . '::' . $alias } = sub { 
             my $self = shift; $self = $self->instance unless ( ref $self );
@@ -155,7 +221,7 @@ sub lookup_conductor {
     my ( $action_info, $action_method ) = $self->lookup_action( $action, { return => 'info' } );
     $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
     my $conductor      = $action_info->{conductor};
-    
+
     # skip conductor for component-only actions
 
     return undef  if ( $conductor eq 'null' ); 
@@ -193,7 +259,7 @@ ACTION:
         }
 
         # Allow as many redirects as we need
-    
+
         while ( my $action_redir = $action_info->{redir} ) {
             $action_info = $self->CONFIG->{action}->{ lc $action_redir };
             $self->scrib( 3, "Info within redir ($action_redir):\n", Dumper( $action_info ) );
@@ -215,12 +281,12 @@ sub finish_request {
     my ( $self ) = @_;
 
     # Ask the stash to clean itself up
-  
+
     my $stash_class = $self->{stash_class};
     $stash_class->clean_stash;
 
     # Clear out all the content
-  
+
     foreach my $key ( keys %{ $self } ) {
         delete $self->{ $key };
     }
@@ -336,6 +402,10 @@ B<get_stash( 'name' )>
 Retrieves the value corresponding to 'name' from the current stash
 class. Note that many aliases (e.g., "$R-E<gt>db") actually call
 'get_stash' internally, so you will not see this used very frequently.
+
+B<db_stash( $handle, [ $connection_key ] )>
+
+B<ldap_stash( $handle, [ $connection_key ] )>
 
 B<setup_aliases()>
 

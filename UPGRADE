@@ -1,11 +1,11 @@
 UPGRADING OPENINTERACT
-=========================
+========================================
 
 This document has a few pointers for upgrading OpenInteract.
 
-===============
-Quick help
-===============
+==============================
+QUICK HELP
+==============================
 
 Most of the time, upgrading OpenInteract is as simple as:
 
@@ -28,28 +28,176 @@ from the directory where you unpacked the OpenInteract
 distribution. This will upgrade all the core OpenInteract packages in
 the base installation to the versions included with the distribution.
 
+ 3) Once you've done that, you can upgrade packages in the websites at
+ your leisure.
 
-===============
-General upgrade notes
-===============
+
+==============================
+GENERAL UPGRADE NOTES
+==============================
 
 Always read the 'Changes' file in this directory for more details
 about changes between versions. 
 
----------------
+If you have any problems, check the archives of the openinteract-help
+mailing list at:
+
+  http://www.geocrawler.com/lists/3/SourceForge/8429/0/
+
+and if you don't find your solution there, mail the list at:
+
+  openinteract-help@lists.sourceforge.net
+
+--------------------
 Server configuration:
+--------------------
 
 As we improve OpenInteract, we occasionally add new configuration
 options to the 'server.perl' file. Since we have not yet developed a
-utility to integrate these changes automatically, check out the
-'Changes' file and see what updates there have been between the
-versions.
+utility to integrate these changes automatically, check here to see
+what updates there have been between the versions.
 
-===============
-Upgrading from 1.06 (and earlier)
-===============
 
----------------
+==============================
+UPGRADING TO 1.2
+==============================
+
+This is a substantial upgrade. Please read the following notes before
+upgrading.
+
+Briefly:
+
+ - The way we use the Template Tolkit has drastically changed, but the
+ interface is almost entirely the same. There is a script to migrate
+ templates.
+
+ - All templates must have an associated package now
+
+ - There are a number of changes to the server configuration file.
+
+ - All DBI objects need to derive from 'OpenInteract::SPOPS::DBI'
+ rather than 'OpenInteract::SPOPS'
+
+--------------------
+Template changes:
+--------------------
+
+ - To translate all the old templates in one or more directories to
+ new ones, run (from the source distribution directory):
+
+     $ perl script/template_translate.pl directory [ directory, directory ]
+
+   For instance:
+
+     $ perl script/template_translate.pl /devel/pkg/mypkg/template
+
+   All old templates are saved with a .old extension, new ones are
+   saved under the old name.
+
+ - All templates should be processed using
+ 'OpenInteract::Template::Process' instead of
+ 'OpenInteract::Template::Toolkit'. So older packages with something
+ like:
+
+   my $TMPL_CLASS = 'OpenInteract::Template::Toolkit';
+
+   sub listing {
+     ...
+     return $TMPL_CLASS->handler( ... );
+   }
+
+ just change the first line to:
+
+   my $TMPL_CLASS = 'OpenInteract::Template::Process';
+
+ You can also delete the line and use (recommended):
+
+   sub listing {
+     ...
+     return $R->template->handler( ... );
+   }
+
+
+ - You also need to pass BOTH the template name and package to the
+ template processor:
+
+     return $R->template->handler( ..., { db      => 'mytemplate',
+                                          package => 'mypackage' } );
+
+  You'll know you need to do this when you see an error like:
+
+     Cannot process template!file error - Template
+     (::mytemplate) is not in the website common directory and
+     is not in the format 'package::name' at
+     .../OpenInteract/Template/Process.pm line 45.
+ 
+
+--------------------
+Server configuration changes:
+--------------------
+
+ - There are a large number of changes to the server configuration, so
+   it would probably be easiest to open up your existing server
+   configuration and the sample configuration file
+   side-by-side. (There are also documentation updates, which should
+   help.) Copy over information from your existing configuration file
+   to the sample, then save.
+
+ - Add:
+
+    {dir}{template} => '$BASE/template'
+
+    You can store templates here specific to your website and refer to
+    them by template name only.
+
+ - Move:
+
+    {db_info}
+
+   to:
+
+    {db_info}{main}
+
+ - Add:
+
+    {default_connection_db} => 'main'
+
+ - If you're using LDAP, add:
+
+    {default_connection_ldap} => 'main'
+    {ldap_info}{main} => { ...params...}
+
+ - Add:
+
+    {cache}{template}{expires} => 900
+
+ - If you're using MySQL as a session store, change:
+
+     {system_alias}{'OpenInteract::Session::MySQL'} => [ 'session' ]
+
+   to be:
+
+     {system_alias}{'OpenInteract::Session::DBI'}   => [ 'session' ]
+
+
+ - Add:
+
+     {default_objects}{superuser}  => 1
+     {default_objects}{supergroup} => 1
+
+ - Add:
+
+     {id}{user_type}  => 'int'
+     {id}{group_type} => 'int'
+
+    If you're using LDAP, use 'char' instead of 'int'
+
+
+==============================
+UPGRADING FROM 1.06 (AND EARLIER)
+==============================
+
+--------------------
 Table schema changes (field renaming):
 
   sys_security:
@@ -62,14 +210,14 @@ Table schema changes (field renaming):
      oid     --> object_id
 
 
----------------
+--------------------
 Add the line:
 
   config_type  perl
 
 to your 'conf/base.conf' file.
 
----------------
+--------------------
 In 'conf/server.perl'
 
 Add the configuration keys:
@@ -94,11 +242,11 @@ to
 
  
 
-===============
-Upgrading from 1.05 (and earlier)
-===============
+==============================
+UPGRADING FROM 1.05 (AND EARLIER)
+==============================
 
----------------
+--------------------
 SPOPS/MySQL changes:
 
 If the website authors do not upgrade to the new packages and use the
@@ -111,7 +259,7 @@ for each object:
 The packages distributed with OpenInteract all have this change.
 
 
----------------
+--------------------
 Package Repository:
 
 Version 1.06 and higher use an entirely different package repository
@@ -144,5 +292,5 @@ While this should be a seamless upgrade, you MUST restart the Apache
 process to have the changes take effect.
 
 
-=========================
-$Id: UPGRADE,v 1.2 2001/06/01 02:16:31 lachoy Exp $
+========================================
+$Id: UPGRADE,v 1.4 2001/08/27 00:16:21 lachoy Exp $

@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.11 2001/07/12 16:07:07 lachoy Exp $
+# $Id: Startup.pm,v 1.20 2001/08/27 15:05:38 lachoy Exp $
 
 use strict;
 use Data::Dumper  qw( Dumper );
@@ -9,10 +9,10 @@ use OpenInteract::Config;
 use OpenInteract::Error;
 use OpenInteract::Package;
 use OpenInteract::PackageRepository;
-use SPOPS::Configure;
+use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -25,16 +25,15 @@ sub main_initialize {
     # Ensure we can find the base configuration, and use it or read it in
 
     return undef unless ( $p->{base_config} or $p->{base_config_file} );
-    my $bc = $p->{base_config} || 
+    my $bc = $p->{base_config} ||
              $class->read_base_config({ filename => $p->{base_config_file} });
 
     # Create our main config object
 
     my $C = $class->create_config({ base_config  => $bc });
 
-    # Initialize OpenInteract::Package -- it's a SPOPS class, but it's
-    # different from the rest in that we actually *use* it to create the
-    # other classes/modules (bootstrapping thing)
+    # Initialize the package repository class -- it's a SPOPS class,
+    # but a really simple one
 
     $REPOS_CLASS->class_initialize( $C );
 
@@ -71,35 +70,53 @@ sub main_initialize {
         }
     }
 
-    my $successful = $class->require_module({ 
+    # Read in all the classes specified by the packages
+
+    my $successful = $class->require_module({
                                class    => [ keys %require_class ],
 					           pkg_link => \%require_class });
     if ( scalar @{ $successful } != scalar keys %require_class ) {
         _w( 0, "Some classes were not required!" );
     }
 
-    # The config object should now have all actions and SPOPS definitions 
+    # The config object should now have all actions and SPOPS definitions
     # read in, so run any necessary configuration options
-  
+
     my $init_class = $class->finalize_configuration({ config => $C });
 
     # Store the configuration for later use
-  
+
     my $stash_class = $bc->{stash_class};
     $stash_class->set_stash( 'config', $C );
 
     # Tell OpenInteract::Request to setup aliases if they haven't already
 
-    if ( $p->{alias_init} ) { 
+    if ( $p->{alias_init} ) {
         my $request_class = $bc->{request_class};
         $request_class->setup_aliases;
     }
 
     # Initialize all the SPOPS object classes
 
-    if ( $p->{spops_init} ) { 
+    if ( $p->{spops_init} ) {
         $class->initialize_spops({ config => $C, class => $init_class });
     }
+
+    # Read in all the classes for all configured conductors
+
+    my @conductor_classes = ();
+    foreach my $conductor ( keys %{ $C->{conductor} } ) {
+        push @conductor_classes, $C->{conductor}{ $conductor }{class};
+    }
+    $class->require_module({ class => \@conductor_classes });
+
+    # Read in the modules referred to in the 'system_alias' key from
+    # the configuration -- EXCEPT for anything beginning with the
+    # website name since that's an SPOPS object and has already been
+    # created
+
+    my @system_alias_keys = grep ! /^$bc->{website_name}/, keys %{ $C->{system_alias} };
+    $class->require_module({ class => \@system_alias_keys });
 
     DEBUG && _w( 2, "Contents of INC: @INC" );
 
@@ -154,9 +171,6 @@ sub setup_static_environment {
     $R->{stash_class} = $C->{stash_class};
     $R->stash( 'config', $C );
 
-    my $dbh = OpenInteract::DBI->connect( $C->{db_info} );
-    $R->stash( 'db', $dbh );
-
     # If we were given the superuser password, retrieve the user and
     # check the password
 
@@ -166,7 +180,7 @@ sub setup_static_environment {
         unless ( $user->check_password( $su_passwd ) ) {
             die "Password for superuser does not match!\n";
         }
-        $R->{auth}->{user} = $user;    
+        $R->{auth}{user} = $user;
     }
 
     return $R;
@@ -180,7 +194,7 @@ sub setup_static_environment {
 sub create_config {
     my ( $class, $p ) = @_;
     return undef unless ( $p->{base_config} or $p->{base_config_file} );
-    my $bc = $p->{base_config} || 
+    my $bc = $p->{base_config} ||
              $class->read_base_config({ filename => $p->{base_config_file} });
 
     # Create the configuration file and set the base directory as configured;
@@ -196,8 +210,8 @@ sub create_config {
     # which should be as long as the apache child is alive if we're using
     # mod_perl, and will be set in the returned config object in any case
 
-    $C->{dir}->{base}      = $bc->{website_dir};
-    $C->{dir}->{interact}  = $bc->{base_dir};
+    $C->{dir}{base}      = $bc->{website_dir};
+    $C->{dir}{interact}  = $bc->{base_dir};
     $C->{request_class}    = $bc->{request_class};
     $C->{stash_class}      = $bc->{stash_class};
     $C->{website_name}     = $bc->{website_name};
@@ -209,17 +223,17 @@ sub create_config {
 sub read_package_list {
     my ( $class, $p ) = @_;
     return [] unless ( $p->{filename} or $p->{config} );
-    my $filename = $p->{filename} || 
-                   join( '/', $p->{config}->get_dir( 'config' ), $p->{config}->{package_list} );
-    open( PKG, $filename ) || die "Cannot open package list ($filename): $!"; 
+    my $filename = $p->{filename} ||
+                   join( '/', $p->{config}->get_dir( 'config' ), $p->{config}{package_list} );
+    open( PKG, $filename ) || die "Cannot open package list ($filename): $!";
     my @packages = ();
     while ( <PKG> ) {
         chomp;
         next if /^\s*\#/;
         next if /^\s*$/;
-        s/^\s*//; 
-        s/\s*$//; 
-        push @packages, $_;   
+        s/^\s*//;
+        s/\s*$//;
+        push @packages, $_;
     }
     close( PKG );
     return \@packages;
@@ -285,7 +299,7 @@ sub require_module {
         foreach ( @{ $p->{class} } ) {
             DEBUG && _w( 1, "Trying to require class ($_)" );
             eval "require $_";
-            if ( $@ ) { _w( 0, sprintf( " --require error%-40s (from %s): %s", $_, $p->{pkg_link}->{$_}, $@ ) ) }
+            if ( $@ ) { _w( 0, sprintf( " --require error: %-40s (from %s): %s", $_, $p->{pkg_link}{$_}, $@ ) ) }
             else      { push @success, $_ }
         }
     }
@@ -316,7 +330,7 @@ sub process_package {
     # If we cannot find even one package directory, bail
 
     unless ( scalar @package_dir_list ) {
-        _w( 0, "No package directories found for $pkg_name: was it installed correctly?" ); 
+        _w( 0, "No package directories found for $pkg_name: was it installed correctly?" );
         return undef;
     }
 
@@ -331,18 +345,18 @@ sub process_package {
     my ( %spops, %action );
     foreach my $package_dir ( @package_dir_list ) {
         my $conf_pkg_dir = "$package_dir/conf";
-    
+
         # If the package does not have a 'list_module.dat', that's ok and the
         # 'require_module' class method will simply return an empty list.
-    
+
         $class->require_module({ filename => "$conf_pkg_dir/list_module.dat" });
 
         # Read in the 'action' information and set in the config object
-    
-        my @action_tag_list = $class->read_action_definition({ 
+
+        my @action_tag_list = $class->read_action_definition({
                                        filename => "$conf_pkg_dir/action.perl",
-                                       config => $CONF,
-                                       package => $pkg_info });
+                                       config   => $CONF,
+                                       package  => $pkg_info });
         foreach my $action_tag ( @action_tag_list ) {
             $action{ $action_tag }++  if ( $action_tag );
         }
@@ -352,11 +366,11 @@ sub process_package {
         # able to relate SPOPS objects, which cannot be done until all the
         # definitions are read in. (Yes, we could use 'map' here and above,
         # but it's confusing to people first reading the code)
-    
+
         my @spops_tag_list = $class->read_spops_definition({
                                       filename => "$conf_pkg_dir/spops.perl",
-                                      config => $CONF,
-                                      package => $pkg_info });
+                                      config   => $CONF,
+                                      package  => $pkg_info });
         foreach my $spops_tag ( @spops_tag_list ) {
             $spops{ $spops_tag }++  if ( $spops_tag );
         }
@@ -368,18 +382,18 @@ sub process_package {
     my ( @class_list );
     foreach my $action_key ( keys %action ) {
         next unless ( $action_key );
-        my $action_info = $CONF->{action}->{ $action_key };
+        my $action_info = $CONF->{action}{ $action_key };
         if ( $action_info->{class} ) {
             push @class_list, $action_info->{class};
         }
         if ( ref $action_info->{error} eq 'ARRAY' ) {
             push @class_list, @{ $action_info->{error} };
-        }   
+        }
     }
 
     foreach my $spops_key ( keys %spops ) {
         next unless ( $spops_key );
-        my $spops_info = $CONF->{SPOPS}->{ $spops_key };
+        my $spops_info = $CONF->{SPOPS}{ $spops_key };
         if ( ref $spops_info->{isa} eq 'ARRAY' ) {
             push @class_list, @{ $spops_info->{isa} };
         }
@@ -395,23 +409,27 @@ sub process_package {
 # installation to define lots of information and the website to only
 # override what it needs.
 
+# Also save the key under which this was retrieved under 'key'
+
 sub read_action_definition {
     my ( $class, $p ) = @_;
     DEBUG && _w( 1, "Reading action definitions from ($p->{filename})" );
 
     # $CONF is easier to read and more consistent
-    my $CONF = $p->{config}; 
+
+    my $CONF = $p->{config};
     my $action_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
     return undef  unless ( $action_info );
     my @class_list = ();
     foreach my $action_key ( keys %{ $action_info } ) {
+        $CONF->{action}{ $action_key }{key} = $action_key;
         foreach my $action_conf ( keys %{ $action_info->{ $action_key } } ) {
-            $CONF->{action}->{ $action_key }->{ $action_conf } =
-                                   $action_info->{ $action_key }->{ $action_conf };
+            $CONF->{action}{ $action_key }{ $action_conf } =
+                                   $action_info->{ $action_key }{ $action_conf };
         }
         if ( ref $p->{package} ) {
-            $CONF->{action}->{ $action_key }->{package_name}    = $p->{package}->{name};
-            $CONF->{action}->{ $action_key }->{package_version} = $p->{package}->{version};
+            $CONF->{action}{ $action_key }{package_name}    = $p->{package}{name};
+            $CONF->{action}{ $action_key }{package_version} = $p->{package}{version};
         }
     }
     return keys %{ $action_info };
@@ -426,20 +444,22 @@ sub read_spops_definition {
     DEBUG && _w( 1, "Reading SPOPS definitions from ($p->{filename})" );
 
     # $CONF is easier to read and more consistent
-    my $CONF = $p->{config}; 
+    my $CONF = $p->{config};
     my $spops_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
     return undef unless ( $spops_info );
     my @class_list = ();
     foreach my $spops_key ( keys %{ $spops_info } ) {
+        $CONF->{SPOPS}{ $spops_key }{key} = $spops_key;
         foreach my $spops_conf ( keys %{ $spops_info->{ $spops_key } } ) {
-            $CONF->{SPOPS}->{ $spops_key }->{ $spops_conf } =
-                                   $spops_info->{ $spops_key }->{ $spops_conf };
+            $CONF->{SPOPS}{ $spops_key }{ $spops_conf } =
+                                   $spops_info->{ $spops_key }{ $spops_conf };
         }
         if ( ref $p->{package} ) {
-            $CONF->{SPOPS}->{ $spops_key }->{package_name}    = $p->{package}->{name};
-            $CONF->{SPOPS}->{ $spops_key }->{package_version} = $p->{package}->{version};
+            $CONF->{SPOPS}{ $spops_key }{package_name}    = $p->{package}{name};
+            $CONF->{SPOPS}{ $spops_key }{package_version} = $p->{package}{version};
         }
     }
+
     return keys %{ $spops_info };
 }
 
@@ -473,14 +493,13 @@ sub read_perl_file {
 sub finalize_configuration {
     my ( $class, $p ) = @_;
     my $CONF = $p->{config};
-    my $SPOPS_CONFIG_CLASS = $CONF->{SPOPS_config_class};
     my $REQUEST_CLASS      = $CONF->{request_class};
     my $STASH_CLASS        = $CONF->{stash_class};
 
     # Create all the packages and subroutines on the fly as necessary
 
-    DEBUG && _w( 1, "Trying to parse with $SPOPS_CONFIG_CLASS" );
-    my $init_class = $SPOPS_CONFIG_CLASS->process_config({ config => $CONF->{SPOPS} });
+    DEBUG && _w( 1, "Trying to configure SPOPS classes with SPOPS::ClassFactory" );
+    my $init_class = SPOPS::ClassFactory->create( $CONF->{SPOPS} );
 
     # Setup the default responses, template classes, etc. for all the
     # actions read in.
@@ -498,22 +517,22 @@ sub finalize_configuration {
     DEBUG && _w( 1, "Setting up SPOPS aliases" );
     foreach my $init_alias ( keys %{ $CONF->{SPOPS} } ) {
         next if ( $init_alias =~ /^_/ );
-        my $info        = $CONF->{SPOPS}->{ $init_alias };
+        my $info        = $CONF->{SPOPS}{ $init_alias };
         my $class_alias = $info->{class};
         my @alias_list  = ( $init_alias );
         push @alias_list, @{ $info->{alias} } if ( $info->{alias} );
         foreach my $alias ( @alias_list ) {
             DEBUG && _w( 1, "Tag $alias in $STASH_CLASS to be $class_alias" );
-            $request_alias->{ $alias }->{ $STASH_CLASS } = $class_alias;
+            $request_alias->{ $alias }{ $STASH_CLASS } = $class_alias;
         }
     }
- 
+
     DEBUG && _w( 1, "Setting up System aliases" );
     foreach my $sys_class ( keys %{ $CONF->{system_alias} } ) {
         next if ( $sys_class =~ /^_/ );
-        foreach my $alias ( @{ $CONF->{system_alias}->{ $sys_class } } ) {
+        foreach my $alias ( @{ $CONF->{system_alias}{ $sys_class } } ) {
             DEBUG && _w( 1, "Tagging $alias in $STASH_CLASS to be $sys_class" );
-            $request_alias->{ $alias }->{ $STASH_CLASS } = $sys_class;
+            $request_alias->{ $alias }{ $STASH_CLASS } = $sys_class;
         }
     }
     DEBUG && _w( 1, "Setup object and system aliases ok" );
@@ -562,16 +581,20 @@ OpenInteract::Startup -- Bootstrapper that reads in modules, manipulates @INC, e
 
 =head1 SYNOPSIS
 
-
  # Startup an OpenInteract environment outside Apache and mod_perl
 
  use strict;
  use OpenInteract::Startup;
 
- my $R =  OpenInteract::Startup->setup_static_environment( 
+ my $R =  OpenInteract::Startup->setup_static_environment(
                                       '/home/httpd/MySite' );
 
- # For usage inside Apache/mod_perl, see OpenInteract::ApacheStartup
+ # Same thing, but read the website directory from the command-line
+ # parameter '--website_dir' or the environment variable 'OIWEBSITE'
+
+ my $R =  OpenInteract::Startup->setup_static_environment_options();
+
+ # For usage in Apache/mod_perl, see OpenInteract::ApacheStartup
 
 =head1 DESCRIPTION
 
@@ -649,32 +672,32 @@ You B<must> pass in either 'base_config' or 'base_config_file'.
 
 =item *
 
-base_config (\%)
+B<base_config> (\%)
 
 A hashref with the information from the base configuration file
 
 =item *
 
-base_config_file ($)
+B<base_config_file> ($)
 
 A filename where the base configuration can be found
 
 =item *
 
-alias_init (bool) (optional)
+B<alias_init> (bool) (optional)
 
 A true value will initialize aliases within the request class; the
 default is to not perform the initialization.
 
 =item *
 
-spops_init (bool) (optional)
+B<spops_init> (bool) (optional)
 
 A true value will create/initialize all SPOPS classes (see
-SPOPS::Configure for more information); the default is to not perform
-the initialization.
+L<SPOPS::ClassFactory> for more information); the default is to not
+perform the initialization.
 
-package_extra (\@) (optional)
+B<package_extra> (\@) (optional)
 
 A list of packages not included in the filename of packages to read in
 but you want to include anyway (maybe you are testing a new package
@@ -755,7 +778,7 @@ option '--website_dir') or if not found there the environment variable
 'OIWEBSITE'.
 
 The parameter C<$usage> is for displaying if the 'website_dir'
-parameter can be found in neither. 
+parameter can be found in neither.
 
 The optional parameter C<\%options> is for parsing additional
 commandline options. The keys of the hashref should be formatted in
@@ -772,7 +795,7 @@ Example:
  my $usage = "$0 --website_dir=/path/to/site --title=title";
  my ( $OPT_title );
  my %options = ( 'title=s' => \$OPT_title );
- my $R = OpenInteract::Startup->setup_static_environment_options( 
+ my $R = OpenInteract::Startup->setup_static_environment_options(
                                                       $usage, \%options );
 
  my $news_iter = eval { $R->news->fetch_iterator({ where => 'title like ?',
@@ -798,7 +821,7 @@ Choose one or the other
 
 =item *
 
-config
+B<config> (\%)
 
 An OpenInteract::Config object which has 'package_list' as a key; this
 file is assumed to be in the 'config' directory, also found on the
@@ -806,7 +829,7 @@ object.
 
 =item *
 
-filename
+B<filename> ($)
 
 A scalar specifying where the packages can be read from.
 
@@ -825,14 +848,14 @@ Parameters:
 
 =item *
 
-filename ($)
+B<filename> ($)
 
 A scalar specifying where the file is located; it must have a
 fully-qualified path.
 
 =item *
 
-dir ($)
+B<dir> ($)
 
 A scalar specifying the website directory which has the file
 'conf/base.conf' under it.
@@ -853,14 +876,14 @@ Parameters (choose one of the two):
 
 =item *
 
-filename ($)
+B<filename> ($)
 
 Name of file which has modules to read in; one module per line, blank
 lines and lines beginning with a comment (#) are skipped
 
 =item *
 
-class ($ | \@)
+B<class> ($ | \@)
 
 Single classname or arrayref of classnames to read in.
 
@@ -882,7 +905,7 @@ information on what goes into a package and how it is laid out.)
 
 Note that we do B<not> create/configure the SPOPS classes yet, since
 that process requires that all SPOPS classes to be used exist in the
-configuration. (See L<SPOPS::Configure> for more details.)
+configuration. (See L<SPOPS::ClassFactory> for more details.)
 
 Parameters:
 
@@ -890,20 +913,21 @@ Parameters:
 
 =item *
 
-package ($)
+B<package> ($)
 
 Name of package to be processed; this should correspond to a
 particular directory in the package directory
 
 =item *
 
-config (obj)
+B<config> (obj)
 
-An OpenInteract::Config object
+An L<OpenInteract::Config> object or hashref with configuration
+information.
 
 =item *
 
-package_dir (\@) (optional)
+B<package_dir> (\@) (optional)
 
 Directories where this package might be kept; if not passed in, it
 will be found from the config object
@@ -922,19 +946,19 @@ Parameters:
 
 =item *
 
-filename ($)
+B<filename> ($)
 
 File where the action definion is.
 
 =item *
 
-config (obj)
+B<config> (obj)
 
 OpenInteract::Config object where we set the action information.
 
 =item *
 
-package (\%)
+B<package> (\%)
 
 Hashref with information about a package so we can set name/version
 info.
@@ -953,19 +977,19 @@ Parameters:
 
 =item *
 
-filename ($)
+B<filename> ($)
 
 File where the module definion is.
 
 =item *
 
-config (obj)
+B<config> (obj)
 
 OpenInteract::Config object where we set the module information.
 
 =item *
 
-package (obj)
+B<package> (obj)
 
 Hashref with information about a package so we can set name/version
 info.
@@ -979,7 +1003,7 @@ perl data structure and return its value. For instance, your file
 could have something like the following:
 
  $action = {
-            'boxes' => { 
+            'boxes' => {
                 'class'     => 'OpenInteract::Handler::Boxes',
                 'security'  => 'no',
             }, ...
@@ -1000,7 +1024,7 @@ Parameters:
 
 =item *
 
-filename ($)
+B<filename> ($)
 
 File to read data structure from.
 
@@ -1029,11 +1053,11 @@ Parameters:
 
 =item *
 
-config (obj)
+B<config> (obj)
 
 An OpenInteract::Config configuration object. Note that the keys
-'request_class', 'SPOPS_config_class' and 'stash_class' must be
-defined in the config object prior to calling this routine.
+'request_class' and 'stash_class' must be defined in the config object
+prior to calling this routine.
 
 =back
 
@@ -1050,13 +1074,13 @@ Parameters:
 
 =item *
 
-class (\@)
+B<class> (\@)
 
 An arrayref of classes to initialize.
 
 =item *
 
-config (obj)
+B<config> (obj)
 
 An L<OpenInteract::Config> configuration object, needed by the
 C<class_initialize> method within the SPOPS classes.
@@ -1084,6 +1108,6 @@ it under the same terms as Perl itself.
 
 =head1 AUTHORS
 
-Chris Winters <chris@cwinters.com>
+Chris Winters L<chris@cwinters.com>
 
 =cut

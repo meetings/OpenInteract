@@ -1,13 +1,14 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.5 2001/07/11 12:26:27 lachoy Exp $
+# $Id: DBI.pm,v 1.8 2001/08/13 03:48:08 lachoy Exp $
 
 use strict;
+use Carp         qw( croak );
 use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -35,8 +36,8 @@ sub connect {
     my $username = $db_info->{username};
     my $password = $db_info->{password};
     DEBUG && _w( 2, "Connecting with ($dsn) ($username) ($password)" );
-    my $db = DBI->connect( $dsn, $username, $password )
-                         || die "Connect failed: $DBI::errstr\n";
+    my $db = eval { DBI->connect( $dsn, $username, $password ) };
+    croak "Connect failed: $@\n" if ( $@ );
     DEBUG && _w( 1, "DBI::connect >> Connected ok" );
 
     # If we have specified a 'db_name', go ahead and 'use' that
@@ -86,15 +87,14 @@ __END__
 
 =head1 NAME
 
-OpenInteract::DBIConnect - Centralized connection location to DBI databases
+OpenInteract::DBI - Centralized connection location to DBI databases
 
 =head1 SYNOPSIS
 
- # Just get a database handle from the info in your config
+ # Get a database handle based on the 'main' info in your config
  # (conf/server.perl)
- my $db = OpenInteract::DBI->connect({ 
-            $CONFIG->{db_info}
-          });
+
+ my $db = OpenInteract::DBI->connect({ $CONFIG->{db_info}{main} });
 
 =head1 DESCRIPTION
 
@@ -314,6 +314,8 @@ Try to use the BEGIN/END tricks ActiveState recommends -- do they work
 with just scripts, or also with modules?
 
 =head1 BUGS
+
+None known.
 
 =head1 SEE ALSO
 
