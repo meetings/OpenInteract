@@ -1,6 +1,6 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.19 2002/01/02 02:43:53 lachoy Exp $
+# $Id: Provider.pm,v 1.21 2002/08/09 22:55:31 lachoy Exp $
 
 use strict;
 use Data::Dumper       qw( Dumper );
@@ -10,7 +10,7 @@ use Template::Provider;
 
 @OpenInteract::Template::Provider::ISA      = qw( Template::Provider );
 $OpenInteract::Template::Provider::VERSION  = '1.2';
-$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
@@ -179,6 +179,12 @@ sub _load {
     }
     my ( $tmpl_package, $tmpl_name ) = $R->site_template->parse_name( $name );
 
+    # Fix case where we're given '::foo_template'
+
+    if ( $tmpl_name and ! $tmpl_package ) {
+        $name = $tmpl_name;
+    }
+
     # If this isn't a 'package::name' name, see if it's a template in
     # the 'common' directory for this website; otherwise throw an
     # error
@@ -243,13 +249,16 @@ sub _fetch_template_from_fs {
     my ( $self, $pkg, $name ) = @_;
     my $R = OpenInteract::Request->instance;
 
-    # is this template on disk in the package? if so load it up and
-    # send it on
+    # is this template on disk in the common area or in the package?
 
-    my $filename = $self->_find_package_template_filename( $pkg, $name );
+    my $filename = $self->_find_common_template_filename( $pkg, $name ) ||
+                   $self->_find_package_template_filename( $pkg, $name );
+
     return undef unless ( -f $filename );
 
-    $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Template found in filesystem ($filename); trying to open" );
+    # ...if so load it up and send it on
+
+    $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Template found in fs [$filename]; trying to open" );
     my $data = eval { $self->_fetch_oi_file( $filename ) };
     if ( $@ ) {
         $R->scrib( 0, "Error when trying to open template from filesystem: $@" );
@@ -434,6 +443,20 @@ sub _fetch_oi_file {
     return $data;
 }
 
+
+sub _find_common_template_filename {
+    my ( $self, $package, $template_name ) = @_;
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Trying to create filename for template ",
+                            "[$package\:\:$template_name] in common area" );
+    my $website_dir = $R->CONFIG->get_dir( 'template' );
+    my $tmpl_ext    = $self->_find_template_extension( $R->CONFIG );
+    my $common_template_name     = "$website_dir/$package/$template_name";
+    my $common_template_name_ext = "$common_template_name.$tmpl_ext";
+    return $common_template_name     if ( -f $common_template_name );
+    return $common_template_name_ext if ( -f $common_template_name_ext );
+    return undef;
+}
 
 # Find a template in a package's filesystem. If file exists, return
 # name. Otherwise return undef.

@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.36 2002/03/15 15:44:43 lachoy Exp $
+# $Id: Package.pm,v 1.37 2002/05/13 12:31:35 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -19,7 +19,7 @@ use SPOPS::Utility     ();
 require Exporter;
 
 @OpenInteract::Package::ISA       = qw( Exporter );
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.37 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
 
 use constant READONLY_FILE => '.no_overwrite';
@@ -1076,10 +1076,21 @@ sub add_to_inc {
 sub _check_module_install {
     my ( $class, @modules ) = @_;
     my ( @failed_modules );
+MODULE:
     foreach my $module ( @modules ) {
         next unless ( $module );
-        eval "require $module";
-        push @failed_modules, $module if ( $@ );
+        if ( $module =~ /\|\|/ ) {
+            my @alt_modules = split /\s*\|\|\s*/, $module;
+            foreach my $alt_module ( @alt_modules ) {
+                eval "require $alt_module";
+                next MODULE unless ( $@ );
+            }
+            push @failed_modules, join( ' or ', @alt_modules );
+        }
+        else {
+            eval "require $module";
+            push @failed_modules, $module if ( $@ );
+        }
     }
     return @failed_modules;
 }

@@ -1,11 +1,11 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.17 2002/02/24 06:47:06 lachoy Exp $
+# $Id: Auth.pm,v 1.18 2002/06/04 11:29:54 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -76,18 +76,6 @@ sub user {
 
     $R->{auth}{logged_in} = 1;
     $class->remember_login;
-
-    my $CONFIG = $R->CONFIG;
-    if ( my $custom_class = $CONFIG->{login}{custom_login_handler} ) {
-        my $custom_method = $CONFIG->{login}{custom_login_handler} || 'handler';
-        $R->scrib( 1, "Custom login handler/method being used: ($custom_class) ($custom_method)" );
-        eval { $custom_class->$custom_method() };
-        if ( $@ ) {
-            $R->scrib( 0, "Custom login handler died with: $@" );
-            $class->custom_login_failed;
-        }
-    }
-
     return;
 }
 
@@ -244,9 +232,6 @@ sub create_nologin_user {
 }
 
 
-sub custom_login_failed { $_[0]->create_nologin_user }
-
-
 # If the user is logged in, retrieve the groups he/she/it belongs to
 
 sub group {
@@ -286,7 +271,6 @@ sub group {
         $R->DEBUG && $R->scrib( 2, "Retrieved groups: ",
                                    join( ', ', map { "($_->{name})" } @{ $R->{auth}{group} } ) );
     }
-    return;
 }
 
 
@@ -313,6 +297,49 @@ sub is_admin {
     }
 }
 
+
+########################################
+# CUSTOM AUTH METHOD
+
+sub custom_handler {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    my $CONFIG = $R->CONFIG;
+    my $custom_class = $CONFIG->{login}{custom_handler};
+    return unless ( $custom_class );
+
+    eval "require $custom_class";
+    if ( $@ ) {
+        $R->scrib( 0, "Tried to use custom login handler [$custom_class]",
+                   "but requiring the class failed: $@" );
+        return;
+    }
+    my $custom_method = $CONFIG->{login}{custom_method}
+                        || 'handler';
+    $R->scrib( 1, "Custom login handler/method being used: ",
+               "[$custom_class] [$custom_method]" );
+    eval { $custom_class->$custom_method() };
+    if ( $@ ) {
+        $R->scrib( 0, "Custom login handler died with: $@" );
+        $class->custom_handler_failed;
+    }
+}
+
+sub custom_handler_failed {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    my $CONFIG = $R->CONFIG;
+    my $custom_class = $CONFIG->{login}{custom_handler};
+    my $fail_method  = $CONFIG->{login}{custom_fail_method};
+    return unless ( $fail_method );
+    eval { $custom_class->$fail_method() };
+    if ( $@ ) {
+        $R->scrib( 0, "Caught error from failure method [$custom_class]",
+                   "[$fail_method]: $@" );
+    }
+}
+
+
 1;
 
 __END__
@@ -337,6 +364,10 @@ OpenInteract::Auth - Authenticate the user object and create its groups
  # See whether this user is an administrator
 
  OpenInteract::Auth->is_admin;
+
+ # Run custom methods as defined in the server configuration
+
+ OpenInteract::Auth->custom_handler;
 
 =head1 DESCRIPTION
 
@@ -415,12 +446,11 @@ C<conf/server.perl> file. Just set:
 You can also define custom behavior for a login by specifying in the
 server configuration:
 
-   login => { custom_login_handler => 'My::Handler::Login' },
+   login => { custom_handler => 'My::Handler::Login' },
 
-The C<handler()> method will then be called on
-'My::Handler::Login'. It will only be called after a successful
-login. No arguments are passed into the handler, but C<$R> is fully
-stocked with the user object.
+The C<handler()> method will then be called on 'My::Handler::Login'
+after the users and groups have been fetched when the method
+C<custom_handler()> is called on this class or a subclass.
 
 B<group()>
 
@@ -437,6 +467,15 @@ administrator. If the user is an administrator, then:
  $R->{auth}{is_admin}
 
 is set to a true value.
+
+B<custom_handler()>
+
+Runs the handler defined in the server configuration key
+'login.custom_handler' using the method 'login.custom_method' or
+'handler', if that is not defined.
+
+If the custom handler fails, we will call 'login.custom_fail_method'
+on the same class if the key is defined.
 
 =head1 SUBCLASSING
 

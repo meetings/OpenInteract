@@ -223,9 +223,10 @@ $data = {
        login_field          => 'login_login_name',
        password_field       => 'login_password',
        remember_field       => 'login_remember',
-       custom_login_handler => '',
-       custom_login_method  => '',
-       always_remember      => undef,
+       custom_handler       => undef,
+       custom_method        => undef,
+       custom_fail-method   => undef,
+       always_remember      => 0,
      },
 
      ########################################
@@ -510,5 +511,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.32 $',
+     'ConfigurationRevision' => '$Revision: 1.33 $',
 };

@@ -1,6 +1,6 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.10 2002/01/02 02:43:53 lachoy Exp $
+# $Id: DBI.pm,v 1.11 2002/05/08 12:02:17 lachoy Exp $
 
 use strict;
 use Carp         qw( croak );
@@ -8,7 +8,7 @@ use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -197,6 +197,13 @@ B<db_name> ($) (optional)
 The name of your database -- only include if you want to 'share
 connections' among different websites and if you do not specify the
 database name in your B<dsn>.
+
+If you specify this value then this module will try to execute a:
+
+  use $db_name
+
+statement. This will not run in certain databases -- notably
+PostgreSQL -- so only include this if you know you need it.
 
 =item *
 

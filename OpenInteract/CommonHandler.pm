@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.39 2002/04/15 19:14:29 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.41 2002/08/12 16:42:20 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.41 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -310,16 +310,16 @@ sub _search_build_where_clause {
             push @where_param, " $field_name $oper ? ";
             my ( $search_value );
             if ( $exact_match{ $field_name } ) {
-                $search_value = $search_criteria->{ $field_name };
+                $search_value = $value;
             }
             elsif ( $left_exact_match{ $field_name } ) {
-                $search_value = "$search_criteria->{ $field_name }%";
+                $search_value = "$value%";
             }
             elsif ( $right_exact_match{ $field_name } ) {
-                $search_value = "%$search_criteria->{ $field_name }";
+                $search_value = "%$value";
             }
             else {
-                $search_value = "%$search_criteria->{ $field_name }%";
+                $search_value = "%$value%";
             }
             push @value, $search_value;
             $R->DEBUG && $R->scrib( 2, "Set ($field_name) $oper ($search_value)" );
@@ -830,7 +830,8 @@ sub wizard_search {
     $p ||= {};
 
     my %params = %{ $p };
-    $params{iterator} = $class->_search_build_and_run({ max => $class->MY_WIZARD_RESULTS_MAX });
+    ( $params{iterator}, $params{msg} ) =
+                    $class->_search_build_and_run({ max => $class->MY_WIZARD_RESULTS_MAX });
 
     $R->{page}{title} = $class->MY_WIZARD_RESULTS_TITLE;
     $R->{page}{_simple_}++;

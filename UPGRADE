@@ -58,6 +58,25 @@ yet developed a utility to integrate these changes automatically,
 check here to see what updates there have been between the versions.
 
 ==============================
+UPGRADING TO 1.41
+==============================
+
+NOTE: It's recommended you use SPOPS 0.64 or higher with
+OpenInteract. Otherwise you may have problems creating new objects.
+
+Renamed configuration keys:
+
+     'login.custom_login_handler' => 'login.custom_handler'
+     'login_custom_login_method'  => 'login.custom_method'
+   
+Added configuration key:
+
+     'login.custom_fail_method'
+
+These are optional: doing nothing won't affect operation unless you've
+got a custom login handler defined.
+
+==============================
 UPGRADING TO 1.40
 ==============================
 
@@ -506,4 +525,4 @@ process to have the changes take effect.
 
 
 ========================================
-$Id: UPGRADE,v 1.14 2002/05/07 12:20:51 lachoy Exp $
+$Id: UPGRADE,v 1.16 2002/08/13 11:24:43 lachoy Exp $

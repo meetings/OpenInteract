@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.31 2002/04/23 13:05:44 lachoy Exp $
+# $Id: Startup.pm,v 1.32 2002/08/12 03:46:49 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -14,8 +14,7 @@ use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
-@OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = substr(q$Revision: 1.32 $, 10);
 
 use constant DEBUG => 0;
 
@@ -67,41 +66,12 @@ sub main_initialize {
     # elsewhere in the system
 
     $C->{package_list} = [ map { $_->{name} } @{ $packages } ];
-    my %require_class = ();
     foreach my $pkg_info ( @{ $packages } ) {
-        my $pkg_require_list = $class->process_package( $pkg_info, $C );
-        foreach my $pkg_require_class ( @{ $pkg_require_list } ) {
-            $require_class{ $pkg_require_class } = $pkg_info->{name};
-        }
+        $class->process_package( $pkg_info, $C );
     }
 
-    # Do any global overrides for both SPOPS and the action table
-    # entries.
-
-    my $override_spops_file = join( '/', $C->{dir}{base},
-                                         $C->{override}{spops_file} );
-    my $override_action_file = join( '/', $C->{dir}{base},
-                                          $C->{override}{action_file} );
-
-    if ( -f $override_spops_file ) {
-        my $override_spops = OpenInteract::Config::GlobalOverride->new(
-                                        { filename => $override_spops_file } );
-        $override_spops->apply_rules( $C->{SPOPS} );
-    }
-    if ( -f $override_action_file ) {
-        my $override_action = OpenInteract::Config::GlobalOverride->new(
-                                        { filename => $override_action_file } );
-        $override_action->apply_rules( $C->{action} );
-    }
-
-    # Read in all the classes specified by the packages
-
-    my $successful = $class->require_module({
-                               class    => [ keys %require_class ],
-					           pkg_link => \%require_class });
-    if ( scalar @{ $successful } != scalar keys %require_class ) {
-        _w( 0, "Some classes were not required!" );
-    }
+    $class->_process_global_overrides( $C );
+    $class->_require_extra_classes( $C );
 
     # Store the configuration for later use
 
@@ -401,7 +371,6 @@ sub process_package {
     # include), action config (to parse and set) and the SPOPS config (to
     # parse and set). Base package first so its info can be overridden.
 
-    my ( %spops, %action );
     foreach my $package_dir ( $base_pkg_dir, $site_pkg_dir ) {
         my $conf_pkg_dir = "$package_dir/conf";
 
@@ -412,13 +381,9 @@ sub process_package {
 
         # Read in the 'action' information and set in the config object
 
-        my @action_tag_list = $class->read_action_definition({
-                                       filename => "$conf_pkg_dir/action.perl",
-                                       config   => $CONF,
-                                       package  => $pkg_info });
-        foreach my $action_tag ( @action_tag_list ) {
-            $action{ $action_tag }++  if ( $action_tag );
-        }
+        $class->read_action_definition({ filename => "$conf_pkg_dir/action.perl",
+                                         config   => $CONF,
+                                         package  => $pkg_info });
 
         # Read in the SPOPS information and set in the config object; note
         # that we cannot *process* the SPOPS config yet because we must be
@@ -426,38 +391,10 @@ sub process_package {
         # definitions are read in. (Yes, we could use 'map' here and above,
         # but it's confusing to people first reading the code)
 
-        my @spops_tag_list = $class->read_spops_definition({
-                                      filename => "$conf_pkg_dir/spops.perl",
-                                      config   => $CONF,
-                                      package  => $pkg_info });
-        foreach my $spops_tag ( @spops_tag_list ) {
-            $spops{ $spops_tag }++  if ( $spops_tag );
-        }
+        $class->read_spops_definition({ filename => "$conf_pkg_dir/spops.perl",
+                                        config   => $CONF,
+                                        package  => $pkg_info });
     }
-
-    # Now find all the classes (from both the action list and the spops
-    # list) required for this package and return them to the caller
-
-    my ( @class_list );
-    foreach my $action_key ( keys %action ) {
-        next unless ( $action_key );
-        my $action_info = $CONF->{action}{ $action_key };
-        if ( $action_info->{class} ) {
-            push @class_list, $action_info->{class};
-        }
-        if ( ref $action_info->{error} eq 'ARRAY' ) {
-            push @class_list, @{ $action_info->{error} };
-        }
-    }
-
-    foreach my $spops_key ( keys %spops ) {
-        next unless ( $spops_key );
-        my $spops_info = $CONF->{SPOPS}{ $spops_key };
-        if ( ref $spops_info->{isa} eq 'ARRAY' ) {
-            push @class_list, @{ $spops_info->{isa} };
-        }
-    }
-    return \@class_list;
 }
 
 
@@ -491,7 +428,6 @@ sub read_action_definition {
             $CONF->{action}{ $action_key }{package_version} = $p->{package}{version};
         }
     }
-    return keys %{ $action_info };
 }
 
 
@@ -518,8 +454,6 @@ sub read_spops_definition {
             $CONF->{SPOPS}{ $spops_key }{package_version} = $p->{package}{version};
         }
     }
-
-    return keys %{ $spops_info };
 }
 
 
@@ -616,6 +550,105 @@ sub initialize_spops {
 }
 
 
+# Do any global overrides for both SPOPS and the action table entries.
+
+sub _process_global_overrides {
+    my ( $class, $config ) = @_;
+    my $override_spops_file = join( '/', $config->{dir}{base},
+                                         $config->{override}{spops_file} );
+    my $override_action_file = join( '/', $config->{dir}{base},
+                                          $config->{override}{action_file} );
+
+    if ( -f $override_spops_file ) {
+        my $override_spops = OpenInteract::Config::GlobalOverride->new(
+                                        { filename => $override_spops_file } );
+        $override_spops->apply_rules( $config->{SPOPS} );
+    }
+    if ( -f $override_action_file ) {
+        my $override_action = OpenInteract::Config::GlobalOverride->new(
+                                        { filename => $override_action_file } );
+        $override_action->apply_rules( $config->{action} );
+    }
+}
+
+
+sub _require_extra_classes {
+    my ( $class, $config ) = @_;
+    my ( %require_class );
+
+    my $action_require = $class->_find_extra_action_classes( $config );
+    my $spops_require  = $class->_find_extra_spops_classes( $config );
+
+    # Read in all the classes specified by the packages
+
+    my $successful_action = $class->require_module({
+                               class    => [ keys %{ $action_require } ],
+					           pkg_link => $action_require });
+    if ( scalar @{ $successful_action } != scalar keys %{ $action_require } ) {
+        my %all_tried = map { $_ => 1 } @{ $action_require };
+        delete $all_tried{ $_ } for ( @{ $successful_action } );
+        _w( 0, "Some action classes were not required: ",
+               join( ', ', keys %all_tried ) );
+    }
+
+    my $successful_spops = $class->require_module({
+                               class    => [ keys %{ $spops_require } ],
+					           pkg_link => $spops_require });
+    if ( scalar @{ $successful_spops } != scalar keys %{ $spops_require } ) {
+        my %all_tried = map { $_ => 1 } @{ $spops_require };
+        delete $all_tried{ $_ } for ( @{ $successful_spops } );
+        _w( 0, "Some SPOPS classes were not required: ",
+               join( ', ', keys %all_tried ) );
+    }
+}
+
+
+sub _find_extra_action_classes {
+    my ( $class, $config ) = @_;
+    my %map = ();
+    my $action = $config->{action};
+    foreach my $key ( keys %{ $action } ) {
+        next unless ( $key and $action->{ $key });
+        my $package = $action->{ $key }{package_name};
+        if ( $action->{ $key }{class} ) {
+            $map{ $action->{ $key }{class} } = $package
+        }
+        if ( $action->{ $key }{filter} ) {
+            if ( ref $action->{ $key }{filter} eq 'ARRAY' ) {
+                $map{ $_ } = $package for ( @{ $action->{ $key }{filter} } );
+            }
+            else {
+                $map{ $action->{ $key }{filter} } = $package
+            }
+        }
+        if ( $action->{ $key }{error} ) {
+            if ( ref $action->{ $key }{error} eq 'ARRAY' ) {
+                $map{ $_ } = $package for ( @{ $action->{ $key }{error} } );
+            }
+            else {
+               $map{ $action->{ $key }{error} } = $package;
+            }
+        }
+    }
+    return \%map;
+}
+
+
+sub _find_extra_spops_classes {
+    my ( $class, $config ) = @_;
+    my %map = ();
+    my $spops = $config->{SPOPS};
+    foreach my $key ( keys %{ $spops } ) {
+        next unless ( $key and $spops->{ $key });
+        my $package = $spops->{ $key }{package_name};
+        if ( ref $spops->{ $key }{isa} eq 'ARRAY' ) {
+            map { $map{ $_ } = $package } @{ $spops->{ $key }{isa} };
+        }
+    }
+    return \%map;
+}
+
+
 
 sub _w {
   return unless ( DEBUG >= shift );
@@ -627,8 +660,6 @@ sub _w {
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -1164,5 +1195,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters L<chris@cwinters.com>
-
-=cut

@@ -100,10 +100,10 @@ pkg/base_group-1.36.tar.gz
 pkg/base_page-0.98.tar.gz
 pkg/base_security-1.57.tar.gz
 pkg/base_template-1.31.tar.gz
-pkg/base_theme-1.33.tar.gz
-pkg/base_user-1.55.tar.gz
+pkg/base_theme-1.34.tar.gz
+pkg/base_user-1.57.tar.gz
 pkg/lookup-0.20.tar.gz
-pkg/object_activity-0.18.tar.gz
+pkg/object_activity-0.19.tar.gz
 pkg/results_manage-0.08.tar.gz
 pkg/system_doc-1.29.tar.gz
 pkg/classified-1.35.tar.gz

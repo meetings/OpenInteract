@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.20 2002/01/17 00:03:31 lachoy Exp $
+# $Id: Plugin.pm,v 1.21 2002/05/21 21:06:26 lachoy Exp $
 
 use strict;
 use Class::Date     qw( -DateParse );
@@ -13,7 +13,7 @@ use Text::Sentence;
 
 @OpenInteract::Template::Plugin::ISA     = qw( Template::Plugin );
 $OpenInteract::Template::Plugin::VERSION  = '1.2';
-$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
 
 
 my %SECURITY_CONSTANTS  = (
@@ -152,15 +152,20 @@ sub _create_date_object {
 # Format a date with a strftime format
 
 sub date_format {
-    my ( $self, $date_string, $format ) = @_;
+    my ( $self, $date_string, $format, $params ) = @_;
     return undef unless ( $date_string );
+    $params ||= {};
     my $date = _create_date_object( $date_string );
     unless ( $date ) {
         OpenInteract::Request->instance->scrib( 0, "Cannot parse ($date_string) into valid date" );
         return undef;
     }
     $format ||= '%Y-%m-%e %l:%M %p';
-    return $date->strftime( $format );
+    my $formatted = $date->strftime( $format );
+    if ( $params->{fill_nbsp} ) {
+        $formatted =~ s/\s/\&nbsp;/g;
+    }
+    return $formatted;
 }
 
 

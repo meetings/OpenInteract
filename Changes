@@ -1,5 +1,114 @@
 Revision history for Perl extension OpenInteract.
 
+1.41 Tue Aug 13 07:28:10 EDT 2002
+
+Individual:
+
+ * Makefile.PL:
+
+   - Changed 'Email::Valid' prereq to 'Mail::RFC822::Address', since
+   the latter is available on Win32.
+
+ * OpenInteract.pm:
+
+   - Add call to OpenInteract::Auth->custom_handler() after the other
+   authentication methods have been run.
+
+ * OpenInteract/Auth.pm:
+
+   - Move the custom method as declared in the server configuration to
+   stand on its own rather than after the user logs in
+   successfully. We also renamed a few configuration keys in the
+   'login' group.
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Fixed bug in wizard_search() that was not getting the search
+   results back properly due to a malformed argument capture. (Thanks
+   to Bill Heckel (bill@billheckel.com) for spotting it.)
+
+   - Fixed bug in _search_build_where_clause() so that we properly
+   handle searches with multiple values for a single
+   criterion. (Thanks to Ewald Hinrichs (ewald.hinrichs@applied.de)
+   for the bug report.)
+
+ * OpenInteract/DBI.pm:
+
+   - Added documentation for connection parameter 'db_name'. Thanks to
+   Drew Taylor (drew@drewtaylor.com) for the prod.
+
+ * OpenInteract/Package.pm:
+
+   - In 'package.conf' file, allow 'Module::Foo||Module::Bar||...'
+   syntax to specify alternative modules that can be used for the same
+   purpose. For instance, Win32 does not have an install of
+   Email::Valid, so we use 'Email::Valid||Mail::RFC822::Address' and
+   allow the code that uses this module to use either of them.
+
+ * OpenInteract/Startup.pm:
+
+   - Refactor some of the initialization code. Specifically, remove
+   some functionality regarding the classes tracked to be required en
+   masse and put it in separate methods. Also move this tracking until
+   AFTER the global overrides have been processed.
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - New parameter for date_format(): a true value for 'fill_nbsp'
+   will fill all whitespace in the formatted string with '&nbsp;'
+
+ * OpenInteract/Template/Provider.pm:
+
+   - Allow for package templates to be stored in sitewide template
+   area. These templates should be used for customization since the
+   package may get upgraded and the templates overwritten. This means
+   instead of modifying the template:
+
+     $WEBSITE_DIR/pkg/mypkg/template/foo.tmpl
+
+   You probably want to modify:
+
+     $WEBSITE_DIR/template/mypkg/foo.tmpl
+
+   Since the former will be overwritten with an upgrade to 'mypkg'.
+
+   - Allow templates with the name spec '::foo_template' to be pulled
+   properly from the sitewide template directory
+
+ * conf/sample-server.ini, conf/sample-server.perl:
+
+   Rename configuration keys:
+
+     'login.custom_login_handler' => 'login.custom_handler'
+     'login_custom_login_method'  => 'login.custom_method'
+   
+   Add configuration key:
+
+     'login.custom_fail_method'
+
+Packages updated:
+
+   OpenInteract     1.40 -> 1.41
+   ----------------------------
+   base:            1.67 -= 1.67
+   base_box:        0.45 -= 0.45
+   base_component:  1.30 -= 1.30
+   base_error:      1.42 -= 1.42
+   base_group:      1.36 -= 1.36
+   base_page:       0.98 -= 0.98
+   base_security:   1.57 -= 1.57
+   base_template:   1.31 -= 1.31
+   base_theme:      1.33 -= 1.34
+   base_user:       1.55 -= 1.57
+   lookup:          0.20 -= 0.20
+   object_activity: 0.18 -= 0.19
+   results_manage:  0.08 -= 0.08
+   system_doc:      1.29 -= 1.29
+   classified:      1.35 -= 1.35
+   full_text:       1.31 -= 1.31
+   news:            1.39 -= 1.39
+
+
 1.40  Tue May  7 08:54:49 EDT 2002
 
 Overall:

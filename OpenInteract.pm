@@ -1,6 +1,6 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.34 2002/04/15 13:10:57 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.37 2002/08/12 03:47:33 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
@@ -8,7 +8,7 @@ use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = '1.40';
+$OpenInteract::VERSION  = '1.41';
 
 
 # Generic separator used in display
@@ -290,6 +290,7 @@ sub setup_authentication {
             $auth_class->user;
             $auth_class->group;
             $auth_class->is_admin;
+            $auth_class->custom_handler;
         };
         $error_msg = $@;
     }
@@ -516,7 +517,8 @@ C<die> with Apache return code (e.g., 'OK' )
 
 B<setup_authentication( $R )>: Authenticate the user and get the
 groups the user belongs to, plus set for this request whether the user
-is an administrator.
+is an administrator. Also run the custom authentication handler as
+defined in the server configuration.
 
 Return: nothing
 
