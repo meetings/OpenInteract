@@ -1,0 +1,6 @@
+base.conf                  --> conf base.conf
+sample-action_override.ini --> conf sample-action_override.ini
+sample-spops_override.ini  --> conf sample-spops_override.ini
+server.ini                 --> conf server.ini
+log4perl.conf              --> conf log4perl.conf
+observer.ini               --> conf observer.ini
