@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.62  Thu Sep 30 22:43:23 EDT 2004
+
+ - Bugfix
+
+
 1.61  Sun May 30 11:05:37 EDT 2004
 
  - Small fixes: one a dependency, one about sending a filehandle, one

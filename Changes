@@ -1,5 +1,17 @@
 Revision history for Perl extension OpenInteract.
 
+1.62  Thu Sep 30 22:43:23 EDT 2004
+
+Individual:
+
+ * OpenInteract.pm:
+
+   - OI-6: Fix bug when specifying static files to send my filename
+   (vs filehandle). Thanks to Andreas Nolte for reporting.
+
+No packages changed.
+
+
 1.61  Sun May 30 11:05:27 EDT 2004
 
 Individual:

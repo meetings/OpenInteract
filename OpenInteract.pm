@@ -1,13 +1,13 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.53 2004/05/30 15:13:49 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.55 2004/09/28 16:10:37 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost :response );
 use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
-$OpenInteract::VERSION  = '1.61';
+$OpenInteract::VERSION  = '1.62';
 
 # Generic separator used in display
 
@@ -464,11 +464,14 @@ sub run_content_handler {
 
 sub send_static_file {
     my ( $class, $R ) = @_;
-    my $fh = $R->{page}{send_file};
+    my $file_spec = $R->{page}{send_file};
     my ( $file_size );
+    my ( $fh );
 
     # File is a handle...
-    if ( ref $fh ) {
+
+    if ( ref $file_spec ) {
+        $fh = $file_spec;
         my $default_type = 'application/octet-stream';
         unless ( $R->{page}{content_type} ) {
             $R->scrib( 0, "No content type set for filehandle to send, ",
@@ -483,15 +486,15 @@ sub send_static_file {
 
     # File is a filename...
     else {
-        my $fh = Apache->gensym;
-        eval { open( $fh, $R->{page}{send_file} ) || die $!; };
+        $fh = Apache->gensym;
+        eval { open( $fh, $file_spec ) || die $! };
         if ( $@ ) {
-            $R->scrib( 0, "Cannot open static file from filesystem ($R->{page}{send_file}): $@" );
+            $R->scrib( 0, "Cannot open static file from filesystem ($file_spec): $@" );
             return NOT_FOUND;
         }
         $file_size = $R->{page}{send_file_size}
-                     || (stat $R->{page}{send_file})[7];
-        $R->DEBUG && $R->scrib( 1, "Sending file ($R->{page}{send_file}) of size",
+                     || (stat $file_spec)[7];
+        $R->DEBUG && $R->scrib( 1, "Sending file ($file_spec) of size",
                                 "($file_size) and type",
                                 "($R->{page}{content_type})" );
     }
