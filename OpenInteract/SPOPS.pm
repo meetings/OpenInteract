@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.28 2002/09/08 21:20:02 lachoy Exp $
+# $Id: SPOPS.pm,v 1.32 2002/12/13 22:03:09 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -8,7 +8,7 @@ use Digest::MD5     qw( md5_hex );
 use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.32 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
@@ -44,6 +44,23 @@ sub save_object_key {
         }
     }
     return $self->{tmp_object_key} = $obj_key;
+}
+
+
+########################################
+# DESCRIPTION
+########################################
+
+# Enhancement to the method in SPOPS
+
+sub object_description {
+    my ( $self ) = @_;
+    my $desc = SPOPS::object_description( $self );
+    my $date_field = $self->CONFIG->{description_date_field};
+    if ( $date_field ) {
+        $desc->{date} = $self->{ $date_field };
+    }
+    return $desc;
 }
 
 
@@ -112,7 +129,13 @@ sub fetch_object_by_key {
 
 sub log_action {
     my ( $self, $action, $id ) = @_;
-    return 1   unless ( $self->CONFIG->{track}{ $action } );
+    if ( $action eq 'delete' ) {
+        return 1  unless ( $self->CONFIG->{track}{delete} || $self->CONFIG->{track}{remove} );
+        $action = 'remove';
+    }
+    else {
+        return 1  unless ( $self->CONFIG->{track}{ $action } );
+    }
     return $self->log_action_enter( $action, $id );
 }
 

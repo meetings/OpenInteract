@@ -1,6 +1,6 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.91 2002/11/07 13:02:18 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.92 2002/11/10 16:33:39 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
@@ -10,7 +10,7 @@ use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
 
 my $CLASS_TRACKING_KEY = 'class_cache_track';
 
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.91 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.92 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 

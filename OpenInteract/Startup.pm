@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.33 2002/09/16 20:18:36 lachoy Exp $
+# $Id: Startup.pm,v 1.34 2002/12/19 22:20:21 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -14,7 +14,7 @@ use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -235,7 +235,8 @@ sub create_temp_lib {
     $opt ||= '';
     my $site_dir = $base_config->{website_dir};
 
-    my $lib_dir  = "$site_dir/$TEMP_LIB_DIR";
+    my $lib_dir  = $base_config->{templib_dir}
+                   || "$site_dir/$TEMP_LIB_DIR";
     unshift @INC, $lib_dir;
 
     if ( -d $lib_dir and $opt eq 'lazy' ) {

@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.26 2002/11/07 13:03:03 lachoy Exp $
+# $Id: Plugin.pm,v 1.27 2002/11/10 16:32:52 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -11,7 +11,7 @@ use SPOPS::Secure   qw( :level :scope );
 use SPOPS::Utility;
 use Text::Sentence;
 
-$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -163,7 +163,7 @@ sub date_format {
         OpenInteract::Request->instance->scrib( 0, "Cannot parse ($date_string) into valid date" );
         return undef;
     }
-    $format ||= '%Y-%m-%e %l:%M %p';
+    $format ||= '%Y-%m-%d %l:%M %p';
     my $formatted = $date->strftime( $format );
     if ( $params->{fill_nbsp} ) {
         $formatted =~ s/\s/\&nbsp;/g;

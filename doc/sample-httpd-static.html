@@ -8,10 +8,13 @@
     <h1>Sample httpd_static.conf File</h1>
 
 <pre><font size="-1">
+
 # Change manually:
 #   -- Change '127.0.0.1' to your IP address
 #   -- Change 'webmaster@mycompany.com' to your contact e-mail address
 #   -- Change 'www.mycompany.com' to your website hostname
+
+# If you're using Named virtual hosts, just remove the 'Listen' line
 
 Listen 127.0.0.1:80
 &lt;VirtualHost 127.0.0.1:80&gt;
@@ -21,6 +24,7 @@ ServerAdmin webmaster@mycompany.com
 ServerName www.mycompany.com
 DocumentRoot %%WEBSITE_DIR%%/html
 
+LogFormat "%h %l %u %t \"%r\" %&gt;s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
 CustomLog %%WEBSITE_DIR%%/logs/access_log_static combined
 ErrorLog  %%WEBSITE_DIR%%/logs/error_log_static
 
@@ -32,10 +36,20 @@ ErrorLog  %%WEBSITE_DIR%%/logs/error_log_static
 
 RewriteEngine On
 
-# any URL beginning with /images will be answered by this server and
+# Any URL beginning with /images will be answered by this server and
 # no further mod_rewrite rules will be processed
 
 RewriteRule ^/images - [L]
+
+# Enable your front-end server to handle search engine requests
+
+RewriteRule ^/robots\.txt - [L]
+
+# Discard (with a '403 Forbidden') requests for the Code Red document
+# (hole in IIS servers that can keep your backend mod_perl servers
+# busy...)
+
+RewriteRule ^/default\.ida - [F]
 
 # Proxy ([P]) all other requests to a back-end server
 

@@ -936,44 +936,16 @@ stash_class      MySite::Stash
     just say "OpenInteract" in the httpd.conf file because we have
     already included the library in our <code>startup.pl</code>.</p>
 
-    <H1>Running Multiple Websites on One Server</H1>
+    <h2>Running Multiple Websites on One Server</h2>
 
-    <P>mod_perl is a fairly heavyweight server, and the <em>mod_perl
-    Guide</em> spends quite a few pages on different strategies you
-    can use to minimize the memory footprint. While the scenario of
-    running one website per server is appealing because it minimizes
-    interaction between websites, it might not be feasible due to your
-    resources.</p>
-
-    <P>Fortunately, OpenInteract has taken pains to ensure that
-    different websites can run together using the same
-    mod_perl-enabled apache process family.</p>
-
-    <p>The only trick currently is to ensure that websites do not use
-    the same namespace. It is best to make them as explicit as
-    possible and not use acronyms. This doesn't impose as much of a
-    burden as it might sound: developers rarely use fully qualified
-    class names since OpenInteract provides an aliasing facility for
-    this sort of thing.</p>
-
-    <P>To run multiple websites under the same server, Every website
-    must have what is known as a <EM>stash class</EM>, or a package
-    where variables (such as the configuration object, the database
-    handle, the list of error handlers for website modules, and
-    others) are fetched during a request and kept intact between
-    requests as well.</p>
-
-    <P>This allows us to do certain expensive operations once --
-    connect to a database, establish a cache, create a template
-    processing object, parse the configuration file -- and keep the
-    results for the lifetime of the apache httpd child.</p>
-
-    <p>Most of the time you'll never deal with the stash class -- the
-    <code>OpenInteract::Request</code> object saves and retrieves
-    information from it behind the scenes. In addition, when you
-    create a new website the <code>oi_manage</code> script creates a
-    stash class specifically for that website, and you don't need to
-    do anything with it to make it work.</p>
+    <P>OpenInteract is a fairly heavyweight application. Its numerous
+    modules and, more importantly, package versioning necessitate that
+    each application run under its own mod_perl server. Multiple
+    applications can easily be run on the same machine, and can share
+    the same base package repository. But experience has shown that
+    trying to run multiple applications under the same set of
+    processes is nearly impossible unless everything is kept perfectly
+    in sync. And that never, ever happens.</p>
 
     <h1>Suggested Readings</h1>
 

@@ -1,5 +1,64 @@
 Revision history for Perl extension OpenInteract.
 
+1.55  Fri Dec 20 08:00:48 EST 2002
+
+Individual:
+
+ * conf/sample-base.conf:
+
+   - Add 'templib_dir' key which you can use to set the temporary
+   library directory.
+
+ * doc/*:
+
+   - Number of small changes to documentation (internal consistency,
+   etc.). Add sample-server-ini.html for example of recommended server
+   configuration type.
+
+ * OpenInteract/SPOPS.pm:
+
+   - Add 'object_description' which uses the method from SPOPS but
+   adds 'date' if the configured object has 'description_date_field'
+   defined in its configuration.
+
+   - Catch SPOPS log actions for 'delete' and 'remove' to do the same
+   thing (SPOPS for some reason uses delete/remove interchangably...)
+
+ * OpenInteract/Startup.pm:
+
+   - Try to read temporary library directory from base config first
+   (user can customize), otherwise use the same value as
+   previous. Thanks to Andreas Nolte for the suggestion.
+
+ * OpenInteract/UI/Main.pm:
+
+   - Make choosing the main template customizable via
+   subclassing. Thanks to Chris McDaniel <Chris.McDaniel@telus.com>
+   for the idea.
+
+
+Packages updated:
+
+   OpenInteract     1.51 -> 1.55
+   ----------------------------
+   base:            1.70 -> 1.70
+   base_box:        1.01 -> 1.01
+   base_error:      1.43 -> 1.43
+   base_group:      1.37 -> 1.37
+   base_page:       1.00 -> 1.15
+   base_security:   1.58 -> 1.58
+   base_template:   2.21 -> 2.22
+   base_theme:      1.35 -> 1.35
+   base_user:       1.58 -> 1.59
+   lookup:          1.00 -> 1.00
+   object_activity: 1.00 -> 1.01
+   results_manage:  1.00 -> 1.00
+   system_doc:      1.32 -> 1.32
+   classified:      1.36 -> 1.36
+   full_text:       1.32 -> 1.33
+   news:            1.40 -> 1.48
+
+
 1.54  Thu Nov  7 10:12:00 EST 2002
 
 Individual:

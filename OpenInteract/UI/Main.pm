@@ -1,11 +1,10 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.8 2002/09/08 20:56:09 lachoy Exp $
+# $Id: Main.pm,v 1.9 2002/11/25 04:09:06 lachoy Exp $
 
 use strict;
 
-@OpenInteract::UI::Main::ISA     = qw( OpenInteract::Config );
-$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
     my ( $class ) = @_;
@@ -21,7 +20,7 @@ sub handler {
         else {
             $R->{page}{_template_key_} = $R->CONFIG->{page_directives}{ $directive };
             $R->DEBUG && $R->scrib( 1, "Using template key from directive: ",
-                                       "($R->{page}{_template_key_})" );
+                                       "[$R->{page}{_template_key_}]" );
         }
     }
 
@@ -44,10 +43,30 @@ sub handler {
         $R->scrib( 0, "Action died. Here is what it left: $@" );
     }
 
-    # Do our special content cases
+    # Check to see if we're supposed to send back a file (no content
+    # to return)
 
-    return undef               if ( $R->{page}{send_file} );
-    return $R->{page}{content} if ( $R->{page}{_no_template_} );
+    return undef if ( $R->{page}{send_file} );
+
+    # Otherwise pick the template to wrap the content in
+
+    my $template_name = $class->choose_template;
+    $R->DEBUG && $R->scrib( 1, "Using template [$template_name] for full page" );
+    return $R->{page}{content} unless ( $template_name );
+
+    $R->{main_template_vars} ||= {};
+    return $R->template->handler( {},
+                                  { %{ $R->{main_template_vars} },
+                                    page => $R->{page} },
+                                  { name => $template_name } );
+}
+
+
+sub choose_template {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+
+    return undef if ( $R->{page}{_no_template_} );
 
     my $template_name = $R->{page}{_template_name_};
 
@@ -60,21 +79,12 @@ sub handler {
         $template_key   ||= 'main_template';
         $template_name    = $R->{theme}->property_value( $template_key );
     }
-
-    $R->DEBUG && $R->scrib( 1, "Using template ($template_name) for full page" );
-    $R->{main_template_vars} ||= {};
-
-    return $R->template->handler( {},
-                                  { %{ $R->{main_template_vars} },
-                                    page => $R->{page} },
-                                  { name => $template_name } );
+    return $template_name;
 }
 
 1;
 
 __END__
-
-=pod
 
 =head1 NAME
 
@@ -85,6 +95,29 @@ OpenInteract::UI::Main - The primary user interface assembly 'conductor'
  my $page = OpenInteract::UI::Main->handler();
  send_http_headers();
  print $page;
+
+ # Subclass to define a new method for looking up template names:
+
+ package OpenInteract::UI::LanguageChoice;
+
+ use base qw( OpenInteract::UI::Main );
+
+ my $DEFAULT_LANGUAGE = 'en';
+
+ sub choose_template {
+     my ( $class ) = @_;
+     my ( $language );
+     if ( $R->{auth}{is_logged_in} ) {
+         $language = $R->{auth}{user}->language;
+     }
+     $language ||= $R->apache->param( 'lang' )
+                   || $R->{session}{lang}
+                   || $DEFAULT_LANGUAGE;
+     my $R = OpenInteract::Request->instance;
+     my $template = $R->{theme}->property_value( "template_$language" )
+                    || $R->{theme}->property_value( 'main_template' );
+     return $template;
+ }
 
 =head1 DESCRIPTION
 
@@ -154,10 +187,44 @@ full-featured and will almost certainly do what you need.
 
 B<handler()>
 
-Single method that performs the actions described above. Returns
-either a single scalar with the full page generated or undef, in which
-case the information to be sent is likely a non-HTML page that needs
-to be sent on its own.
+Performs the actions described above. Returns either a single scalar
+with the full page generated or undef, in which case the information
+to be sent is likely a non-HTML page that needs to be sent on its own.
+
+B<choose_template()>
+
+Class method to find the template name to wrap the content in. If
+undef is returned then C<handler()> just returns the raw
+content. Otherwise we use the return value as the template name.
+
+Here are the steps we execute, in order, to find the main template
+name:
+
+=over 4
+
+=item 1.
+
+If C<$R-E<gt>{page}{_no_template_}> is true we return undef.
+
+=item 2.
+
+If C<$R-E<gt>{page}{_template_name_}> is defined we return it.
+
+=item 3.
+
+If C<$R-E<gt>{page}{_template_key_}> is defined we return the value of
+that key in the current theme.
+
+=item 4.
+
+If C<$R-E<gt>{page}{_simple_}> is defined we return the value of
+'simple_template' in the current theme.
+
+=item 5.
+
+We return the value of 'main_template' in the current theme.
+
+=back
 
 =head1 DIRECTIVES
 
@@ -174,8 +241,8 @@ Says that OI should use the template corresponding to 'Popup' to
 display the action 'User'. The correspondence is currently done in
 this handler but this will change shortly.
 
-The directives used are listed in the C<server.perl> file for a
-website, under the C<page_directives> key.
+The directives used are listed in the server configuration under the
+C<page_directives> key.
 
 =head1 TO DO
 
@@ -195,5 +262,3 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters <chris@cwinters.com>
-
-=cut
