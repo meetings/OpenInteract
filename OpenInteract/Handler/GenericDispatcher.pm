@@ -167,13 +167,14 @@ sub _check_task_security {
 sub check_cache {
     my ( $class, $p, $key_params ) = @_;
     my $R = OpenInteract::Request->instance;
-    if ( $R->{auth}{is_admin} || $p->{skip_cache} || $R->cache ) {
+    my $cache = $R->cache;
+    if ( $R->{auth}{is_admin} || $p->{skip_cache} || ! $cache ) {
         return undef;
     }
 
     my $key = $class->_make_cache_key( $p, $key_params );
     return undef unless ( $key );
-    my $data = $R->cache->get({ key => $key });
+    my $data = $cache->get({ key => $key });
     $R->DEBUG && $R->scrib( 1, "CACHE HIT! [Task: $p->{TASK}]" ) if ( $data );
     return $data;
 }
@@ -206,21 +207,22 @@ sub generate_content {
     }
     my $R = OpenInteract::Request->instance;
     my $content = $R->template->handler( $template_params, $variables, $template_source );
-    if ( $R->{auth}{is_admin} || $p->{skip_cache} || $R->cache ) {
+    my $cache = $R->cache;
+    if ( $R->{auth}{is_admin} || $p->{skip_cache} || ! $cache ) {
         return $content;
     }
 
     my $key = $class->_make_cache_key( $p, $key_params );
     if ( $key ) {
         my $cache_expire = $p->{ACTION}{cache_expire} || {};
-        $R->cache->set({ key    => $key,
-                         data   => $content,
-                         expire => $cache_expire->{ $p->{TASK} } });
-        my $tracking = $R->cache->get({ key => $CLASS_TRACKING_KEY }) || {};
+        $cache->set({ key    => $key,
+                      data   => $content,
+                      expire => $cache_expire->{ $p->{TASK} } });
+        my $tracking = $cache->get({ key => $CLASS_TRACKING_KEY }) || {};
         push @{ $tracking->{ $class } }, $key;
         $R->DEBUG && $R->scrib( 1, "Adding key [$key] to class [$class]" );
-        $R->cache->set({ key  => $CLASS_TRACKING_KEY,
-                         data => $tracking });
+        $cache->set({ key  => $CLASS_TRACKING_KEY,
+                      data => $tracking });
     }
     return $content;
 }

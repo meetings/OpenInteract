@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.54  Thu Nov  7 10:12:00 EST 2002
+
+ - Small bugfix in OI::Handler::GenericDispatcher to fix the incorrect
+ bugfix from earlier. (Doh!)
+
 1.53  Thu Nov  7 07:57:11 EST 2002
 
  - Small bugfix in OI::Handler::GenericDispatcher
