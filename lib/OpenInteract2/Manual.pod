@@ -1,0 +1,600 @@
+=head1 NAME
+
+OpenInteract2::Manual - User Guide and Reference Manual for OpenInteract
+
+=head1 DESCRIPTION
+
+This is the manual for OpenInteract2. It includes information about
+how to setup OpenInteract2 (including databases, web servers, etc.),
+how to develop modules in OpenInteract and how to extend it for your
+own purposes. It is also a reference for the features OpenInteract2
+has with pointers to the relevant module documentation for details.
+
+This manual provides an overview of the framework along with examples,
+directions, etc. If you need implementation-specific information,
+please see the documentation for the appropriate module. (All modules
+are listed below.)
+
+The manual is broken down into:
+
+=over 4
+
+=item
+
+L<OpenInteract2::Manual::Intro|OpenInteract2::Manual::Intro>
+
+Provides an introduction to the capabilities of OpenInteract 2 and a
+quick start guide for setting up a website.
+
+=item
+
+L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
+
+Create a new package and modify an existing one. Developers should
+read this first.
+
+=item
+
+L<OpenInteract2::Manual::Conversion|OpenInteract2::Manual::Conversion>
+
+Read this if you're upgrading an existing OpenInteract 1.x site to
+OpenInteract 2, particularly if you're going to be migrating custom
+packages you've developed.
+
+=item 
+
+L<OpenInteract2::Manual::Changes|OpenInteract2::Manual::Changes>
+
+Listing of the changes between OI versions. The major architectural
+changes between 1.x and 2.x are also listed here.
+
+=item
+
+L<OpenInteract2::Manual::Templates|OpenInteract2::Manual::Templates>
+
+Using templates.
+
+=item
+
+L<OpenInteract2::Manual::Widgets|OpenInteract2::Manual::Widgets>
+
+Using template widgets.
+
+=item 
+
+L<OpenInteract2::Manual::Packages|OpenInteract2::Manual::Packages>
+
+Learn about a package: how we create distributable OpenInteract2
+applications.
+
+=item
+
+L<OpenInteract2::Manual::Caching|OpenInteract2::Manual::Caching>
+
+How to setup and use content caching.
+
+=item 
+
+L<OpenInteract2::Manual::Tutorial|OpenInteract2::Manual::Tutorial>
+
+Walk through creating a new package, including templates, actions,
+data and documentation.
+
+=item
+
+L<OpenInteract2::Manual::Authentication|OpenInteract2::Manual::Authentication>
+
+How to setup authentication and related actions.
+
+=item
+
+L<OpenInteract2::Manual::Security|OpenInteract2::Manual::Security>
+
+How task and object security works and how you can change it.
+
+=item
+
+L<OpenInteract2::Manual::Management|OpenInteract2::Manual::Management>
+
+Managing OpenInteract2 using C<oi2_manage> and the
+L<OpenInteract2::Manage|OpenInteract2::Manage> framework.
+
+=item
+
+L<OpenInteract2::Manual::AdminDatabase|OpenInteract2::Manual::AdminDatabase>
+
+Setup databases.
+
+=item
+
+L<OpenInteract2::Manual::AdminApache|OpenInteract2::Manual::AdminApache>
+
+Setup Apache/mod_perl.
+
+=item
+
+L<OpenInteract2::Manual::Datasource|OpenInteract2::Manual::Datasource>
+
+How to setup and use datasources.
+
+=item
+
+L<OpenInteract2::Manual::DataImport|OpenInteract2::Manual::DataImport>
+
+Importing data into OpenInteract datasources.
+
+=item
+
+L<OpenInteract2::Manual::SPOPS|OpenInteract2::Manual::SPOPS>
+
+How OpenInteract2 enhances SPOPS objects and makes them easier for you
+to configure.
+
+=item
+
+L<OpenInteract2::Manual::SearchResults|OpenInteract2::Manual::SearchResults>
+
+Serializing and retrieving search results.
+
+=item
+
+L<OpenInteract2::Manual::LDAP|OpenInteract2::Manual::LDAP>
+
+How to setup and use LDAP support.
+
+=back
+
+=head1 MODULES
+
+=over 4
+
+
+=item *
+
+L<Apache::OpenInteract2|Apache::OpenInteract2>: OpenInteract2 Content handler for Apache 1.x
+
+=item *
+
+L<Apache::OpenInteract2::HttpAuth|Apache::OpenInteract2::HttpAuth>: Use HTTP authentication to check logins against OpenInteract2 users
+
+=item *
+
+L<HTTP::Daemon::OpenInteract2|HTTP::Daemon::OpenInteract2>: Subclass of HTTP::Daemon for OpenInteract 2
+
+=item *
+
+L<OpenInteract2::Action|OpenInteract2::Action>: Represent and dispatch actions
+
+=item *
+
+L<OpenInteract2::Action::Common|OpenInteract2::Action::Common>: Base class for common functionality
+
+=item *
+
+L<OpenInteract2::Action::CommonAdd|OpenInteract2::Action::CommonAdd>: Tasks to display empty form and create an object
+
+=item *
+
+L<OpenInteract2::Action::CommonDisplay|OpenInteract2::Action::CommonDisplay>: Task to display an object
+
+=item *
+
+L<OpenInteract2::Action::CommonRemove|OpenInteract2::Action::CommonRemove>: Task to remove an object
+
+=item *
+
+L<OpenInteract2::Action::CommonSearch|OpenInteract2::Action::CommonSearch>: Implement searching functionality for SPOPS::DBI-based objects
+
+=item *
+
+L<OpenInteract2::Action::CommonUpdate|OpenInteract2::Action::CommonUpdate>: Task to update an object
+
+=item *
+
+L<OpenInteract2::Action::TemplateOnly|OpenInteract2::Action::TemplateOnly>: Base class for template-only actions
+
+=item *
+
+L<OpenInteract2::Auth|OpenInteract2::Auth>: Base class for logging in OpenInteract users
+
+=item *
+
+L<OpenInteract2::Auth::AdminCheck|OpenInteract2::Auth::AdminCheck>: See whether user is admin
+
+=item *
+
+L<OpenInteract2::Auth::Group|OpenInteract2::Auth::Group>: Retreive groups into OpenInteract
+
+=item *
+
+L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>: Base class for creating OpenInteract users
+
+=item *
+
+L<OpenInteract2::Cache|OpenInteract2::Cache>: - Caches objects to avoid database hits and content to avoid template processing
+
+=item *
+
+L<OpenInteract2::Cache::File|OpenInteract2::Cache::File>: - Implement caching in the filesystem
+
+=item *
+
+L<OpenInteract2::Config|OpenInteract2::Config>: - Centralized configuration information
+
+=item *
+
+L<OpenInteract2::Config::Base|OpenInteract2::Config::Base>: Represents a server base configuration
+
+=item *
+
+L<OpenInteract2::Config::GlobalOverride|OpenInteract2::Config::GlobalOverride>: - Process global override settings for a set of configuration directives
+
+=item *
+
+L<OpenInteract2::Config::Ini|OpenInteract2::Config::Ini>: Read/write INI-style (++) configuration files
+
+=item *
+
+L<OpenInteract2::Config::IniFile|OpenInteract2::Config::IniFile>: OI configuration using INI files
+
+=item *
+
+L<OpenInteract2::Config::Package|OpenInteract2::Config::Package>: Read, write and check package config files
+
+=item *
+
+L<OpenInteract2::Config::PackageChanges|OpenInteract2::Config::PackageChanges>: Represent entries from a package Changes file
+
+=item *
+
+L<OpenInteract2::Config::PerlFile|OpenInteract2::Config::PerlFile>: Subclass OpenInteract2::Config to read/write information from/to a perl file
+
+=item *
+
+L<OpenInteract2::Config::Readonly|OpenInteract2::Config::Readonly>: Simple read/write for readonly files
+
+=item *
+
+L<OpenInteract2::Config::TransferSample|OpenInteract2::Config::TransferSample>: On website install or package creation, transfer and modify sample files
+
+=item *
+
+L<OpenInteract2::Constants|OpenInteract2::Constants>: Define codes used throughout OpenInteract
+
+=item *
+
+L<OpenInteract2::ContentGenerator|OpenInteract2::ContentGenerator>: Coordinator for classes generating content
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TT2Context|OpenInteract2::ContentGenerator::TT2Context>: Provide a custom context for templates in OpenInteract
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TT2Plugin|OpenInteract2::ContentGenerator::TT2Plugin>: Custom OpenInteract functionality in templates
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TT2Process|OpenInteract2::ContentGenerator::TT2Process>: Process Template Toolkit templates in OpenInteract
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TT2Provider|OpenInteract2::ContentGenerator::TT2Provider>: Retrieve templates for the Template Toolkit
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TemplateSource|OpenInteract2::ContentGenerator::TemplateSource>: Common routines for loading content from OI2 templates
+
+=item *
+
+L<OpenInteract2::ContentGenerator::TextTemplate|OpenInteract2::ContentGenerator::TextTemplate>: Content generator using Text::Template
+
+=item *
+
+L<OpenInteract2::Context|OpenInteract2::Context>: Provides the environment for a server
+
+=item *
+
+L<OpenInteract2::Controller|OpenInteract2::Controller>: Top-level controller to generate and place content
+
+=item *
+
+L<OpenInteract2::Controller::HTML|OpenInteract2::Controller::HTML>: Controller for HTML content
+
+=item *
+
+L<OpenInteract2::Controller::ManageBoxes|OpenInteract2::Controller::ManageBoxes>: Mixin methods for managing boxes
+
+=item *
+
+L<OpenInteract2::Controller::ManageTemplates|OpenInteract2::Controller::ManageTemplates>: Mixin methods for managing templates
+
+=item *
+
+L<OpenInteract2::Controller::Raw|OpenInteract2::Controller::Raw>: Basic controller just outputting action content
+
+=item *
+
+L<OpenInteract2::Conversion::ActionConfig|OpenInteract2::Conversion::ActionConfig>: Convert old action.perl files into INI configurations
+
+=item *
+
+L<OpenInteract2::Conversion::IniConfig|OpenInteract2::Conversion::IniConfig>: Parent class for converting perl configurations to INI format
+
+=item *
+
+L<OpenInteract2::Conversion::SPOPSConfig|OpenInteract2::Conversion::SPOPSConfig>: Convert old spops.perl files into INI configurations
+
+=item *
+
+L<OpenInteract2::Cookie|OpenInteract2::Cookie>: Generic cookie methods
+
+=item *
+
+L<OpenInteract2::Datasource::DBI|OpenInteract2::Datasource::DBI>: Create DBI database handles
+
+=item *
+
+L<OpenInteract2::Datasource::LDAP|OpenInteract2::Datasource::LDAP>: Centralized connection location to LDAP directories
+
+=item *
+
+L<OpenInteract2::DatasourceManager|OpenInteract2::DatasourceManager>: Base class for datasource connection managers
+
+=item *
+
+L<OpenInteract2::Exception|OpenInteract2::Exception>: Base class for exceptions in OpenInteract
+
+=item *
+
+L<OpenInteract2::Exception::Application|OpenInteract2::Exception::Application>: Unknown
+
+=item *
+
+L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>: Unknown
+
+=item *
+
+L<OpenInteract2::Exception::Parameter|OpenInteract2::Exception::Parameter>: Unknown
+
+=item *
+
+L<OpenInteract2::Exception::Security|OpenInteract2::Exception::Security>: Unknown
+
+=item *
+
+L<OpenInteract2::File|OpenInteract2::File>: Safe filesystem operations for OpenInteract
+
+=item *
+
+L<OpenInteract2::Manage|OpenInteract2::Manage>: Provide common functions and factory for management tasks
+
+=item *
+
+L<OpenInteract2::Manage::Package|OpenInteract2::Manage::Package>: Parent for all package management tasks
+
+=item *
+
+L<OpenInteract2::Manage::Package::Check|OpenInteract2::Manage::Package::Check>: Check validity of a package
+
+=item *
+
+L<OpenInteract2::Manage::Package::CreatePackage|OpenInteract2::Manage::Package::CreatePackage>: Create a sample package
+
+=item *
+
+L<OpenInteract2::Manage::Package::Export|OpenInteract2::Manage::Package::Export>: Export a package into a portable format
+
+=item *
+
+L<OpenInteract2::Manage::Website|OpenInteract2::Manage::Website>: Parent for website management tasks
+
+=item *
+
+L<OpenInteract2::Manage::Website::Create|OpenInteract2::Manage::Website::Create>: Create a new website
+
+=item *
+
+L<OpenInteract2::Manage::Website::CreateSuperuserPassword|OpenInteract2::Manage::Website::CreateSuperuserPassword>: Change password for superuser
+
+=item *
+
+L<OpenInteract2::Manage::Website::InstallPackage|OpenInteract2::Manage::Website::InstallPackage>: Install a package distribution to a website
+
+=item *
+
+L<OpenInteract2::Manage::Website::InstallPackageData|OpenInteract2::Manage::Website::InstallPackageData>: Install object/table data from packages
+
+=item *
+
+L<OpenInteract2::Manage::Website::InstallPackageSecurity|OpenInteract2::Manage::Website::InstallPackageSecurity>: Managment task
+
+=item *
+
+L<OpenInteract2::Manage::Website::InstallPackageSql|OpenInteract2::Manage::Website::InstallPackageSql>: Install SQL structures, object/SQL data and security objects
+
+=item *
+
+L<OpenInteract2::Manage::Website::InstallPackageStructure|OpenInteract2::Manage::Website::InstallPackageStructure>: Managment task
+
+=item *
+
+L<OpenInteract2::Manage::Website::ListActions|OpenInteract2::Manage::Website::ListActions>: List all actions in a website
+
+=item *
+
+L<OpenInteract2::Manage::Website::ListObjects|OpenInteract2::Manage::Website::ListObjects>: Task to list all SPOPS objects in a website
+
+=item *
+
+L<OpenInteract2::Manage::Website::ListPackages|OpenInteract2::Manage::Website::ListPackages>: List packages installed to a website
+
+=item *
+
+L<OpenInteract2::Manage::Website::RemovePackage|OpenInteract2::Manage::Website::RemovePackage>: Managment task
+
+=item *
+
+L<OpenInteract2::Manage::Website::TestDB|OpenInteract2::Manage::Website::TestDB>: Managment task
+
+=item *
+
+L<OpenInteract2::Manage::Website::TestLDAP|OpenInteract2::Manage::Website::TestLDAP>: Task to test configured LDAP connections
+
+=item *
+
+L<OpenInteract2::Manage::Website::ThemeDump|OpenInteract2::Manage::Website::ThemeDump>: Dump a theme to a themeball
+
+=item *
+
+L<OpenInteract2::Manage::Website::ThemeInstall|OpenInteract2::Manage::Website::ThemeInstall>: Install a theme from a themeball
+
+=item *
+
+L<OpenInteract2::Manage::Website::Upgrade|OpenInteract2::Manage::Website::Upgrade>: Upgrade website from a new OpenInteract distribution
+
+=item *
+
+L<OpenInteract2::Manage::Website::ViewSession|OpenInteract2::Manage::Website::ViewSession>: View contents of a session
+
+=item *
+
+L<OpenInteract2::Package|OpenInteract2::Package>: Perform actions on individual packages
+
+=item *
+
+L<OpenInteract2::Repository|OpenInteract2::Repository>: Operations to manipulate package repositories.
+
+=item *
+
+L<OpenInteract2::Request|OpenInteract2::Request>: Represent a single request
+
+=item *
+
+L<OpenInteract2::Request::Apache|OpenInteract2::Request::Apache>: Read parameters, uploaded files and headers
+
+=item *
+
+L<OpenInteract2::Request::CGI|OpenInteract2::Request::CGI>: Read parameters, uploaded files and headers
+
+=item *
+
+L<OpenInteract2::Request::LWP|OpenInteract2::Request::LWP>: Read parameters, uploaded files and headers
+
+=item *
+
+L<OpenInteract2::Request::Standalone|OpenInteract2::Request::Standalone>: Manually create a request object
+
+=item *
+
+L<OpenInteract2::Response|OpenInteract2::Response>: Information about and actions on an HTTP response
+
+=item *
+
+L<OpenInteract2::Response::Apache|OpenInteract2::Response::Apache>: OpenInteract2::Response::Apache
+
+=item *
+
+L<OpenInteract2::Response::CGI|OpenInteract2::Response::CGI>: OpenInteract2::Response::CGI
+
+=item *
+
+L<OpenInteract2::Response::LWP|OpenInteract2::Response::LWP>: OpenInteract2::Response::CGI
+
+=item *
+
+L<OpenInteract2::Response::Standalone|OpenInteract2::Response::Standalone>: OpenInteract2::Response::Standalone
+
+=item *
+
+L<OpenInteract2::ResultsIterator|OpenInteract2::ResultsIterator>: Iterator to scroll through search results that are objects of different classes.
+
+=item *
+
+L<OpenInteract2::ResultsManage|OpenInteract2::ResultsManage>: Save and retrieve generic search results
+
+=item *
+
+L<OpenInteract2::SPOPS|OpenInteract2::SPOPS>: Define common behaviors for all SPOPS objects in the OpenInteract Framework
+
+=item *
+
+L<OpenInteract2::SPOPS::DBI|OpenInteract2::SPOPS::DBI>: Common SPOPS::DBI-specific methods for objects
+
+=item *
+
+L<OpenInteract2::SPOPS::LDAP|OpenInteract2::SPOPS::LDAP>: Common SPOPS::LDAP-specific methods for objects
+
+=item *
+
+L<OpenInteract2::SQLInstall|OpenInteract2::SQLInstall>: - Dispatcher for installing various SQL data from packages to database
+
+=item *
+
+L<OpenInteract2::Session|OpenInteract2::Session>: Implement session handling in the framework
+
+=item *
+
+L<OpenInteract2::Session::DBI|OpenInteract2::Session::DBI>: Create sessions within a DBI data source
+
+=item *
+
+L<OpenInteract2::Session::File|OpenInteract2::Session::File>: Create sessions within a filesystem
+
+=item *
+
+L<OpenInteract2::Session::SQLite|OpenInteract2::Session::SQLite>: Create sessions within a SQLite data source
+
+=item *
+
+L<OpenInteract2::Setup|OpenInteract2::Setup>: Setup an OpenInteract2::Context object
+
+=item *
+
+L<OpenInteract2::URL|OpenInteract2::URL>: Create URLs, parse URLs and generate action mappings
+
+=item *
+
+L<OpenInteract2::Upload|OpenInteract2::Upload>: Represent a file upload
+
+=item *
+
+L<OpenInteract2::Util|OpenInteract2::Util>: Package of routines that do not really fit anywhere else
+
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright (c) 2001-2003 Chris Winters. All rights reserved.
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.1 or
+any later version published by the Free Software Foundation; with no
+Invariant Sections, with no Front-Cover Texts, and with no Back-Cover
+Texts. A copy of the license is included in the file titled
+"COPYING-DOCS".
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>
+
+The following people have offered patches, advice, development funds,
+etc. to OpenInteract and OpenInteract2:
+
+=over 4
+
+=item *
+
+intes.net (http://www.intes.net/) has funded and supported OpenInteract
+development from its inception.
+
+=item  *
+
+Andreas Nolte E<lt>andreas.nolte@bertelsmann.deE<gt> and his team have
+contributed lots of great ideas and have been super for bouncing ideas
+around.
+
+=item *
+
+Christian Lemburg E<lt>lemburg@aixonix.deE<gt>

@@ -1,0 +1,218 @@
+=head1 NAME
+
+OpenInteract2::Manual::Changes - Significant changes to OpenInteract2
+
+=head1 NOTE
+
+Each package maintains its own changelog. These changes are not
+mentioned here except to note the package version changes with
+successive OI2 releases.
+
+=head1 1.99_00, 10 June 2003
+
+This is the first BETA release. DO NOT run production systems on it.
+
+=head2 Compatibility
+
+Since OpenInteract 2.x uses a separate namespace than OpenInteract 1.x
+(OpenInteract2 vs. OpenInteract), you should have B<no problems>
+installing this on a machine with OpenInteract 1.x. 
+
+There is currently no automated way to upgrade the server
+configuration or everything about a custom package. (You can translate
+the C<conf/action.perl> and C<conf/spops.perl> into the new INI format
+-- see scripts in C<script/>.) In addition, a number of core packages
+have upgraded schemas so you can't simply dump your table and reload
+it.
+
+Before 2.0 final is released there should be tools to:
+
+=over 4
+
+=item *
+
+Do a simple translation of content handlers and other classes. This
+would just translate most of the $R calls to CTX calls (or
+CTX-E<gt>request, CTX-E<gt>response calls).
+
+=item *
+
+Do a translation of Template Toolkit directives that have changed
+(there aren't many).
+
+=back
+
+=head2 Major Changes
+
+These are the highlights. Many others are lurking under the covers.
+
+=over 4
+
+=item *
+
+There is no longer a package repository and a website, only a
+website. This greatly simplifies development.
+
+=item *
+
+You can deploy OI2 under a specific URL-space so that, for instance,
+all requests under '/OI2/' will get translated to the proper action.
+
+=item *
+
+And along with deployment you can easily rewrite URLs to fit in the
+deployment scheme.
+
+=item *
+
+Tight integration with SPOPS object persistence still exists and has
+been enhanced to make development easier -- you do not have to specify
+'SPOPS::Secure' in the ISA, just set the 'is_secure' key to 'yes'. You
+also do not have to specify the database type in your persistent
+object -- it's wired to a datasource which knows this information, so
+we generate it at startup time.
+
+=item *
+
+An entirely new management scheme replaced the massive C<oi_manage>
+with programmable tasks to create a website, create and install
+packages, install database schemas along with associated data and
+security settings, and more.
+
+=item *
+
+Request parameters that OI2 deals with are separate from the how those
+parameters are retrieved. This means it's easy to deploy an OI2 server
+in different environments -- it ships with interfaces for Apache
+1.x/mod_perl 1.x, CGI, and a standalone server based on LWP. It's easy
+to create interfaces for other systems as well. (See L<OI2
+INTERFACES>.)
+
+=item *
+
+Content handlers are now objects instead of classes, all deriving from
+L<OpenInteract2::Action|OpenInteract2::Action>. This simplifies
+development, making each action stateful rather than passing around a
+dumb hashref.
+
+=item *
+
+You can now generate any kind of content from OI2. OI2 is still
+heavily biased toward the Template Toolkit (can you blame it?), but
+you can plugin any type of content generator you like. A sample one is
+in the distribution:
+L<OpenInteract2::ContentGenerator::TextTemplate|OpenInteract2::ContentGenerator::TextTemplate>.
+
+=item *
+
+The C<OpenInteract::CommonHandler> megalith has been split up into
+separate classes to deal with searching, displaying, updating, adding,
+and removing objects.
+
+=item *
+
+All actions in the core packages have been modified to use these
+common handlers where possible, and when not possible they don't
+overload as much functionality into a single task. For instance,
+'display' will just display a non-editable object; 'display_form' will
+just display an existing object in a form for updating; 'display_add'
+will display a form without an object.
+
+=item *
+
+The procedures for installing SQL structures, initial data and
+security has been totally overhauled. It's B<much> to create an
+installer now.
+
+=item *
+
+Authentication is more flexible and can be adapted to different
+systems (e.g., HTTP authentication instead of cookies) more easily.
+
+=item *
+
+The package and repository code was entirely rewritten. The repository
+now holds the bare minimum to keep track of objects and it should
+never become corrupted.
+
+=item *
+
+Everything in OI2 should throw an exception object rather than issue a
+C<die>. This allows us to discern the different types of errors more
+easily, keep track of where they were thrown, etc.
+
+=item *
+
+An ever-growing testing suite ensures that OI2 can adapt easily and
+also provides a separate bunch of documentation.
+
+=back
+
+=head2 OI2 INTERFACES
+
+An 'interface' refers to how OpenInteract2 interacts with the outside
+world. An interface consists of three parts:
+
+=over 4
+
+=item *
+
+Adapter to take the user's request, login the user and create the
+necessary OpenInteract2 objects
+(L<OpenInteract2::Request|OpenInteract2::Request>,
+L<OpenInteract2::Response|OpenInteract2::Response>,
+L<OpenInteract2::Controller|OpenInteract2::Controller>).
+
+=item *
+
+Subclass of L<OpenInteract2::Request|OpenInteract2::Request> to take
+the parameters, cookies, and other user information from the user's
+request and put it into the OpenInteract2 framework.
+
+=item *
+
+Subclass of L<OpenInteract2::Response|OpenInteract2::Response> to take
+the generated headers, cookies, and content generated by OpenInteract2
+and send it back to the client.
+
+=back
+
+Since most of the functionality is pushed down into the Request and
+Response subclasses, adapters are generally pretty simple. For
+instance, here's an example of the Adapter for Apache 1.x/mod_perl
+1.x:
+
+ package Apache::OpenInteract2;
+
+ use strict;
+ use OpenInteract2::Auth;
+ use OpenInteract2::Request;
+ use OpenInteract2::Response;
+
+ sub handler($$) {
+     my ( $class, $r ) = @_;
+     my $response = OpenInteract2::Response->new({ apache => $r });
+     my $request  = OpenInteract2::Request->new({ apache => $r });
+     OpenInteract2::Auth->login( $r->pnotes( 'login_user' ) );
+     my $controller = eval {
+         OpenInteract2::Controller->new( $request, $response )
+     };
+     if ( $@ ) {
+         $response->content( $@ );
+     }
+     else {
+         $controller->execute;
+     }
+     $response->send;
+     return $response->status;
+ }
+
+
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

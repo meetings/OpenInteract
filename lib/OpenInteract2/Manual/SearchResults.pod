@@ -1,0 +1,55 @@
+=head1 NAME
+
+Managing Search Results in OpenInteract2
+
+=head1 SYNOPSIS
+
+ my $object_list = perform_search( ... );
+ my $results = OpenInteract2::ResultsManage->new();
+ my $search_id = $results->save( $object_list );
+ 
+ ... later, retrieve the first 50 results ...
+ 
+ my $search_id = $request->param( 'search_id' );
+ my $results = OpenInteract2::ResultsManage->new(
+                              { search_id => $search_id });
+ my $iter = $results->retrieve({ max => 50 });
+ 
+ ... later, retrieve results 51 - 100 ...
+ 
+ my $search_id = $request->param( 'search_id' );
+ my $results = OpenInteract2::ResultsManage->new(
+                              { search_id => $search_id });
+ my $iter = $results->retrieve({ min => 51, max => 100 });
+ 
+=head1 DESCRIPTION
+
+OpenInteract2 comes with the ability to serialize and later retrieve
+search results. This enables users to run large-ish searches and have
+the results be accessible at a later time, or in a paged result form
+(Page 1 of 12, results 1 - 20, etc.) without running the entire search
+again and ensuring that successive pages are consistent..
+
+OpenInteract2 comes with two classes to perform these actions. The
+main one is
+L<OpenInteract2::ResultsManage|<OpenInteract2::ResultsManage>, which
+serializes and retrieves the results. The other is
+L<OpenInteract2::ResultsIterator|OpenInteract2::ResultsIterator>,
+which is an implementation of L<SPOPS::Iterator|SPOPS::Iterator> that
+works with the first class to feed results one at a time.
+
+Currently all documentation for this service is contained in the class
+implementing the scheme:
+L<OpenInteract2::ResultsManage|OpenInteract2::ResultsManage>.
+
+=head1 SEE ALSO
+
+This module works with the 'full_text' package.
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

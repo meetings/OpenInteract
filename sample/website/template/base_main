@@ -1,0 +1,69 @@
+[%- DEFAULT theme = OI.theme_properties;
+    home_url    = OI.make_url( BASE = '/' );
+    logo_url    = OI.make_url( IMAGE = '/images/oi_logo.gif' );
+    powered_url = OI.make_url( IMAGE = '/images/pw_by_oi.gif' ); -%]
+<html>
+ <head>
+  <title>[% title %]</title>
+ <script language="javascript">
+<!--
+
+[% script %]
+
+[% PROCESS global_javascript %]
+
+// -->
+ </script>
+ </head>
+ <body bgcolor="[% theme.bgcolor %]">
+
+<a href="[% home_url %]"><img src="[% logo_url %]" width="316" height="74" 
+                 border="0" alt="OpenInteract logo"></a>
+<br clear="all">
+<table border="0" width="100%" cellpadding="2" bgcolor="[% theme.main_menu_border_color %]">
+<tr><td>
+<table border="0" width="100%" bgcolor="[% theme.main_menu_bgcolor %]"
+       cellpadding="4" cellspacing="0">
+ <tr align="center" valign="middle">
+   <td><font size="+1">
+       <b><a href="[% home_url %]">Home</a></b> |
+       <b><a href="[% OI.make_url( ACTION = 'user' ) %]">Users</a></b> |
+       <b><a href="[% OI.make_url( ACTION = 'group' ) %]">Groups</a></b> |
+       <b><a href="[% OI.make_url( ACTION = 'page',
+                                   TASK   = 'directory_list' ) %]">Pages</a></b>
+   </td>
+ </tr>
+</table>
+
+</td></tr>
+</table>
+
+<table border="0" width="100%" bgcolor="[% theme.bgcolor %]"
+       cellpadding="1" cellspacing="0">
+ <tr valign="top">
+  <td width="75%" align="left">
+   <br>
+
+[% content %]
+
+  </td>
+  <td width="25%" align="right">
+   <br>
+
+[%- OI.action_execute( 'boxes' ) -%]
+
+ </td></tr>
+</table>
+
+<hr width="50%" noshade="noshade">
+<p align="center">
+  Questions? Check out <a href="http://openinteract.sourceforge.net/">the website</a>
+</p>
+<p align="right">
+ <a href="http://openinteract.sourceforge.net/cgi-bin/twiki/view/OI/PoweredBy"><img
+      src="[% powered_url %]" width="88" height="31" 
+      border="0" alt="Powered by OpenInteract!"></a>
+</p>
+
+ </body>
+</html>

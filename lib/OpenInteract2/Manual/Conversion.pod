@@ -1,0 +1,204 @@
+=head1 NAME
+
+Converting from 1.x - Moving your site and custom packages from OI 1.x to 2.x
+
+=head1 WEBSITE
+
+This part of the manual will describe how to translate your
+website. All this should require is translating your server
+configuration and any database schema changes.
+
+=head2 Server Configuration
+
+First off, OI 2.x exclusively uses the INI file format for the server
+configuration -- 1.x allowed you to use either the serialized Perl
+data structure or the INI format. Hopefully you will see this as a
+good thing.
+
+There are no automatic conversion utilities for your server
+configuration. The best thing to do is open both configuration files
+in parallel editing windows and compare, copying relevant information
+from your old file into the new one. ('C-x 3' in emacs is good for
+this sort of thing...)
+
+The basic structure of the configuration files is the same. New
+information has been added -- datasources are unified, some names have
+changed, etc. -- but generally you'll find information in the same
+general location.
+
+(TODO: Create a utility to pull information out of an existing INI
+format and update the default one with it? Not all of the information,
+just the highlights...)
+
+=head2 Database
+
+Following is a list of database schema changes you need to make to
+bring your 1.x database up to speed:
+
+(...the wind howls, the sagebrush ambles across the screen, nothing is
+here...)
+
+=head1 PACKAGES
+
+Upgrading packages is undoubtedly the most resource intensive part of
+the upgrade. It will definitely require some work, but your work will
+be justly rewarded. And there are a few utilities packaged with OI2 to
+do at least some of the grunt work for you.
+
+We'll break the process into pieces roughly mirroring the package
+directory structure.
+
+=head2 Package Metadata (.)
+
+This consists of the files:
+
+=over 4
+
+=item *
+
+package.conf
+
+=item *
+
+Changes
+
+=item *
+
+MANIFEST
+
+=item *
+
+MANIFEST.SKIP
+
+=back
+
+There is no structural change necessary for these files to
+work. However, depending on your scenario you may wish to upgrade your
+package by a whole version number to indicate that it will only work
+with OI2. This also allows you to maintain two source trees for a
+particular package, just in case you need to support both of them.
+
+B<package.conf>
+
+The only structural change is that the 'template_blocks' directive has
+been removed from the package configuration.
+
+To change:
+
+=over 4
+
+=item *
+
+B<sql_installer>: Update the class name from
+'OpenInteract::SQLInstaller::Foo' to
+'OpenInteract2::SQLInstaller::Poo'.
+
+=back
+
+B<MANIFEST>
+
+There will be a few file name changes throughout the process. But
+rather than list them all here, just remember that any
+renamings/removals will have to be reflected here. Running:
+
+ oi2_manage check_package
+
+from your package's root directory will still let you know of any
+discrepancies between your C<MANIFEST> and the files in the directory.
+
+You can also use the =ExtUtils::Manifest= trick:
+
+ $ perl -MExtUtils::Manifest -e 'ExtUtils::Manifest::mkmanifest()'
+
+=head2 Configuration (conf/)
+
+OpenInteract2 has abandoned the Perl data structure as configuration
+file. It's too difficult to edit and when generated isn't formatted
+for humans to read. Instead we're using the INI file format for both
+the action configuration and the SPOPS configurations.
+
+Two scripts are included with OI2 to help with this task:
+
+ script/translate_action_to_ini.pl
+ script/translate_spops_to_ini.pl
+
+Both are just wrappers around a class found under
+C<OpenInteract2::Conversion>. They work on STDIN and STDOUT:
+
+ perl translate_action_to_ini.pl < ~/pkg/mypkg/conf/action.perl > action.ini
+ perl translate_action_to_ini.pl < ~/pkg/mypkg/conf/spops.perl > spops.ini
+
+In addition to doing the fairly simple conversion from the Perl data
+structure to INI, it also does a few modifications to your data. Some
+of these are key renamings (e.g., the 'security' key in your action
+configuration should now be 'is_secure') while others remove now
+unnecessary data (e.g., most items in your 'isa' are now unnecessary,
+as OI2 creates it properly at startup).
+
+After running the script you should still check the configuration to
+ensure everything worked and make any additional modifications. In
+particular, the keys of the 'links_to' and 'has_a' configuration items
+are not yet modified from C<OpenInteract::Foo> to
+C<OpenInteract2::Foo>.
+
+Finally, in the packages shipped with OpenInteract2 we've kept all the
+action configuration entries in a single file (C<action.ini>) but
+moved the configuration for each SPOPS object into its own file (e.g.,
+C<spops_news.ini>, C<spops_news_section.ini>). You can keep all your
+SPOPS configurations in a single file, but they're probably easier to
+edit if they're in multiple files.
+
+B<NOTE>: Each SPOPS configuration file should begin with C<spops> so
+the OI2 startup procedure can find it.
+
+=head2 Documentation (doc/)
+
+Documentation is pretty much the same. The system documentation tool
+under C</SystemDoc/> will pick up all POD files in a package's C<doc/>
+directory. Instead of using an index (C<titles>) that always, always
+got out of sync, we instead just parse all the docs and grab the title
+out of it. Yes, it's more expensive, but how often are you browsing
+package docs? (And you have fast disk drives and/or an aggressively
+caching filesystem, right?)
+
+And because OI no longer has error handlers you can delete the
+C<ERRORS> section from your POD. (Packages generated with OI had this
+by default.)
+
+To change:
+
+=over 4
+
+=item *
+
+C<titles> - Delete this file
+
+=item *
+
+C<package.pod> - If you have a file of this name, rename it to
+'packagename'.pod -- e.g., 'gallery.pod' if you're modifying the
+'gallery' package, etc.
+
+=back
+
+=head2 Package data (data/)
+
+=head2 SQL Structures (struct/)
+
+=head2 Template (template/)
+
+=head2 Libraries (OpenInteract/)
+
+=head2 Examples (eg/)
+
+=head2 HTML files/images (html/)
+
+=head2 Standalone scripts (script/)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

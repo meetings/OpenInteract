@@ -1,0 +1,68 @@
+=head1 NAME
+
+OpenInteract2::Manual::SPOPS - Controlling interations between OpenInteract2 and SPOPS
+
+=head1 SYNOPSIS
+
+This part of the OpenInteract manual describes how OpenInteract2 uses
+SPOPS and the additional features you can set.
+
+=head1 SPOPS SUBCLASS NAMING
+
+Unlike OI 1.x, you no longer have to name L<SPOPS::DBI|SPOPS::DBI>,
+L<SPOPS::DBI::Pg|SPOPS::DBI::Pg>, or any other implementation-specific
+subclass in the 'isa' key of your configuration. Instead, you just
+need to tell OI2 what datasource you're using for the object -- if you
+don't specify one then you're using the default, which is normally
+'main'.
+
+At startup time OI2 will rewrite the 'isa' key to have the proper
+entries in it for your datasource. This means your objects will never
+get out of sync and eliminates a major hassle with OI 1.x. Here's an
+example. Say you have the following datasource declared in your server
+configuration:
+
+ [datasource main]
+ type = DBI
+ spops = SPOPS::DBI::Pg
+ ...
+
+
+
+=head1 SECURITY TAGGING
+
+=head1 CREATION SECURITY CONVERSION
+
+=head1 DISPLAY/EDIT URL
+
+SPOPS allows you to specify a URL for display/editing in the
+configuration key 'display'. OpenInteract2 enhances this by allowing
+you to use the common 'ACTION' and 'TASK' keys and have the URL be
+generated at runtime, including the deployment context. This allows
+you to focus on the action and not worry about deployment details.
+
+=head1 DATE CONVERSION
+
+OpenInteract can perform round-trip date conversion for you. This
+means that when a date is pulled out of the database it will be
+converted into an object (normally L<DateTime|DateTime>) and when you
+execute a C<save()> against an object it will be converted from the
+object format into one your database can understand.
+
+Setting it up is simple. Just set the key 'convert_date_field' in your
+SPOPS configuration to an array reference with the fields in your
+object of date/datetime format.
+
+=head1 SEE ALSO
+
+L<DateTime|DateTime>
+
+L<SPOPS::Tool::DateConvert|SPOPS::Tool::DateConvert>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

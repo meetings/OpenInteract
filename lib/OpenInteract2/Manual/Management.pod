@@ -1,0 +1,21 @@
+=head1 NAME
+
+Managing OpenInteract2
+
+=head1 SYNOPSIS
+
+This part of the OpenInteract manual describes how to manage
+OpenInteract2 using C<oi2_manage> and the
+L<OpenInteract2::Manage|OpenInteract2::Manage> framework.
+
+=head1 DESCRIPTION
+
+Coming soon!
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>

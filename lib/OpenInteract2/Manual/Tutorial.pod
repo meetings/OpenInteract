@@ -1,0 +1,20 @@
+=head1 NAME
+
+OpenInteract Tutorial
+
+=head1 SYNOPSIS
+
+This tutorial will show you the different methods for creating a
+package and how to maintain them.
+
+=head1 DESCRIPTION
+
+Coming soon!
+
+=head1 COPYRIGHT
+
+Copyright (c) 2002-2003 Chris Winters. All rights reserved.
+
+=head1 AUTHORS
+
+Chris Winters E<lt>chris@cwinters.comE<gt>
