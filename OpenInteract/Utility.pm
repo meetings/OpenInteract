@@ -1,13 +1,13 @@
 package OpenInteract::Utility;
 
-# $Id: Utility.pm,v 1.8 2002/01/16 12:57:37 lachoy Exp $
+# $Id: Utility.pm,v 1.9 2003/03/25 16:32:48 lachoy Exp $
 
 use strict;
 use Mail::Sendmail ();
 use MIME::Lite     ();
 
 @OpenInteract::Utility::ISA     = ();
-$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_SUBJECT        => 'Mail sent from OpenInteract';
 use constant DEFAULT_ATTACH_MESSAGE => 'Emailing attachments';
@@ -141,8 +141,6 @@ sub _clean_attachment_filename {
 
 __END__
 
-=pod
-
 =head1 NAME
 
 OpenInteract::Utility - Package of routines that do not really fit anywhere else
@@ -174,7 +172,7 @@ OpenInteract::Utility - Package of routines that do not really fit anywhere else
 =head1 DESCRIPTION
 
 This class currently implments utilities for sending email. Note: In
-the future the mailing methods t may move into a separate class (e.g.,
+the future the mailing methods may move into a separate class (e.g.,
 C<OpenInteract::Mailer>)
 
 =head1 METHODS
@@ -318,13 +316,11 @@ L<MIME::Lite|MIME::Lite>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2002 intes.net, inc.. All rights reserved.
+Copyright (c) 2001-2003 intes.net, inc.. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
 =head1 AUTHORS
 
-Chris Winters <chris@cwinters.com>
-
-=cut
+Chris Winters E<lt>chris@cwinters.comE<gt>

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.66 2003/02/16 21:12:29 lachoy Exp $
+# $Id: oi_manage,v 1.67 2003/03/13 03:27:00 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.66 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.67 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -3570,10 +3570,10 @@ currently support removing the files associated with the package, or
 the templates in the database that belong to the package. If you want
 to truly eradicate your package, you should do the following:
 
- >> oi_manage --pacakage=mypackage \
+ >> oi_manage --package=mypackage \
               --website_dir=/path/to/my_website \
               remove_template
- >> oi_manage --pacakage=mypackage \
+ >> oi_manage --package=mypackage \
               --website_dir=/path/to/my_website \
               remove_package
  >> cd /path/to/my_website/pkg
@@ -4110,6 +4110,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.66 $
+Revision: $Revision: 1.67 $
 
 =cut

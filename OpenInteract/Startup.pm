@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.36 2003/01/25 16:20:15 lachoy Exp $
+# $Id: Startup.pm,v 1.37 2003/03/13 03:26:34 lachoy Exp $
 
 use strict;
 use Cwd            qw( cwd );
@@ -15,7 +15,7 @@ use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.37 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -596,7 +596,7 @@ sub _require_extra_classes {
                                class    => [ keys %{ $action_require } ],
 					           pkg_link => $action_require });
     if ( scalar @{ $successful_action } != scalar keys %{ $action_require } ) {
-        my %all_tried = map { $_ => 1 } @{ $action_require };
+        my %all_tried = map { $_ => 1 } keys %{ $action_require };
         delete $all_tried{ $_ } for ( @{ $successful_action } );
         _w( 0, "Some action classes were not required: ",
                join( ', ', keys %all_tried ) );
@@ -606,7 +606,7 @@ sub _require_extra_classes {
                                class    => [ keys %{ $spops_require } ],
 					           pkg_link => $spops_require });
     if ( scalar @{ $successful_spops } != scalar keys %{ $spops_require } ) {
-        my %all_tried = map { $_ => 1 } @{ $spops_require };
+        my %all_tried = map { $_ => 1 } keys %{ $spops_require };
         delete $all_tried{ $_ } for ( @{ $successful_spops } );
         _w( 0, "Some SPOPS classes were not required: ",
                join( ', ', keys %all_tried ) );

@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.32 2002/12/13 22:03:09 lachoy Exp $
+# $Id: SPOPS.pm,v 1.33 2003/04/01 03:53:38 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -8,7 +8,7 @@ use Digest::MD5     qw( md5_hex );
 use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.32 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
@@ -37,7 +37,7 @@ sub save_object_key {
         $obj_key = $self->generate_object_key;
         eval { $self->db_insert({ %{ $p }, table => OBJECT_KEY_TABLE,
                                   field => [ qw/ object_key class object_id / ],
-                                  value => [ $obj_key, ref( $self ), $self->id ] }) };
+                                  value => [ $obj_key, ref( $self ), scalar( $self->id ) ] }) };
         if ( $@ ) {
             warn "Cannot save object key: $@\n";
             return undef;
@@ -85,7 +85,7 @@ sub fetch_object_key {
                                  from   => OBJECT_KEY_TABLE,
                                  select => [ 'object_key' ],
                                  where  => 'class = ? AND object_id = ?',
-                                 value  => [ ref $self, $self->id ],
+                                 value  => [ ref $self, scalar( $self->id ) ],
                                  return => 'single' });
     return $row->[0] if ( $row );
     return undef;

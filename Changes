@@ -1,5 +1,83 @@
 Revision history for Perl extension OpenInteract.
 
+1.57  Mon Apr  7 21:08:38 EDT 2003
+
+Overall:
+
+ * Small bugfixes and enhancements.
+
+Individual:
+
+ * INSTALL.website:
+
+   - Modify the sample information for configuring your database
+   connection as it was a little confusing. Thanks to Andrew Hurst
+   <hurst9@llnl.gov> for the pointer.
+
+ * Makefile.PL:
+
+   - Set the unknown version numbers to '0' instead of 'undef' -- as
+   it was EU::MM wasn't picking up the dependency properly. Thanks to
+   Barry Hoggard <barry@tristanmedia.com> for pointing it out.
+
+ * conf/sample-server.ini:
+
+   - Make the sample configuration and description a little clearer as
+   to what's required, what various items are, etc.
+
+ * OpenInteract/Cache.pm:
+
+   - Force scalar context on ->id call.
+
+ * OpenInteract/PackageRepository.pm:
+
+   - Fix ->package_filename to work properly on Win32. Thanks to David
+   C. Reed <dreed@xonos.com> for the fix!
+
+ * OpenInteract/SPOPS.pm:
+
+   - Fix problem with fetching/saving object keys when the object is
+   using a multiple-value primary key. Thanks to damien leri
+   <damien@babelfield.com> for pointing out the problem.
+
+ * OpenInteract/Startup.pm:
+
+   - Fix bug triggered when we cannot bring in all the action or SPOPS
+   classes. (Trying to treat the hashref as an arrayref, oops.)
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - In make_url(), use '&amp;' as a query argument separator rather
+   than a bare '&'. Thanks to damien leri <damien@babelfield.com> for
+   the pointer and Randal for the clarification.
+
+ * script/oi_manage:
+
+   - Fix some typos in the docs -- thanks to Jon <jon@3ev.com> for the
+   pointer.
+
+Packages updated:
+
+   OpenInteract     1.56 -> 1.57
+   ----------------------------
+   base:            1.72 -> 1.72
+   base_box:        1.04 -> 1.05
+   base_error:      1.45 -> 1.45
+   base_group:      1.38 -> 1.38
+   base_page:       1.17 -> 1.23
+   base_security:   1.60 -> 1.60
+   base_template:   2.23 -> 2.23
+   base_theme:      1.36 -> 1.36
+   base_user:       1.61 -> 1.64
+   lookup:          1.01 -> 1.01
+   object_activity: 1.03 -> 1.04
+   results_manage:  1.01 -> 1.02
+   system_doc:      1.33 -> 1.33
+   classified:      1.38 -> 1.38
+   full_text:       1.34 -> 1.34
+   news:            1.54 -> 1.54
+
+
 1.56  Mon Feb 17 16:55:40 EST 2003
 
 Overall:

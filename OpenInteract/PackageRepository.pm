@@ -1,6 +1,6 @@
 package OpenInteract::PackageRepository;
 
-# $Id: PackageRepository.pm,v 1.7 2003/02/10 13:22:12 lachoy Exp $
+# $Id: PackageRepository.pm,v 1.8 2003/03/26 02:27:17 lachoy Exp $
 
 use strict;
 use base qw( Exporter SPOPS::HashFile );
@@ -11,7 +11,7 @@ use Data::Dumper  qw( Dumper );
 use OpenInteract::Package;
 use SPOPS::Utility;
 
-$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::PackageRepository::VERSION   = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::PackageRepository::EXPORT_OK = qw( $PKG_DB_FILE );
 
 # Define our SPOPS configuration information. Very simple.
@@ -24,7 +24,7 @@ $OpenInteract::PackageRepository::C        = {
 $OpenInteract::PackageRepository::RULESET  = {};
 
 $PKG_DB_FILE = 'conf/package_repository.perl';
-sub package_filename { return File::Spec->catfile( '/', $_[1], $PKG_DB_FILE ) }
+sub package_filename { return File::Spec->catfile( $_[1], $PKG_DB_FILE ) }
 
 sub CONFIG  { return $OpenInteract::PackageRepository::C };
 sub RULESET { return $OpenInteract::PackageRepository::RULESET };

@@ -1,6 +1,6 @@
 package OpenInteract::Cache;
 
-# $Id: Cache.pm,v 1.5 2002/09/09 03:05:32 lachoy Exp $
+# $Id: Cache.pm,v 1.6 2003/04/07 02:55:57 lachoy Exp $
 
 use strict;
 
@@ -65,7 +65,7 @@ sub set {
     my $R = OpenInteract::Request->instance;
     if ( _is_object( $data ) ) {
         $obj = $data;
-        $key = _make_spops_idx( ref $obj, $obj->id );
+        $key = _make_spops_idx( ref $obj, scalar( $obj->id ) );
         $R->DEBUG && $R->scrib( 2, "Created class/id key [$key]" );
         $is_object++;
         return undef  unless ( $obj->pre_cache_save );
@@ -86,7 +86,7 @@ sub clear {
 
     my $key = $p->{key};
     if ( ! $key and _is_object( $p->{data} ) ) {
-        $key = _make_spops_idx( ref $p->{data}, $p->{data}->id );
+        $key = _make_spops_idx( ref $p->{data}, scalar( $p->{data}->id ) );
     }
     elsif ( ! $key and $p->{class} and $p->{object_id} ) {
         $key = _make_spops_idx( $p->{class}, $p->{object_id} );

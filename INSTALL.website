@@ -57,12 +57,12 @@ Change the following values:
    some sample values:
 
       [db_info main]
-      db_owner      =
+      driver_name   = mysql
+      dsn           = mydbname
       username      = dbuser
       password      = dbpassword
-      dsn           = mysql
-      db_name       = MyAppDB
-      driver_name   = mysql
+      db_name       = 
+      db_owner      =
       sql_install   =
       long_read_len = 65536
       long_trunc_ok = 0
@@ -313,4 +313,4 @@ the 'site admin' group to pull up a form).
 Now: have some fun!
 
 ========================================
-$Id: INSTALL.website,v 1.13 2002/09/09 03:17:01 lachoy Exp $
+$Id: INSTALL.website,v 1.14 2003/02/22 17:32:56 lachoy Exp $

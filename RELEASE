@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.57  Mon Apr  7 21:08:38 EDT 2003
+
+ - Small bugfixes and enhancements.
+
+
 1.56  Mon Feb 17 16:55:40 EST 2003
 
  - All packages now use %%DATETIME%% key to specify a datetime field.
@@ -261,4 +266,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.29 2003/02/17 22:21:08 lachoy Exp $
+$Id: RELEASE,v 1.30 2003/04/08 01:16:38 lachoy Exp $

@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.29 2003/02/16 21:29:41 lachoy Exp $
+# $Id: Plugin.pm,v 1.30 2003/03/25 16:28:12 lachoy Exp $
 
 use strict;
 use base qw( Template::Plugin );
@@ -11,7 +11,7 @@ use SPOPS::Secure   qw( :level :scope );
 use SPOPS::Utility;
 use Text::Sentence;
 
-$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::VERSION  = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 my %SECURITY_CONSTANTS  = (
   level => {
@@ -22,6 +22,7 @@ my %SECURITY_CONSTANTS  = (
   },
 );
 
+use constant QUERY_ARG_SEPARATOR => '&amp;';
 
 ########################################
 # PLUGIN IMPLEMENTATION
@@ -299,7 +300,7 @@ sub make_url {
     if ( $R->{path}{location} ) {
         $url_base = "$R->{path}{location}$url_base";
     }
-	my $query = join( '&',
+	my $query = join( QUERY_ARG_SEPARATOR,
                       map  { "$_=" . _url_escape( $p->{ $_ } ) }
                       grep { defined $p->{ $_ } }
                       keys %{ $p } );
