@@ -7,7 +7,7 @@ use Apache::Constants qw( :common :remotehost );
 use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
-$OpenInteract::VERSION  = '1.57';
+$OpenInteract::VERSION  = '1.58';
 
 # Generic separator used in display
 

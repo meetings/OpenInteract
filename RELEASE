@@ -1,6 +1,11 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.58  Sun Apr 13 19:52:57 EDT 2003
+
+ - Fixed bug in base_page 
+
+
 1.57  Mon Apr  7 21:08:38 EDT 2003
 
  - Small bugfixes and enhancements.

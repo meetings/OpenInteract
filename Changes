@@ -1,5 +1,19 @@
 Revision history for Perl extension OpenInteract.
 
+1.58  Sun Apr 13 19:52:57 EDT 2003
+
+Overall:
+
+ * Fixed fairly serious bug in base_page package that shipped with
+   1.57.
+
+Packages updated:
+
+   OpenInteract     1.57 -> 1.58
+   ----------------------------
+   base_page:       1.23 -> 1.24
+
+
 1.57  Mon Apr  7 21:08:38 EDT 2003
 
 Overall:
