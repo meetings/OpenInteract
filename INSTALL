@@ -1,69 +1,66 @@
-INSTALLING OPENINTERACT 2
+INSTALLING OPENINTERACT
 =========================
+
+(NOTE: If you're upgrading from version 1.05 or earlier, please read
+the file 'UPGRADE' in this directory.)
+
 
 (1) Run the normal perl install
 
  perl Makefile.PL
  make
- make test (this may take a while...)
+ make test (no tests yet...)
  make install
-
-You can also use Module::Build:
-
- perl Build.PL
- ./Build
- ./Build test
- ./Build install
 
 This procedure will install the base libraries. Normal Perl
 installation rules apply.
 
-OI2 comes with a number of files that need to be available for package
-authors and people creating websites. You can run:
-
- $ oi2_manage create_source_dir --source_dir=/opt/OpenInteract2
-
-from the distribution directory to create it.
-
-UPGRADING FROM 1.x?
---------------------
-
-DO NOT WORRY about modules overwriting. Everything is in the
-'OpenInteract2::' namespace so your existing 1.x libraries will be
-untouched. Also, please read 'perldoc
-OpenInteract2::Manual::Conversion' after you install. The short news:
-there's no simple conversion for everything, but you'll be gaining
-lots of functionality.
-
-DEPENDENCIES
---------------------
-
-OpenInteract2 uses a number of libraries, all of them are readily
+OpenInteract uses a number of libraries, and all of them are readily
 available via CPAN. For those on Win32 systems without a compiler,
 most of them are also available via the PPM installation system. Some
-modules requiring compilation are not available via the standard PPM
-repository and are available at:
+modules requiring compilation are not available via PPM and are
+available at:
 
  http://openinteract.sourceforge.net/
 
 Instructions for setup and download are located there as well.
 
-(2) Create a website
+(2) Run the OpenInteract install
 
-See 'perldoc OpenInteract2::Manual::QuickStart' for instructions on
-getting a site running in just a few minutes!
+Without changing directories from the directory where you unpacked the
+OpenInteract distribution, run:
+
+ oi_manage install --base_dir=/path/to/installation
+
+The 'oi_manage' script should have been installed to a publically
+accessible place (e.g., '/usr/local/bin' or '/usr/bin') for you when
+you installed the rest of the library with 'make install'. If not,
+just copy the file 'script/oi_manage' to an accessible place. (You can
+also just run 'script/oi_manage install', but then 'oi_manage' won't
+be accessible to manipulate future websites and configuration
+information. This makes life hard for you. Why do that?)
+
+This command creates the OpenInteract base directory and installs all
+the packages that were distributed with the system.
+
+That's it! OpenInteract is now installed and you should never need to
+do this again. Upgrades to packages and installation of new packages
+are done through the OpenInteract package system (and the 'oi_manage'
+script) and work on existing installations.
+
 
 (3) Read up
 
-Check out the documentation, starting with 'OpenInteract2::Manual',
-which has pointers to many other documents. Or, after finishing your
-website installation you can go to the '/SystemDoc/' path and read the
-docs through your browser. In the manual you'll find information about
-administering OpenInteract2, notes about packages, what goes into
-creating a website, building/configuring Apache, how to create develop
-a package, and much more.
+Check out the documentation: 
 
-Good luck, and have fun!
+1. INSTALL.website (in this directory): Tells you how to create a new
+OpenInteract website. This document is also copied to the website
+directory when you create it.
+
+2. doc/admin.html: More information about administering OpenInteract,
+including notes about packages, creating websites, and
+building/configuring Apache.
+
 
 =========================
-$Id: INSTALL,v 1.4 2003/06/30 14:43:48 lachoy Exp $
+$Id: INSTALL,v 1.5 2001/10/07 21:12:20 lachoy Exp $
