@@ -1,12 +1,12 @@
 package OpenInteract::SPOPS::LDAP;
 
-# $Id: LDAP.pm,v 1.9 2001/08/28 21:28:13 lachoy Exp $
+# $Id: LDAP.pm,v 1.10 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 use OpenInteract::SPOPS;
 
 @OpenInteract::SPOPS::LDAP::ISA     = qw( OpenInteract::SPOPS );
-$OpenInteract::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::LDAP::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 
 # TODO: Ensure stub is in SPOPS::LDAP for this
@@ -50,10 +50,9 @@ sub base_dn  {
 
 sub get_connect_key {
     my ( $class ) = @_;
-    my $connect_key = $class->CONFIG->{datasource};
-    unless ( $connect_key ) {
-        $connect_key = $class->global_config->{default_connection_ldap};
-    }
+    my $connect_key = $class->CONFIG->{datasource} ||
+                      $class->global_config->{datasource}{default_connection_ldap} ||
+                      $class->global_config->{default_connection_ldap};
     $connect_key = $connect_key->[0] if ( ref $connect_key eq 'ARRAY' );
     return $connect_key;
 }

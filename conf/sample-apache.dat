@@ -5,6 +5,3 @@ Apache
 Apache::Constants
 Apache::URI
 Apache::Request
-Apache::Cookie
-Apache::DBI
-Apache::StatINC

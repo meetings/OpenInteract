@@ -1,6 +1,6 @@
 package OpenInteract::Error::System;
 
-# $Id: System.pm,v 1.2 2001/08/24 20:35:33 lachoy Exp $
+# $Id: System.pm,v 1.5 2001/10/28 02:41:34 lachoy Exp $
 
 use strict;
 use Carp                   qw( cluck );
@@ -8,11 +8,9 @@ use Data::Dumper           qw( Dumper );
 use OpenInteract::Error::Main;
 
 @OpenInteract::Error::System::ISA     = ();
-$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::System::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 my $ERROR_HOLD = $OpenInteract::Error::Main::ERROR_HOLD;
-
-use constant DEBUG      => 0;
 
 # Increment at which we should break down
 # codes if not found (change to 100 for more macro)
@@ -64,7 +62,7 @@ $OpenInteract::Error::System::CODES = {
 
 # Since we can handle any code, we move the checking phase to the error handler
 
-sub can_handle_error { 
+sub can_handle_error {
     my ( $class, $err ) = @_;
 
     # Just find the general handler for that particular code. Here's an
@@ -73,7 +71,7 @@ sub can_handle_error {
     #  1) 512 -> not found -> 510
     #  2) 510 -> not found -> 500
 
-    my $start = $CODE_SEEK; 
+    my $start = $CODE_SEEK;
     my $info = $OpenInteract::Error::System::CODES->{ $err->{code} };
     while ( ! $info ) {
         my $use_code = $err->{code} - ( $err->{code} % $start );
@@ -88,7 +86,9 @@ sub can_handle_error {
 
 sub cannot_parse_config {
     my ( $err ) = @_;
-    cluck ">> Error: Cannot open/parse config file. $err->{tmp_filename} / $err->{system_msg}" if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: Cannot open/parse config file.",
+                       "$err->{tmp_filename} / $err->{system_msg}";
     $err->{notes} = "Filename tried to open: $err->{tmp_filename}";
     OpenInteract::Error::Main->save_error( $err );
     return '<h2 align="center">Website Down</h2>' .
@@ -103,35 +103,37 @@ sub cannot_parse_config {
 
 sub cannot_connect_db {
     my ( $err ) = @_;
-    cluck ">> Error: Cannot connect to db. Info:\n", Dumper( $err->{tmp_db_info} ) if ( DEBUG );
     my $R = OpenInteract::Request->instance;
+    $R->DEBUG &&  cluck ">> Error: Cannot connect to db. Info:\n",
+                        Dumper( $err->{tmp_db_info} ) ;
     my $C = $R->CONFIG;
-    $err->{error_id} = $err->generate_random_code( 16 ); 
-  
+    $err->{error_id} = $err->generate_random_code( 16 );
+
     # First send an email
 
     my $msg = <<MSG;
 
-Website Name: $C->{website_name}
+Website Name: $C->{server_info}{website_name}
 
-Something terrible has happened: I cannot connect to 
-the database or a previous connection has been dropped. 
-If you do not fix this soon, you will have an angry 
+Something terrible has happened: I cannot connect to
+the database or a previous connection has been dropped.
+If you do not fix this soon, you will have an angry
 mob of users on your hands.
 
  Error Code: $err->{error_id}
- (written out to $R->{dir}->{base}/error)
- 
+ (written out to $R->{dir}{base}/error)
+
 Your friendly OpenInteract System
 MSG
-    eval { OpenInteract::Utility->send_email({ to      => $R->CONFIG->{admin_email}, 
+    eval { OpenInteract::Utility->send_email({ to      => $R->CONFIG->{mail}{admin_email} ||
+                                                          $R->CONFIG->{admin_email},
                                                message => $msg,
                                                subject => 'Cannot connect to database!' }) };
     if ( $@ ) {
         $err->{notes} = "Cannot send email to admin; saved email msg";
         $R->throw({ code => 203 });
-    } 
-    else { 
+    }
+    else {
         $err->{notes} = 'E-mail sent to admin ok.';
     }
     $err->{notes} = "DB connection info:", Dumper( $err->{tmp_db_info} );
@@ -149,7 +151,9 @@ MSG
 
 sub cannot_open_template {
     my ( $err ) = @_;
-    cluck ">> Error: cannot open template. $err->{tmp_filename} / $err->{system_msg}" if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: cannot open template.",
+                       "$err->{tmp_filename} / $err->{system_msg}";
     $err->{user_msg} = 'Could not open template file';
     $err->{notes} = "Filename tried to open: $err->{tmp_filename}";
     OpenInteract::Error::Main->save_error( $err );
@@ -159,9 +163,11 @@ sub cannot_open_template {
 
 sub cannot_parse_template {
     my ( $err ) = @_;
-    cluck ">> Error: cannot parse template. $err->{tmp_filename} / $err->{system_msg}" if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: cannot parse template.",
+                       "$err->{tmp_filename} / $err->{system_msg}";
     $err->{user_msg} = 'Could not process template';
-    $err->{notes} = "Filename tried to open: $err->{tmp_filename} (if blank, we used text passed in)"; 
+    $err->{notes} = "Filename tried to open: $err->{tmp_filename} (if blank, we used text passed in)";
     OpenInteract::Error::Main->save_error( $err );
     return "[[ error processing directive: template error ]]";
 }
@@ -172,11 +178,11 @@ sub cannot_send_mail {
     my $mail_info = $OpenInteract::Error::extra;
     OpenInteract::Error::Main->save_error( $err );
     my $R = OpenInteract::Request->instance;
-    my $filename = $R->CONFIG->get_dir( 'mail' ) . "/msg_$err->{error_id}"; 
+    my $filename = $R->CONFIG->get_dir( 'mail' ) . "/msg_$err->{error_id}";
     eval { open( MAIL, "> $filename" ) || die $! };
     if ( $@ ) {
-        $R->scrib( 0, "Good gravy! I cannot send an email, and I cannot open up a file to dump\n", 
-                      "the email into. (Tried: (($filename)) and got (($@)) in return.)\n", 
+        $R->scrib( 0, "Good gravy! I cannot send an email, and I cannot open up a file to dump\n",
+                      "the email into. (Tried: (($filename)) and got (($@)) in return.)\n",
                       "I'll just put it into STDERR and you can deal with it.\n\n", Dumper( $mail_info ), "\n" );
         return undef;
     }
@@ -192,7 +198,9 @@ sub cannot_send_mail {
 
 sub cannot_open_template_db {
     my ( $err ) = @_;
-    cluck ">> Error: cannot open template. $err->{tmp_name} / $err->{system_msg}" if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: cannot open template.",
+                       "$err->{tmp_name} / $err->{system_msg}";
     $err->{user_msg} = 'Could not open template from database';
     $err->{notes} = "Tag tried to open with: $err->{tmp_name}";
     OpenInteract::Error::Main->save_error( $err );
@@ -202,11 +210,12 @@ sub cannot_open_template_db {
 
 sub cannot_find_login_fields {
     my ( $err ) = @_;
-    cluck ">> Error: cannot find login/password fields!" if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: cannot find login/password fields!";
     $err->{user_msg}   = 'No login/password fields specified!';
     $err->{system_msg} = "Please create entries in your 'conf/server.perl' file under " .
                          "the 'login->login_field' and 'login->password_field' keys. I cannot " .
-                         "process logins until this is done. Remember to restart the server after " . 
+                         "process logins until this is done. Remember to restart the server after " .
                          "you have made the change.";
     OpenInteract::Error::Main->save_error( $err );
     return undef;
@@ -215,15 +224,17 @@ sub cannot_find_login_fields {
 
 #300
 
+# Syntax: $R->throw({ code => 314, system_msg => '/location/notfound' });
+
 sub file_not_found {
     my ( $err ) = @_;
-    cluck ">> Error: cannot find or open requested file: $err->{system_msg}"           if ( DEBUG );
+    my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: cannot find or open requested location *$err->{system_msg})";
     $err->{user_msg} = 'Requested file not found or cannot be opened';
     OpenInteract::Error::Main->save_error( $err );
-    my $R = OpenInteract::Request->instance;
-    $R->{page}->{title} = 'Sorry: File not found';
-    my $html = $R->template->handler( {}, { err => $err }, { db      => 'err_not_found',
-                                                             package => 'base_error' } );
+    $R->{page}{title} = 'Sorry: Action not found';
+    my $html = $R->template->handler( {}, { err => $err },
+                                      { name => 'error_not_found' } );
     die "$html\n";
 }
 
@@ -237,76 +248,76 @@ sub cannot_log_object_creation {
 
 sub task_is_forbidden {
     my ( $err ) = @_;
-    cluck ">> Error: Cannot do task due to security: $err->{system_msg}"       if ( DEBUG );
     my $R = OpenInteract::Request->instance;
-    my $html = $R->template->handler( {}, 
-                                      { err => $err, 
-                                        admin_email => $R->CONFIG->{admin_email} },
-                                      { db      => 'err_task_forbidden',
-                                        package => 'base_error' } );
+    $R->DEBUG && cluck ">> Error: Cannot perform task due to security ($err->{system_msg})";
+    my $html = $R->template->handler( {},
+                                      { err => $err,
+                                        admin_email => $R->CONFIG->{mail}{admin_email} ||
+                                                       $R->CONFIG->{admin_email} },
+                                      { name => 'error_task_forbidden' } );
     die "$html\n";
 }
 
 
 sub task_no_default {
     my ( $err ) = @_;
-    $err->{user_msg} = 'No default method defined'; 
-    cluck ">> Error: Cannot do task due to no default: $err->{system_msg}"     if ( DEBUG );
     my $R = OpenInteract::Request->instance;
+    $err->{user_msg} = 'No default method defined';
+    $R->DEBUG && cluck ">> Error: Cannot do task due to no default: $err->{system_msg}";
 
     # First send an email
 
-    eval { OpenInteract::Utility->send_email({ to      => $err->{tmp_email}, 
+    eval { OpenInteract::Utility->send_email({ to      => $err->{tmp_email},
                                                message => $err->{tmp_msg},
                                                subject => $err->{tmp_subject} }) };
     if ( $@ ) {
         $err->{notes} = "Cannot send email to author; saved email msg";
         $R->throw({ code => 203 });
-    } 
+    }
     else {
         $err->{notes} = 'E-mail sent to author ok.';
     }
     OpenInteract::Error::Main->save_error( $err );
-    my $html = $R->template->handler( {}, 
-                                      { err => $err, 
+    my $html = $R->template->handler( {},
+                                      { err => $err,
                                         author_email => $err->{tmp_email} },
-                                      { db      => 'err_task_no_default',
-                                        package => 'base_error' } );
+                                      { name => 'error_task_no_default' } );
     die "$html\n";
 }
 
 
 sub task_not_allowed_security {
     my ( $err ) = @_;
-    cluck ">> Error: Cannot accomplish task due to security."                  if ( DEBUG );
     my $R = OpenInteract::Request->instance;
-    my $html = $R->template->handler( {}, 
+    $R->DEBUG && cluck ">> Error: Cannot accomplish task due to security.";
+    my $html = $R->template->handler( {},
                                       { err => $err,
-                                        admin_email => $R->CONFIG->{admin_email}  },
-                                      { db      => 'err_task_forbidden',
-                                        package => 'base_error' } );
+                                        admin_email => $R->CONFIG->{mail}{admin_email} ||
+                                                       $R->CONFIG->{admin_email}  },
+                                      { name => 'error_task_forbidden' } );
     die "$html\n";
 }
 
 
 sub cannot_retrieve_object_of_id {
     my ( $err ) = @_;
-    cluck ">> Error: Cannot retrieve object given a particular ID."            if ( DEBUG );
     my $R = OpenInteract::Request->instance;
+    $R->DEBUG && cluck ">> Error: Cannot retrieve object given a particular ID.";
 
     # First send an email
 
     my $msg = <<'';
-For some reason beyond security, a user could not retrieve an object 
+For some reason beyond security, a user could not retrieve an object
 given a particular ID. You might want to look into it.
 
-    eval { OpenInteract::Utility->send_email({ to      => $R->CONFIG->{admin_email}, 
+    eval { OpenInteract::Utility->send_email({ to      => $R->CONFIG->{mail}{admin_email} || 
+                                                          $R->CONFIG->{admin_email},
                                                message => $msg,
                                                subject => 'Failed to retrieve object' }) };
     if ( $@ ) {
         $err->{notes} = "Cannot send email to admin; saved email msg";
         $R->throw( { code => 203 } );
-    } 
+    }
     else {
         $err->{notes} = 'E-mail sent to admin ok.';
     }
@@ -320,7 +331,7 @@ sub cannot_create_session {
     my $R = OpenInteract::Request->instance;
     $R->scrib( 0, "Cannot create session -- someone is probably using a ",
                   "defunct key or something." );
-    $R->cookies->create_cookie({ 
+    $R->cookies->create_cookie({
                    name => $OpenInteract::Session::COOKIE_NAME,
                    path => '/',
                    value => undef,
@@ -333,18 +344,18 @@ sub cannot_create_session {
 
 sub bad_username {
     my ( $err ) = @_;
-    cluck ">> Error: User $err->{tmp_login_name} not found in system"          if ( DEBUG );
     my $R = OpenInteract::Request->instance;
-    $R->{ $ERROR_HOLD }->{loginbox}->{bad_login} = "User $err->{tmp_login_name} not found!";
+    $R->DEBUG && cluck ">> Error: User $err->{tmp_login_name} not found in system";
+    $R->{ $ERROR_HOLD }{loginbox}{bad_login} = "User $err->{tmp_login_name} not found!";
     return undef;
 }
 
 sub bad_password {
     my ( $err ) = @_;
-    cluck ">> Error: User $err->{tmp_login_name} login with wrong password"    if ( DEBUG );
     my $R = OpenInteract::Request->instance;
-    $R->{ $ERROR_HOLD }->{loginbox}->{bad_login}  = "Bad password for $err->{tmp_login_name}; try again.";
-    $R->{ $ERROR_HOLD }->{loginbox}->{login_name} = $err->{tmp_login_name};
+    $R->DEBUG && cluck ">> Error: User $err->{tmp_login_name} login with wrong password";
+    $R->{ $ERROR_HOLD }{loginbox}{bad_login}  = "Bad password for $err->{tmp_login_name}; try again.";
+    $R->{ $ERROR_HOLD }{loginbox}{login_name} = $err->{tmp_login_name};
     return undef;
 }
 
@@ -374,8 +385,8 @@ sub cannot_fetch {
 
 sub log_and_return {
     my ( $err, $opt ) = @_;
-    cluck ">> Error with code $err->{code} thrown. Info: $err->{system_msg}" unless ( $opt eq 'nowarn' );
     my $R = OpenInteract::Request->instance;
+    cluck ">> Error with code $err->{code} thrown. Info: $err->{system_msg}" unless ( $opt eq 'nowarn' );
     $R->DEBUG && $R->scrib( 2, "Trying to save errror ", Dumper( $err ) );
     OpenInteract::Error::Main->save_error( $err );
     return undef;
@@ -415,11 +426,11 @@ B<0-100>: emerg - system is unusable
 
 =over 4
 
-=item * 
+=item *
 
 10: cannot_parse_config
 
-=item * 
+=item *
 
 11: cannot_connect_db
 
@@ -429,7 +440,7 @@ B<100-199>: alert - action must be taken immediately
 
 =over 4
 
-=item * 
+=item *
 
 (none currently)
 

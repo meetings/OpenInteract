@@ -1,6 +1,6 @@
 package OpenInteract::Template::Plugin;
 
-# $Id: Plugin.pm,v 1.13 2001/09/21 17:19:49 lachoy Exp $
+# $Id: Plugin.pm,v 1.17 2001/11/19 04:14:32 lachoy Exp $
 
 use strict;
 use Class::Date     qw( -DateParse );
@@ -13,7 +13,7 @@ use Text::Sentence;
 
 @OpenInteract::Template::Plugin::ISA     = qw( Template::Plugin );
 $OpenInteract::Template::Plugin::VERSION  = '1.2';
-$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Plugin::Revision = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 
 my %SECURITY_CONSTANTS  = (
@@ -122,7 +122,9 @@ sub object_description {
     return $obj->object_description;
 }
 
+
 # Backward compatibility
+
 sub object_info { return object_description( @_ ); }
 
 
@@ -286,20 +288,17 @@ sub _url_escape {
 
 
 ########################################
-# HTML GENERATION (this will probably be bagged)
+# DATA RETRIEVAL
 ########################################
 
-sub form_text {
-    my ( $self, $p ) = @_;
-    my $MAXLENGTH = ( $p->{max} ) ? qq(maxlength="$p->{max}") : '';
-    my $VALIGN    = ( $p->{valign} ) ? qq(valign="$p->{valign}") : '';
-    my $BGCOLOR   = ( $p->{bgcolor} ) ? qq(bgcolor="$p->{bgcolor}") : '';
-    return <<ROW;
-<tr $VALIGN $BGCOLOR>
-   <td>$p->{pre_label}$p->{label}$p->{post_label}</td>
-   <td>$p->{pre_input}<input type="text" size="$p->{size}" $MAXLENGTH value="$p->{value}">$p->{post_input}</td>
-</tr>
-ROW
+# TODO: Figure out how configure this to use a nice API to select only
+# certain users (e.g., pass in a group name, group API, beginning of a
+# last name, etc..
+
+sub get_users {
+    my ( $self ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return eval { $R->user->fetch_iterator({ order => 'login_name' }) };
 }
 
 
@@ -348,6 +347,11 @@ sub login_group {
 }
 
 
+sub is_admin {
+    return OpenInteract::Request->instance->{auth}{is_admin};
+}
+
+
 sub return_url {
     my $R = OpenInteract::Request->instance;
     return $R->{page}{return_url} ||  $R->{path}{original};
@@ -375,6 +379,10 @@ sub session {
     return \%{ OpenInteract::Request->instance->{session} };
 }
 
+sub server_config {
+    return OpenInteract::Request->instance->CONFIG;
+}
+
 
 1;
 
@@ -384,7 +392,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Template::Provider - Retrieve templates for the Template Toolkit
+OpenInteract::Template::Plugin - Custom OpenInteract functionality in templates
 
 =head1 SYNOPSIS
 
@@ -893,6 +901,22 @@ Example:
    <p>You are very special, logged-in user!</p>
  [% END %]
 
+B<is_admin()>
+
+True/false depending on whether the user is an administrator. The
+definition of 'is an administrator' depends on the authentication
+class being used -- by default it means that the user is the superuser
+or a member of the 'site admin' group. But you can modify this based
+on your needs, and make the result available to all templates with
+this property.
+
+Example:
+
+ [% IF OI.is_admin %]
+   <p>You are an administrator -- you have the power! It feels great,
+   eh?</p>
+ [% END %]
+
 B<session()>
 
 Contains all information currently held in the session. Note that
@@ -952,10 +976,20 @@ the value used by the system to represent the security scopes. This
 will rarely be used but exists for completeness with
 C<security_level>.
 
-[% security_scope = OI.security_scope %]
-[% FOREACH scope = security_scope.keys %]
-  OI defines [% scope %] as [% security_scope.$scope %]
-[% END %]
+ [% security_scope = OI.security_scope %]
+ [% FOREACH scope = security_scope.keys %]
+   OI defines [% scope %] as [% security_scope.$scope %]
+ [% END %]
+
+B<server_config()>
+
+Returns the server configuration object (or hashref) -- whatever is
+returned by calling in normal code:
+
+ $R->CONFIG;
+
+ The ID of the site admin group is: 
+  [% OI.server_config.default_objects.site_admin_group %]
 
 =head1 NOTICE
 

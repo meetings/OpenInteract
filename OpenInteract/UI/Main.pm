@@ -1,19 +1,17 @@
 package OpenInteract::UI::Main;
 
-# $Id: Main.pm,v 1.4 2001/09/21 17:10:44 lachoy Exp $
+# $Id: Main.pm,v 1.6 2001/11/29 05:35:11 lachoy Exp $
 
 use strict;
+
+@OpenInteract::UI::Main::ISA     = qw( OpenInteract::Config );
+$OpenInteract::UI::Main::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
 
-    # Put the Popup and other directives here. A 'directive' exists
-    # before the actual url and should have been parsed out in the main
-    # Apache handler (see pkg/base/OpenInteract.pm). The value for the
-    # directive should be the key in the 'template_names' configuration
-    # information which is used below. More information about directives
-    # in the POD.
+    # Put the Popup and other directives here. (See DIRECTIVES in POD.)
 
     if ( my $directive = $R->{ui}{directive} ) { 
         if ( $directive =~ /^(NoTmpl|NoTemplate)$/ ) {
@@ -22,7 +20,8 @@ sub handler {
         }
         else {
             $R->{page}{_template_key_} = $R->CONFIG->{page_directives}{ $directive };
-            $R->DEBUG && $R->scrib( 1, "Using template key from directive: ($R->{page}{_template_key_})" );
+            $R->DEBUG && $R->scrib( 1, "Using template key from directive: ",
+                                       "($R->{page}{_template_key_})" );
         }
     }
 
@@ -44,31 +43,28 @@ sub handler {
 
     # Do our special content cases
 
-    return undef                 if ( $R->{page}{send_file} );
+    return undef               if ( $R->{page}{send_file} );
     return $R->{page}{content} if ( $R->{page}{_no_template_} );
 
-    # $template_key here is being used to lookup a template name within a
-    # theme
+    my $template_name = $R->{page}{_template_name_};
 
-    my $template_key  = $R->{page}{_template_key_};
-    $template_key   ||= 'simple_template' if ( $R->{page}{_simple_} );
-    $template_key   ||= 'main_template';
-    my $db_template_name = $R->{page}{_template_name_} || 
-                           $R->{theme}->property_value( $template_key );
-    my ( $template_pkg, $template_name ) = $R->site_template->parse_name( $db_template_name );
-    unless ( $template_pkg and $template_name ) {
-        $template_name = $db_template_name;
-        $template_pkg  = 'base_theme';
+    # If the template name isn't specified by the request, look for a
+    # template key which we can use to find the template in the theme.
+
+    unless ( $template_name ) {
+        my $template_key  = $R->{page}{_template_key_};
+        $template_key   ||= 'simple_template' if ( $R->{page}{_simple_} );
+        $template_key   ||= 'main_template';
+        $template_name    = $R->{theme}->property_value( $template_key );
     }
 
-    $R->DEBUG && $R->scrib( 1, "Using template <<$db_template_name>> for full page" );
+    $R->DEBUG && $R->scrib( 1, "Using template ($template_name) for full page" );
     $R->{main_template_vars} ||= {};
 
-    return $R->template->handler( {}, 
+    return $R->template->handler( {},
                                   { %{ $R->{main_template_vars} },
                                     page => $R->{page} },
-                                  { db      => $template_name,
-                                    package => $template_pkg } );
+                                  { name => $template_name } );
 }
 
 1;
@@ -108,8 +104,10 @@ content by setting:
 
  $R->{page}{_template_name_}
 
-to the name of the template to use. (This, and all templates named
-here, should be found in the 'base_theme' package.)
+to the name of the template to use. This should be a fully-qualified
+template name -- such as 'mypkg::mytemplate'. If you do not specify a
+package the OI template provider will try to find the template in the
+global template directory.
 
 You can also set a template that might vary by theme. This is not the
 name of the template directly but rather a placeholder within the
@@ -162,7 +160,8 @@ to be sent on its own.
 
 A directive (or 'page directive') is placed before the relevant action
 in the URL and tells OpenInteract to display the content in a certain
-manner.
+manner. The directive should have been parsed out in the main content
+handler (OpenInteract.pm).
 
 For instance:
 

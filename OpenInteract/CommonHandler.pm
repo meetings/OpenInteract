@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.24 2001/10/14 20:56:30 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.28 2001/11/06 04:25:07 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';
@@ -24,12 +24,13 @@ use constant ERROR => '4';
 
 sub search_form {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_SEARCH_FORM ) {
+        $R->scrib( 0, "User requested search_form for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>Objects of this type cannot be searched.</p>';
     }
     $p ||= {};
 
-    my $R = OpenInteract::Request->instance;
     my %params = %{ $p };
     $R->{page}{title} = $class->MY_SEARCH_FORM_TITLE;
 
@@ -49,12 +50,13 @@ sub search_form {
 
 sub search {
     my ( $class, $p ) = @_;
+    my $R   = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_SEARCH ) {
+        $R->scrib( 0, "User requested search for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>Objects of this type cannot be searched.</p>';
     }
     $p ||= {};
 
-    my $R   = OpenInteract::Request->instance;
     my $apr = $R->apache;
 
     my %params = %{ $p };
@@ -77,32 +79,39 @@ sub search {
 
         else {
             $R->DEBUG && $R->scrib( 1, "Running search for the first time" );
-            my $iterator = $class->_search_build_and_run({ is_paged => 1 });
-            $results->save( $iterator );
-            $R->DEBUG && $R->scrib( 1, "Search ID ($results->{search_id})" );
-            $class->_search_save_id( $results->{search_id} );
+            my $iterator = eval { $class->_search_build_and_run({ is_paged => 1 }) };
+            if ( $iterator and ! $@ ) {
+                $results->save( $iterator );
+                $R->DEBUG && $R->scrib( 1, "Search ID ($results->{search_id})" );
+                $class->_search_save_id( $results->{search_id} );
+            }
         }
 
-        $params{page_number_field} =  $class->MY_SEARCH_RESULTS_PAGE_FIELD;
-        $params{current_page} = $apr->param( $params{page_number_field} ) || 1;
-        my $hits_per_page     = $class->MY_SEARCH_RESULTS_PAGE_SIZE;
-        my ( $min, $max )     = $results->find_page_boundaries(
-                                           $params{current_page}, $hits_per_page );
-        $params{iterator}     = $results->retrieve({ min => $min, max => $max,
-                                                     return => 'iterator' });
-        $params{total_pages}  = $results->find_total_page_count( $hits_per_page );
-        $params{total_hits}   = $results->{num_records};
-        $params{search_id}    = $results->{search_id};
-        $params{search_results_key} = $class->MY_SEARCH_RESULTS_KEY;
-        $R->DEBUG && $R->scrib( 1, "Search info: min: ($min); max: ($max)",
-                                   "records ($results->{num_records})" );
+        if ( $results->{search_id} ) {
+            $params{page_number_field} =  $class->MY_SEARCH_RESULTS_PAGE_FIELD;
+            $params{current_page} = $apr->param( $params{page_number_field} ) || 1;
+            my $hits_per_page     = $class->MY_SEARCH_RESULTS_PAGE_SIZE;
+            my ( $min, $max )     = $results->find_page_boundaries(
+                                                  $params{current_page}, $hits_per_page );
+            $params{iterator}     = $results->retrieve({ min => $min, max => $max,
+                                                         return => 'iterator' });
+            $params{total_pages}  = $results->find_total_page_count( $hits_per_page );
+            $params{total_hits}   = $results->{num_records};
+            $params{search_id}    = $results->{search_id};
+            $params{search_results_key} = $class->MY_SEARCH_RESULTS_KEY;
+            $R->DEBUG && $R->scrib( 1, "Search info: min: ($min); max: ($max)",
+                                       "records ($results->{num_records})" );
+        }
     }
 
     # If we're not using paged results, then just run the normal
     # search and get back an iterator
 
     else {
-        $params{iterator} = $class->_search_build_and_run;
+        $params{iterator} = eval { $class->_search_build_and_run };
+        if ( $@ ) {
+            $R->scrib( 0, "Got error from running search: $@" );
+        }
     }
 
     $R->{page}{title} = $class->MY_SEARCH_RESULTS_TITLE;
@@ -151,24 +160,8 @@ sub _search_build_and_run {
     my $object_class = $class->MY_OBJECT_CLASS;
     $R->DEBUG && $R->scrib( 1, "RUN SEARCH (before): ", scalar localtime );
 
-    # If the results are paged, only retrieve the ID field of our
-    # object, and add any fields specified in the ORDER clause as
-    # well. Otherwise just select all fields
-
-    my ( @field_list );
     my $order = $class->MY_SEARCH_RESULTS_ORDER;
-    if ( $p->{is_paged} ) {
-        @field_list = ( $object_class->id_field );
-        if ( $order ) {
-            my @order_items = split( /\s*,\s*/, $order );
-            push @field_list, grep ! /^(ASC|DESC)$/, @order_items;
-        }
-    }
-    else {
-        @field_list = @{ $object_class->field_list };
-    }
     my $iter = eval { $object_class->fetch_iterator({
-					                     field_list => \@field_list,
                                          from       => $tables,  where => $where,
                                          value      => $values,  limit => $limit,
                                          order      => $order }) };
@@ -177,9 +170,11 @@ sub _search_build_and_run {
     return $iter unless ( $@ );
 
     $R->scrib( 0, "Search failed: $@ ($SPOPS::Error::system_msg)\nClass: $class\n",
-                  "FROM:", join( ',', @{ $tables } ), "\n",
-                  "WHERE: $where\n",
-                  "VALUES: ", join( ',', @{ $values } ) );
+                  "FROM", join( ',', @{ $tables } ), "\n",
+                  "WHERE $where\n",
+                  "ORDER BY $order\n",
+                  "VALUES", join( ',', @{ $values } ) );
+    die "Search failed ($SPOPS::Error::system_msg)\n";
 }
 
 
@@ -208,7 +203,8 @@ sub _search_build_criteria {
     }
     $R->DEBUG && $R->scrib( 1, "($class) Found search parameters:\n",
                                Dumper( \%search_params ) );
-    return $class->_search_criteria_customize( \%search_params );
+    $class->_search_criteria_customize( \%search_params );
+    return \%search_params
 }
 
 
@@ -227,9 +223,9 @@ sub _search_build_where_clause {
     my $object_class = $class->MY_OBJECT_CLASS;
     my $object_table = $object_class->base_table;
     my %from_tables  = ( $object_table => 1 );
-    my %exact_match        = map { $_ => 1 } $class->MY_SEARCH_FIELDS_EXACT;
-    my %left_exact_match   = map { $_ => 1 } $class->MY_SEARCH_FIELDS_LEFT_EXACT;
-    my %right_exact_match  = map { $_ => 1 } $class->MY_SEARCH_FIELDS_RIGHT_EXACT;
+    my %exact_match        = map { $_ => 1 } $class->_fq_fields( $class->MY_SEARCH_FIELDS_EXACT );
+    my %left_exact_match   = map { $_ => 1 } $class->_fq_fields( $class->MY_SEARCH_FIELDS_LEFT_EXACT );
+    my %right_exact_match  = map { $_ => 1 } $class->_fq_fields( $class->MY_SEARCH_FIELDS_RIGHT_EXACT );
 
     # Go through each of the criteria set -- note that each one must
     # be a fully-qualified (table.field) fieldname or it is discarded.
@@ -355,20 +351,47 @@ sub _search_build_where_clause {
 }
 
 
+# Take a list of fields and ensure that each one is fully-qualified
+
+sub _fq_fields {
+    my ( $class, @fields ) = @_;
+    my $object_class = $class->MY_OBJECT_CLASS;
+    my $object_table = $object_class->base_table;
+    return map { ( /\./ ) ? $_ : "$object_table.$_" } @fields;
+}
+
 
 
 ########################################
 # DISPLAY
 ########################################
 
+
+sub create {
+    my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
+    unless ( $class->MY_ALLOW_CREATE ) {
+        $R->scrib( 0, "User requested create for ($class) and it's not allowed." );
+        return '<h1>Error</h1><p>New objects of this type cannot be created.</p>';
+    }
+    unless ( $p->{level} >= $class->MY_OBJECT_CREATE_SECURITY ) {
+        $R->scrib( 0, "Request for create ($class) denied - inadequate security" );
+        return '<h1>Error</h1><p>You do not have permission to create new objects.</p>';
+    }
+    $p->{edit} = 1;
+    return $class->show( $p );
+}
+
+
 sub show {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_SHOW ) {
+        $R->scrib( 0, "User requested show for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>Objects of this type cannot be viewed.</p>';
     }
     $p ||= {};
 
-    my $R = OpenInteract::Request->instance;
     my %params = %{ $p };
 
     # Assumption: Only users with SEC_LEVEL_WRITE can edit. Maybe
@@ -376,8 +399,7 @@ sub show {
     # object_create_level so we can have different security levels for
     # create and modify?
 
-    $params{do_edit} = ( $R->apache->param( 'edit' ) and
-                         $p->{level} >= SEC_LEVEL_WRITE );
+    $params{do_edit} = ( $p->{edit} or $R->apache->param( 'edit' ) );
 
     # Setup our default info
 
@@ -388,18 +410,20 @@ sub show {
                  eval { $class->fetch_object( $p->{ $id_field }, $id_field ) };
     return $class->search_form({ error_msg => $@ }) if ( $@ );
 
-    # Ensure the object can be edited
+    # Ensure the object can be edited -- remember, 'fetch_object'
+    # ALWAYS returns an object or dies, so don't add another clause
+    # testing for the existence of $object
 
     unless ( $params{do_edit} or $object->is_saved ) {
-        my $error_msg = 'Sorry, did not specify an object to display nor did ' .
-                        'you request to edit an object. (Try: "?edit=1" at the ' .
-                        'end of your URL.)';
+        $R->scrib( 0, "User has requested static display on a new object -- bailing." );
+        my $error_msg = 'Sorry, I could not display the object you requested.';
         return $class->search_form({ error_msg => $error_msg });
     }
 
     # Set both 'object' and the object type equal to the object so the
     # template can use either.
 
+    $params{task_security} = $p->{level};
     $params{object} = $params{ $object_type } = $object;
     $R->{page}{title} = $class->MY_OBJECT_FORM_TITLE;
 
@@ -418,12 +442,13 @@ sub show {
 
 sub edit {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_EDIT ) {
-        my $error_msg = 'Objects of this type cannot be edited. No action done.';
-        return $class->search_form({ error_msg => $error_msg });
+        $R->scrib( 0, "User requested edit for ($class) and it's not allowed." );
+        return $class->search_form({
+                 error_msg => 'Objects of this type cannot be modified.' });
     }
 
-    my $R = OpenInteract::Request->instance;
     $R->{page}{return_url} = $class->MY_EDIT_RETURN_URL;
 
     # Setup default info
@@ -435,7 +460,7 @@ sub edit {
 
     # If we cannot fetch the object for editing, there's clearly a bad
     # error and we should go back to the search form rather than the
-    # display form
+    # display form.
 
     return $class->search_form({ error_msg => $@ }) if ( $@ );
 
@@ -448,6 +473,9 @@ sub edit {
                         'object. No modifications made.';
         return $class->search_form({ error_msg => $error_msg });
     }
+
+    # We pass this to the customization routine so you can do
+    # comparisons, set off triggers based on changes, etc.
 
     my $old_data = $object->as_data_only;
 
@@ -468,7 +496,7 @@ sub edit {
     }
 
     my %show_params = ();
-    eval { $object->save };
+    eval { $object->save( $opts ) };
     if ( $@ ) {
         my $ei = OpenInteract::Error->set( SPOPS::Error->get );
         $R->scrib( 0, "Object ($object_type) save failed: $@ ($ei->{system_msg})" );
@@ -541,17 +569,23 @@ sub _read_field_toggled {
 }
 
 
-# Default is to interpret YYYYMMDD into YYYY-MM-DD
+# Default is to have the year, month and day in three separate fields.
 
 sub _read_field_date {
     my ( $class, $apr, $field ) = @_;
-    my $date_value = $apr->param( $field );
-    $date_value =~ s/\D//g;
-    my ( $y, $m, $d ) = $date_value =~ /^(\d\d\d\d)(\d\d)(\d\d)$/;
+    my ( $y, $m, $d ) = ( $apr->param( $field . '_year' ),
+                          $apr->param( $field . '_month' ),
+                          $apr->param( $field . '_day' ) );
     return undef unless ( $y and $m and $d );
     return join( '-', $y, $m, $d );
-}
+ }
 
+
+sub _read_field_date_object {
+    my ( $class, $apr, $field ) = @_;
+    my $date = $class->_read_field_date( $apr, $field );
+    return Class::Date->new( $date );
+}
 
 
 ########################################
@@ -560,13 +594,13 @@ sub _read_field_date {
 
 sub remove {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_REMOVE ) {
-        my $error_msg = 'Objects of this type cannot be removed from the ' .
-                        'database. No modification made.';
-        return $class->search_form({ error_msg => $error_msg });
+        $R->scrib( 0, "User requested remove for ($class) and it's not allowed." );
+        return $class->search_form({
+                  error_msg => 'Objects of this type cannot be removed.' });
     }
 
-    my $R = OpenInteract::Request->instance;
     my $apr = $R->apache;
 
     my $object_type  = $class->MY_OBJECT_TYPE;
@@ -606,6 +640,54 @@ sub remove {
 }
 
 
+
+########################################
+# NOTIFY
+########################################
+
+
+sub notify {
+    my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
+    unless ( $class->MY_ALLOW_NOTIFY ) {
+        $R->scrib( 0, "User requested notify for ($class) and it's not allowed." );
+        return '<h1>Error</h1><p>Objects of this type cannot be sent.';
+    }
+
+    my $apr = $R->apache;
+    my $object_class = $class->MY_OBJECT_CLASS;
+    my @id_list      = $p->{id_list} || $apr->param( $class->MY_NOTIFY_ID_FIELD );
+    my $email        = $p->{email}   || $apr->param( $class->MY_NOTIFY_EMAIL_FIELD );
+    unless ( $email ) {
+        return '<h2 align="center">Error</h2>' .
+               '<p>Error: Cannot run notification: no email address given.</p>';
+    }
+    unless ( scalar @id_list ) {
+        return '<h2 align="center">Error</h2>' .
+               '<p>Error: Cannot run notification: no objects specified.</p>';
+    }
+
+    my @object_list = ();
+    foreach my $id ( @id_list ) {
+        my $object = eval { $object_class->fetch( $id ) };
+        push @object_list, $object    if ( $object );
+    }
+    my %params = ( from_email => $class->MY_NOTIFY_FROM,
+                   email      => $email,
+                   subject    => $class->MY_NOTIFY_SUBJECT,
+                   object     => \@object_list,
+                   notes      => $apr->param( $class->MY_NOTIFY_NOTES_FIELD ),
+                   type       => $class->MY_OBJECT_TYPE );
+    $class->_notify_customize( \%params );
+    if ( OpenInteract::SPOPS->notify( \%params ) ) {
+        return '<h2 align="center">Success!</h2>' .
+               '<p>Notification sent properly!</p>';
+    }
+    return '<h2 align="center">Error</h2>' .
+           '<p>Error sending email. Please check error logs!</p>';
+}
+
+
 ########################################
 # WIZARD
 ########################################
@@ -618,12 +700,13 @@ sub remove {
 
 sub wizard {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_WIZARD ) {
+        $R->scrib( 0, "User requested wizard for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>The wizard is not enabled for these objects.</p>';
     }
     $p ||= {};
 
-    my $R = OpenInteract::Request->instance;
     my %params = %{ $p };
 
     $R->{page}{title} = $class->MY_WIZARD_FORM_TITLE;
@@ -644,14 +727,15 @@ sub wizard {
 
 sub wizard_search {
     my ( $class, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
     unless ( $class->MY_ALLOW_WIZARD ) {
+        $R->scrib( 0, "User requested wizard search for ($class) and it's not allowed." );
         return '<h1>Error</h1><p>The wizard is not enabled for these objects.</p>';
     }
     $p ||= {};
 
-    my $R = OpenInteract::Request->instance;
     my %params = %{ $p };
-    $params{iterator} = $class->_search_build_and_run({ max => 50 });
+    $params{iterator} = $class->_search_build_and_run({ max => $class->MY_WIZARD_RESULTS_MAX });
 
     $R->{page}{title} = $class->MY_WIZARD_RESULTS_TITLE;
     $R->{page}{_simple_}++;
@@ -775,12 +859,6 @@ sub MY_PACKAGE {
 sub MY_OBJECT_TYPE {
     die "Please define class method MY_OBJECT_TYPE() in $_[0]\n";
 }
-sub MY_SEARCH_FIELDS {
-    die "Please define class method MY_SEARCH_FIELDS() in $_[0]\n";
-}
-sub MY_EDIT_FIELDS {
-    die "Please define class method MY_EDIT_FIELDS() in $_[0]\n";
-}
 
 
 ########################################
@@ -798,6 +876,7 @@ sub MY_SEARCH_FORM_TITLE         { return 'Search Form' }
 sub MY_SEARCH_FORM_TEMPLATE      { return 'search_form' }
 
 sub MY_ALLOW_SEARCH              { return 1 }
+sub MY_SEARCH_FIELDS             { return () }
 sub MY_SEARCH_FIELDS_EXACT       { return () }
 sub MY_SEARCH_FIELDS_LEFT_EXACT  { return () }
 sub MY_SEARCH_FIELDS_RIGHT_EXACT { return () }
@@ -814,17 +893,29 @@ sub MY_ALLOW_SHOW                { return 1 }
 sub MY_OBJECT_FORM_TITLE         { return 'Object Detail' }
 sub MY_OBJECT_FORM_TEMPLATE      { return 'object_form' }
 
+sub MY_ALLOW_CREATE              { return undef }
+sub MY_OBJECT_CREATE_SECURITY    { return SEC_LEVEL_WRITE }
+
 sub MY_ALLOW_EDIT                { return undef }
 sub MY_EDIT_RETURN_URL           { return $_[0]->MY_HANDLER_PATH . '/' }
+sub MY_EDIT_FIELDS               { return () }
 sub MY_EDIT_FIELDS_TOGGLED       { return () }
 sub MY_EDIT_FIELDS_DATE          { return () }
 sub MY_EDIT_DISPLAY_TASK         { return 'show' }
 
 sub MY_ALLOW_REMOVE              { return undef }
 
+sub MY_ALLOW_NOTIFY              { return undef }
+sub MY_NOTIFY_FROM               { return undef }
+sub MY_NOTIFY_SUBJECT            { return '' }
+sub MY_NOTIFY_ID_FIELD           { my $oc = $_[0]->MY_OBJECT_CLASS; return $oc->id_field }
+sub MY_NOTIFY_EMAIL_FIELD        { return 'email' }
+sub MY_NOTIFY_NOTES_FIELD        { return 'notes' }
+
 sub MY_ALLOW_WIZARD              { return undef }
 sub MY_WIZARD_FORM_TITLE         { return 'Wizard: Search' }
 sub MY_WIZARD_FORM_TEMPLATE      { return 'wizard_form' }
+sub MY_WIZARD_RESULTS_MAX        { return 50 }
 sub MY_WIZARD_RESULTS_TITLE      { return 'Wizard: Results' }
 sub MY_WIZARD_RESULTS_TEMPLATE   { return 'wizard_results' }
 
@@ -833,10 +924,11 @@ sub MY_WIZARD_RESULTS_TEMPLATE   { return 'wizard_results' }
 # CUSTOMIZATION INTERFACE
 ########################################
 
-# Template param modifications
+# Template/param modifications
 sub _search_form_customize        { return 1 }
 sub _search_customize             { return 1 }
 sub _show_customize               { return 1 }
+sub _notify_customize             { return 1 }
 sub _wizard_form_customize        { return 1 }
 sub _wizard_search_customize      { return 1 }
 
@@ -892,17 +984,21 @@ OpenInteract::CommonHander - Base class that with a few configuration items take
  sub MY_ALLOW_SEARCH_FORM       { return 1 }
  sub MY_ALLOW_SEARCH            { return 1 }
  sub MY_ALLOW_SHOW              { return 1 }
+ sub MY_ALLOW_CREATE            { return 1 }
  sub MY_ALLOW_EDIT              { return 1 }
  sub MY_ALLOW_REMOVE            { return undef }
  sub MY_ALLOW_WIZARD            { return undef }
+ sub MY_ALLOW_NOTIFY            { return 1 }
 
- # We present dates to the user in three separate fields
+ # My date format is for users to type in 'yyyymmdd'
 
  sub _read_field_date {
-     my ( $class, $apr, $field ) = @_;
-     return join( '-', $apr->param( $field . '_year' ),
-                       $apr->param( $field . '_month' ),
-                       $apr->param( $field . '_day' ) );
+    my ( $class, $apr, $field ) = @_;
+    my $date_value = $apr->param( $field );
+    $date_value =~ s/\D//g;
+    my ( $y, $m, $d ) = $date_value =~ /^(\d\d\d\d)(\d\d)(\d\d)$/;
+    return undef unless ( $y and $m and $d );
+    return join( '-', $y, $m, $d );
  }
 
  1;
@@ -922,175 +1018,125 @@ needs, it is very easy to still let this class do most of the work and
 you can concentrate on the differences, making more maintainable code
 and more sane programmers.
 
-=head1 TASK METHODS
-
-This class supplies the following methods for direct use as
-actions. If you override one, you need to supply content. You can, of
-course, add your own methods (e.g., a 'summary()' method which
-displays the object information in static detail along with related
-objects).
-
-B<search_form()>
-
-Display a search form.
-
-B<search()>
-
-Execute a search and display results.
-
-B<show()>
-
-Display a single record.
-
-B<edit()>
-
-Modify a single record.
-
-B<remove()>
-
-Remove a single record.
-
-B<wizard()>
-
-Start the search wizard (generally display a search criteria page).
-
-B<wizard_search()>
-
-Run the search wizard and display the results.
-
-=head1 CUSTOM BEHAVIOR
+We break the process down into tasks, each task basically
+corresponding to a particular URL class. (For instance,
+'/MyApp/show/?myobject_id=4927' is a 'show' task that displays the
+object with ID 4927.)
 
 Every task allows you to customize an object, means for finding
 objects or the parameters passed to the template. Each of these
 methods take two arguments -- the first argument is always the class,
 and the second is either the information (object, search criteria) to
-be modified or a hashref of template parameters.
+be modified or a hashref of template parameters. (More detail below.)
 
-=head2 Template Customizations
+In this documentation, we first list all the available tasks with a
+brief description of what they do. Note that these are tasks
+implemented for you, you are B<always> free to create your own.
+
+Next, we go into depth for each task and describe how you configure it
+and how you can customize its behavior.
+
+=head1 TASK METHODS
+
+This class supplies the following methods for direct use as tasks. If
+you override one, you need to supply content. You can, of course, add
+your own methods (e.g., a 'summary()' method which displays the object
+information in static detail along with related objects).
+
+=over 4
+
+=item *
+
+B<search_form()>: Display a search form.
+
+=item *
+
+B<search()>: Execute a search and display results.
+
+=item *
+
+B<create()>: Alias for C<show()> that displays an entry form for a
+single record.
+
+=item *
+
+B<show()>: Display a single record.
+
+=item *
+
+B<edit()>: Modify a single record.
+
+=item *
+
+B<remove()>: Remove a single record.
+
+=item *
+
+B<notify()>: Email one or more objects in human-readable format.
+
+=item *
+
+B<wizard()>: Start the search wizard (generally display a search
+criteria page).
+
+=item *
+
+B<wizard_search()>: Run the search wizard and display the results.
+
+=back
+
+=head1 CUSTOMIZATION TYPES
+
+=over 4
+
+=item *
+
+B<Template Customizations>
 
 These methods allow you to step in and modify any template parameters
 that you like.
 
 You can modify the template that any of these will use by setting the
-parameter 'template_name'.
-
-B<_search_form_customize( \%template_params )>
-
-Typically there are no parameters to set/manipulate except possibly
-'error_msg' or 'status_msg' if called from other methods.
-
-B<_search_customize( \%template_params )>
-
-If you are not using paged results there is only the parameter
-'iterator' set. If you use paged results, then there is 'iterator' as
-well as:
-
-=over 4
+parameter 'template_name'. If you set the template name yourself you
+need to set it to a fully-qualified name, such as
+'mypackage::mytemplate'.
 
 =item *
 
-C<page_number_field>
+B<Data Customizations>
 
-=item *
+These methods allow you to step in and modify the data being displayed
+or processed. Read up on the specific customization method for the
+exact parameters you can change and what is available to you.
 
-C<current_page>
+=head1 OVERALL
 
-=item *
+These are configuration and customization items that are not specific
+to a particular task.
 
-C<total_pages>
+=head2 Configuration
 
-=item *
+B<MY_PACKAGE()> ($)
 
-C<total_hits>
+Name of this package.
 
-=item *
+B<MY_OBJECT_TYPE()> ($)
 
-C<search_id>
+Object type (e.g., 'user', 'news', etc.)
 
-=item *
+B<MY_HANDLER_PATH()> ($) (optional)
 
-C<search_results_key>
+Path of handler.
 
-=back
+Default: '/' . MY_OBJECT_TYPE
 
-B<_show_customize( \%template_params )>
+B<MY_OBJECT_CLASS()> ($) (optional)
 
-Typically there are only the parameters 'object' and C<MY_OBJECT_TYPE>
-set to the same value.
+Object class.
 
-=head2 Data Customization
+Default: Gets object class from C<$R> using C<MY_OBJECT_TYPE>:
 
-B<_search_criteria_customize( \%search_criteria )>
-
-Modify the items in C<\%search_criteria> as necessary. The format is
-simple: a key is a fully-qualified (table.field) fieldname, and its
-value is either a scalar or arrayref depending on whether multiple
-values were passed.
-
-Returns: hashref of search criteria.
-
-For instance, say we wanted to restrict searches to all objects with
-an 'active' property of 'yes':
-
- sub _search_criteria_customize {
-    my ( $class, $criteria ) = @_;
-    $criteria->{'mytable.active'} = 'yes';
-    return $criteria;
- }
-
-Easy! Other possibilities include selecting objects based on qualities
-of the user -- say certain objects should only be included in a search
-if the user is a member of a particular group. Since C<$R> is
-available to you, it is simple to check whether the user is a member
-of a group and make necessary modifications.
-
-Note that you must use the fully-qualified 'table.field' format for
-the criteria key, or the criterion will be discarded.
-
-The method should always return the hashref of criteria. Failure to do
-so will likely retrieve all objects in the database, which is
-frequently a Bad Thing.
-
-B<_search_build_where_customize( \@tables, \@where, \@values )>
-
-Allows you to hand-modify the WHERE clause that will be used for
-searching. If you override this method, you will be passed three
-arguments:
-
-=over 4
-
-=item 1.
-
-An arrayref of tables that are used in the WHERE clause -- they become
-the FROM clause of our search SELECT. If you add a JOIN or other
-clause that depends on a separate table then be sure to add it here --
-otherwise the search will fail mightily.
-
-=item 2.
-
-An arrayref of operations that will be joined together with 'AND'
-before being passed to the C<search()> method.
-
-=item 3.
-
-An arrayref of values that will be plugged into the operations.
-
-=back
-
-This might seem a little confusing, but as usual it is easier to show
-than tell. For example, we want to allow the user to select a date in
-a search form and find all items one week after and one week before
-that date.
-
- sub _search_build_where_customize {
-     my ( $class, $table, $where, $value ) = @_;
-     my $R = OpenInteract::Request->instance;
-     my $search_date = $class->_read_field_date( 'pivot_date' );
-     push @{ $where },
-       "( TO_DAYS( ? ) BETWEEN ( TO_DAYS( pivot_date ) + 7 ) " .
-       "AND ( TO_DAYS( pivot_date ) - 7 ) )";
-     push @{ $value }, $search_date;
- }
+=head2 Customizatiion
 
 B<_fetch_object_customize( $object )>
 
@@ -1102,229 +1148,153 @@ Note that C<fetch_object()> is not called when returning objects from
 a search, only when manipulating a single object with C<show()>,
 C<edit()> or C<remove()>.
 
-B<_edit_customize( $object, \%old_data )>
+=head1 TASK: SEARCH FORM
 
-Called just before an object is saved to the datastore. This is most
-useful to perform any custom data retrieval, data manipulation or
-validation. Data present in the object before any modifications is
-passed as a hashref in the second argument.
+=head2 Configuration
 
-Return value is a two-element list: the first is the status -- either
-'OK' or 'ERROR' as exported by this module. The second is only used if
-the status is 'ERROR' -- it should be a hashref of options for
-executing the next step on an error.
+B<MY_ALLOW_SEARCH_FORM()> (bool) (optional)
 
-For instance, if you want to do data validation you might do something
-like:
+Should the search form be viewed?
 
- package My::Handler::MyHander;
+Default: true
 
- use OpenInteract::CommonHandler qw( OK ERROR );
+B<MY_SEARCH_FORM_TITLE()> ($) (optional)
 
- my @required_field = qw( name quest favorite_color );
- my %required_label = ( name => 'Name', quest => 'Quest',
-                        favorite_color => 'Favorite Color' );
+Set the title for the search form.
 
- # ... Override the various configuration routines ...
+Default: 'Search for Thingies'
 
- sub _edit_customize {
-     my ( $class, $object, $old_data ) = @_;
-     my @msg = ();
-     foreach my $field ( @required_field ) {
-        unless ( $object->{ $field } ) {
-            push @msg, "$required_label{ $field } is a required field. " .
-                       "Please enter data for it.";
-        }
-     }
-     return ( OK, undef ) unless ( scalar @msg );
-     return ( ERROR, { error_msg => join( "<br>\n", @msg ),
-                       method    => 'show' } );
- }
+B<MY_SEARCH_FORM_TEMPLATE()> ($) (optional)
 
-So if any of the required fields are not filled in, the method returns
-'ERROR' and a hashref with the method to execute on error, in this
-case 'show' to redisplay the same object along with the error message
-to display.
+Name of the search form template.
 
-You can specify an action to execute in one of three ways:
+Default: C<MY_PACKAGE> . '::search_form'
 
-=over 4
+=head2 Customization
 
-=item *
+B<_search_form_customize( \%template_params )>
 
-B<method>: Calls C<$method()> in the current class.
+Template customization. Typically there are no parameters to
+set/manipulate except possibly 'error_msg' or 'status_msg' if called
+from other methods.
 
-=item *
+=head1 TASK: SEARCH
 
-B<class>, B<method>: Calls C<$class-E<gt>$method()>.
+=head2 Configuration
 
-=item *
+B<MY_ALLOW_SEARCH()> (bool) (optional)
 
-B<action>: Calls the method and class specified by C<$action>.
+Should searches be allowed?
 
-=back
+Default: true
 
-B<_remove_customize( $object )>
+B<MY_SEARCH_RESULTS_PAGED()> (bool) (optional)
 
-Called just before an object is removed from the datastore.
+Set to a true value to enable paged results, meaning that search
+results will come back in groups of B<MY_SEARCH_RESULTS_PAGE_SIZE>. We
+use the methods in 'results_manage' to accomplish this.
 
-=head2 Wizards
+Note: If your objects are not retrievable through a single ID field,
+you will not be able to page your results automatically. You should be
+able to do this by hand in the future.
 
-This class contains some simple support for search wizards. With such
-a wizard you can use OpenInteract in conjunction with JavaScript to
-implement a 'Find...' widget so you can link one object to another
-easily.
+Default: false.
 
-#TODO: Add more here as this gets completed.
+B<MY_SEARCH_RESULTS_PAGE_FIELD()> ($) (optional)
 
-=head1 INTERNAL BEHAVIOR
+If B<MY_SEARCH_RESULTS_PAGED> is true this is the parameter we will
+check to see what page number of the results the user is requesting.
 
-B<_search_build_criteria()>
+Default: 'pagenum'.
 
-Scans the GET/POST for relevant (as specified by C<MY_SEARCH_FIELDS>)
-search criteria and puts them into a hashref. Multiple values are put
-into an arrayref, single values into a scalar.
+B<MY_SEARCH_RESULTS_PAGE_SIZE()> ($) (optional)
 
-Returns: Hashref of search fields and values entered.
+If B<MY_SEARCH_RESULTS_PAGED> is set to a true value we output pages
+of this size.
 
-Depends on:
+Default: 50
 
-C<MY_SEARCH_FIELDS>
+B<MY_SEARCH_RESULTS_KEY()> ($) (optional)
 
-We call C<_search_criteria_customize()> on the criteria just before
-they are passed back to the caller.
+If B<MY_SEARCH_RESULTS_PAGED> is true this routine will generate a key
+under which you will save the ID to get your persisted search
+results. We make the search ID accessible in the template parameters
+under this name as well as 'search_id'.
 
-B<_search_build_where_clause( \%search_criteria )>
+Default: C<MY_OBJECT_CLASS()> . '_search_id'
 
-Builds a WHERE clause suitable for a SQL SELECT statement. It can
-handle table links (with some help by you).
+B<MY_SEARCH_RESULTS_TITLE()> ($) (optional)
 
-Returns: Three-value array: the first value is an arrayref of tables
-used in the search, including the object table itself; the second
-value is the actual WHERE clause, the third value is an arrayref of
-the values used in the WHERE clause.
+Title of search results page.
 
-Depends on:
+Default: 'Search Results'
 
-C<MY_OBJECT_CLASS>
+B<MY_SEARCH_RESULTS_TEMPLATE()> ($) (optional)
 
-C<MY_SEARCH_FIELDS_EXACT>
+Search results template name.
 
-C<MY_SEARCH_TABLE_LINKS>
+Default: 'search_results'
 
-We call C<_search_build_where_customize()> with various information
-just before returning it.
+B<MY_SEARCH_FIELDS()> (@) (optional)
 
-B<_edit_assign_fields( $object )>
+List of fields used to build search. This can include fields from
+other tables. Fields from other tables must be fully-qualified with
+the table name.
 
-If you override this method you will have to read all the information
-from the GET/POST to the object. See below C<FIELD VALUE BEHAVIOR> for
-useful methods in doing this.
+For instance, for a list of fields used to find users, I might list:
 
-=head1 OBJECT BEHAVIOR
+ sub MY_SEARCH_FIELDS { return qw( login_name last_name group.name ) }
 
-B<fetch_object( $id, [ $id_field, $id_field, ... ] )>
+Where 'group.name' is a field from another table. I would then have to
+configure B<MY_SEARCH_TABLE_LINKS> (below) to tell CommonHandler how
+to link my object with that table.
 
-This method is slightly different than the rest. It retrieves a
-particular object for you, given either the ID value in C<$id> or
-given the ID value found in the first one of C<$id_field> that is
-defined in the GET/POST.
+These are the actual parameters from the form used for searching. If
+the names do not match up, such as if you fully-qualify your names in
+the configuration but not the search form, then you will not get the
+criteria you think you will. An obvious symptom of this is running a
+search and getting many more records than you expected, maybe even all
+of them.
 
-Returns: This method B<always> returns an object. If it does not
-return an object it will C<die()>. If an object is not retrieved due
-to an ID value not being found or a matching object not being found, a
-B<new> (empty) object is returned.
+No default.
 
-Depends on:
+B<MY_SEARCH_FIELDS_EXACT()> (@) (optional)
 
-C<MY_OBJECT_CLASS>
-
-=head1 FIELD VALUE BEHAVIOR
-
-B<_read_field( $apache_request, $field_name )>
-
-Just returns the value of C<$field_name> as read from the GET/POST.
-
-B<_read_field_toggled( $apache_request, $field_name )>
-
-If C<$field_name> is set to a true value, returns 'yes', otherwise
-returns 'no'.
-
-B<_read_field_date( $apache_request, $field_name )>
-
-By default, reads in the value of C<$field_name> which it assumes to
-be in the format 'YYYYMMDD' and puts it into 'YYYY-MM-DD' format,
-which it returns. This is probably the method you will most often
-override, depending on how you present dates to your users.
-
-=head1 CONFIGURATION METHODS
-
-B<MY_PACKAGE()> ($)
-
-Mandatory. Returns package name.
-
-B<MY_OBJECT_TYPE()> ($)
-
-Mandatory. Returns object type (e.g., 'user', 'news', etc.)
-
-B<MY_SEARCH_FIELDS()> (@)
-
-Mandatory. Returns fields used to build search.
-
-B<MY_EDIT_FIELDS()> (@)
-
-Mandatory. Returns fields used to edit.
-
-B<MY_HANDLER_PATH()> ($)
-
-Optional. Returns path of handler.
-
-Default: '/' . MY_OBJECT_TYPE
-
-B<MY_OBJECT_CLASS()> ($)
-
-Optional. Returns object class.
-
-Default: Gets object class from C<$R> using C<MY_OBJECT_TYPE>.
-
-B<MY_SEARCH_FIELDS_EXACT> (@)
-
-Optional. Returns fields from C<MY_SEARCH_FIELDS> that must be an
-exact match.
+Returns fields from C<MY_SEARCH_FIELDS> that must be an exact match.
 
 This is used in C<_search_build_where_clause()>. If the field being
 searched is an exact match, we use '=' as a search test.
 
 Otherwise we use 'LIKE' and, if the field is not in
-C<MY_SEARCH_FIELDS_LEFT_EXACT> or C<MY_SEARCH_FIELDS_RIGHT_EXACT>,
-wrap the value in '%'.
+C<MY_SEARCH_FIELDS_LEFT_EXACT> or C<MY_SEARCH_FIELDS_RIGHT_EXACT> (see
+below), wrap the value in '%'.
 
 If you need other custom behavior, do not include the field in
 C<MY_SEARCH_FIELDS> and use C<_search_build_where_customize()> to set.
 
 No default.
 
-B<MY_SEARCH_FIELDS_LEFT_EXACT> (@)
+B<MY_SEARCH_FIELDS_LEFT_EXACT()> (@) (optional)
 
-Optional. Returns fields from C<MY_SEARCH_FIELDS> that must match
-exactly on the left-hand side. This basically sets up:
+Returns fields from C<MY_SEARCH_FIELDS> that must match exactly on the
+left-hand side. This sets up:
 
  $fieldname LIKE "$fieldvalue%"
 
 No default.
 
-B<MY_SEARCH_FIELDS_RIGHT_EXACT> (@)
+B<MY_SEARCH_FIELDS_RIGHT_EXACT()> (@) (optional)
 
-Optional. Returns fields from C<MY_SEARCH_FIELDS> that must match
+Returns fields from C<MY_SEARCH_FIELDS> that must match
 exactly on the right-hand side. This sets up:
 
  $fieldname LIKE "%$fieldvalue"
 
 No default.
 
-B<MY_SEARCH_TABLE_LINKS> (%)
+B<MY_SEARCH_TABLE_LINKS()> (%) (optional)
 
-Optional. Returns table name => ID field mapping used to build WHERE
+Returns table name => ID field mapping used to build WHERE
 clauses that JOIN multiple tables when executing a search.
 
 A key is a table name, and the value enables us to build a join clause
@@ -1334,8 +1304,7 @@ being searched. The value is either a scalar or an arrayref.
 If a scalar, the value is just the ID field in the destination table
 that the ID value in the object maps to:
 
-  sub MY_SEARCH_TABLE_LINKS {
-      return ( address => 'user_id' ) }
+  sub MY_SEARCH_TABLE_LINKS { return ( address => 'user_id' ) }
 
 This means that the table 'address' contains the field 'user_id' which
 the ID of our object matches.
@@ -1379,7 +1348,7 @@ So you could have the setup:
 
 and:
 
-  sub MY_SEARCH_TABLE_LINKS { 
+  sub MY_SEARCH_TABLE_LINKS {
       return ( group => [ 'user_id', 'user_group', 'group_id' ] ) }
 
 And searching for a user by a group name with 'admin' would give:
@@ -1390,165 +1359,544 @@ And searching for a user by a group name with 'admin' would give:
 
 No default.
 
-B<MY_SEARCH_RESULTS_PAGED> (bool)
+B<MY_SEARCH_RESULTS_ORDER()> ($) (optional)
 
-Optional. Set to a true value to enable paged results, meaning that
-search results will come back in groups of
-B<MY_SEARCH_RESULTS_PAGE_SIZE>. We use the methods in 'results_manage'
-to accomplish this.
+An 'ORDER BY' clause used to order your results. The CommonHandler
+makes sure to include the fields used to order the results in the
+SELECT statement, since many databases will complain about their
+absence.
 
-Default: false.
+No default.
 
-B<MY_SEARCH_RESULTS_PAGE_SIZE> ($)
+=head2 Customization
 
-Optional. If B<MY_SEARCH_RESULTS_PAGED> is set to a true value we
-output pages of this size.
+B<_search_customize( \%template_params )>
 
-Default: 50
+Template customization. If you are not using paged results there is
+only the parameter 'iterator' set. If you use paged results, then
+there is 'iterator' as well as:
 
-B<MY_SEARCH_RESULTS_PAGED> (bool)
+=over 4
 
-Optional. Set to a true value to enable paged results, meaning that
-search results will come back in groups of
-B<MY_SEARCH_RESULTS_PAGE_SIZE>. We use the methods in 'results_manage'
-to accomplish this.
+=item *
 
-Default: false.
+C<page_number_field>
 
-B<MY_SEARCH_RESULTS_KEY> ($)
+=item *
 
-Optional. If B<MY_SEARCH_RESULTS_PAGED> is true this routine will
-generate a key under which you will save the ID to get your persisted
-search results. We make the search ID accessible in the template
-parameters under this name as well as 'search_id'.
+C<current_page>
 
-Default: C<MY_OBJECT_CLASS> . '_search_id'
+=item *
 
-B<MY_SEARCH_RESULTS_PAGE_SIZE> ($)
+C<total_pages>
 
-Optional. If B<MY_SEARCH_RESULTS_PAGED> is true we output pages of
-this size.
+=item *
 
-Default: 50
+C<total_hits>
 
-B<MY_SEARCH_RESULTS_PAGE_FIELD> ($)
+=item *
 
-Optional. If B<MY_SEARCH_RESULTS_PAGED> is true this is the parameter
-we will check to see what page number of the results the user is
-requesting.
+C<search_id>
 
-Default: 'pagenum'.
+=item *
 
-B<MY_SEARCH_FORM_TITLE> ($)
+C<search_results_key>
 
-Optional. Title of search form.
+=back
 
-Default: 'Search Form'
+B<_search_criteria_customize( \%search_criteria )>
 
-B<MY_SEARCH_FORM_TEMPLATE()> ($)
+Data customization. Modify the items in C<\%search_criteria> as
+necessary. The format is simple: a key is a fully-qualified
+(table.field) fieldname, and its value is either a scalar or arrayref
+depending on whether multiple values were passed.
 
-Optional. Search form template name.
+For instance, say we wanted to restrict searches to all objects with
+an 'active' property of 'yes':
 
-Default: 'search_form'
+ sub _search_criteria_customize {
+    my ( $class, $criteria ) = @_;
+    $criteria->{'mytable.active'} = 'yes';
+ }
 
-B<MY_SEARCH_RESULTS_TITLE()> ($)
+Easy! Other possibilities include selecting objects based on qualities
+of the user -- say certain objects should only be included in a search
+if the user is a member of a particular group. Since C<$R> is
+available to you, it is simple to check whether the user is a member
+of a group and make necessary modifications.
 
-Optional. Title of search results page.
+Note that you must use the fully-qualified 'table.field' format for
+the criteria key or the criterion will be discarded.
 
-Default: 'Search Results'
+The method should always return the hashref of criteria. Failure to do
+so will likely retrieve all objects in the database, which is
+frequently a Bad Thing.
 
-B<MY_SEARCH_RESULTS_TEMPLATE()> ($)
+B<_search_build_where_customize( \@tables, \@where, \@values )>
 
-Optional. Search results template name.
+Data customization. Allows you to hand-modify the WHERE clause that
+will be used for searching. If you override this method, you will be
+passed three arguments:
 
-Default: 'search_results'
+=over 4
 
-B<MY_OBJECT_FORM_TITLE()> ($)
+=item 1.
 
-Optional. Title of object editing page.
+B<\@tables>: An arrayref of tables that are used in the WHERE clause
+-- they become the FROM clause of our search SELECT. If you add a JOIN
+or other clause that depends on a separate table then be sure to add
+it here -- otherwise the search will fail mightily.
+
+=item 2.
+
+B<\@where>: An arrayref of operations that will be joined together
+with 'AND' before being passed to the C<search()> method.
+
+=item 3.
+
+B<\@values>: An arrayref of values that will be plugged into the
+operations.
+
+=back
+
+This might seem a little confusing, but as usual it is easier to show
+than tell. For example, we want to allow the user to select a date in
+a search form and find all items one week after and one week before
+that date:
+
+ sub _search_build_where_customize {
+     my ( $class, $table, $where, $value ) = @_;
+     my $R = OpenInteract::Request->instance;
+     my $search_date = $class->_read_field_date( 'pivot_date' );
+     push @{ $where },
+       "( TO_DAYS( ? ) BETWEEN ( TO_DAYS( pivot_date ) + 7 ) " .
+       "AND ( TO_DAYS( pivot_date ) - 7 ) )";
+     push @{ $value }, $search_date;
+ }
+
+=head1 TASK: CREATE
+
+This task is just an alias for C<show()>, passing along the 'edit'
+parameter.
+
+=head2 Configuration
+
+B<MY_ALLOW_CREATE()> (bool) (optional)
+
+Should shortcut to display a form to create a new object be allowed?
+
+Default: false
+
+B<MY_OBJECT_CREATE_SECURITY()> (security level) (optional)
+
+Security required to create an object -- this should be a constant
+from L<SPOPS::Secure|SPOPS::Secure>
+
+Default: SEC_LEVEL_WRITE
+
+=head2 Customization
+
+None.
+
+=head1 TASK: SHOW
+
+=head2 Configuration
+
+B<MY_ALLOW_SHOW()> (bool) (optional)
+
+Should object display be allowed?
+
+Default: true
+
+B<MY_OBJECT_FORM_TITLE()> ($) (optional)
+
+Title of object editing page.
 
 Default: 'Object Detail'
 
-B<MY_OBJECT_FORM_TEMPLATE()> ($)
+B<MY_OBJECT_FORM_TEMPLATE()> ($) (optional)
 
-Optional. Object form template name.
+Object form template name.
 
 Default: 'object_form'
 
-B<MY_EDIT_RETURN_URL()> ($)
+=head2 Customization
 
-Optional. URL to use as return when displaying the 'edit' page. (If
+B<_show_customize( \%template_params )>
+
+Typically there are only the parameters 'object' and C<MY_OBJECT_TYPE>
+set to the same value.
+
+Note that this task does not differentiate between displaying an
+object in an editable form and in a static (non-editable) display. If
+you want to use this task to do both, you can use this customization
+to set the template name based on the security status of the object.
+
+For instance:
+
+ sub _show_customize {
+     my ( $class, $params ) = @_;
+     $params->{template_name} = ( $params->{object}{tmp_security_level} < SEC_LEVEL_WRITE )
+                                  ? 'mypkg::static_display' : 'mypkg::form_display';
+ }
+
+=head1 TASK: EDIT
+
+=head2 Configuration
+
+B<MY_ALLOW_EDIT()> (bool) (optional)
+
+Should edits be allowed?
+
+Default: false
+
+B<MY_EDIT_RETURN_URL()> ($) (optional)
+
+URL to use as return when displaying the 'edit' page. (If
 you do not define this weird things can happen if users logout from
 the editing page.)
 
 Default: MY_HANDLER_PATH . '/'
 
-B<MY_EDIT_FIELDS_TOGGLED()> (@)
+B<MY_EDIT_FIELDS()> (@) (optional)
 
-Optional. List of fields that are either 'yes' or 'no'.
+Fields for CommonHandler to retrieve values from the form and set into
+the object. You can set other values by hand using
+C<_edit_customize()>.
+
+You can also specify fields to be handled automatically by
+CommonHandler in C<MY_EDIT_FIELDS_TOGGLED> and C<MY_EDIT_FIELDS_DATE>.
+
+No default.
+
+B<MY_EDIT_FIELDS_TOGGLED()> (@) (optional)
+
+List of fields that are either 'yes' or 'no'. If any true value (as
+perl defines it) is read in then the value of the field is set to
+'yes', otherwise it is set to 'no'.
 
 No default
 
-B<MY_EDIT_FIELDS_DATE()> (@)
+B<MY_EDIT_FIELDS_DATE()> (@) (optional)
 
-Optional. List of fields that are dates. If users are editing raw
-dates and the field value does not need to be manipulated before
-entering the database, then just keep such fields in C<MY_EDIT_FIELDS>
-since they do not need to be treated differently.
+List of fields that are dates. If users are editing raw dates and the
+field value does not need to be manipulated before entering the
+database, then just keep such fields in C<MY_EDIT_FIELDS> since they
+do not need to be treated differently. The default is to read the date
+from three separate fields, but you can override C<_read_field_date()>
+for your own needs.
 
 No default
 
-B<MY_EDIT_DISPLAY_TASK()> ($)
+B<MY_EDIT_DISPLAY_TASK()> ($) (optional)
 
-Optional. Task we should execute after we have edited the record.
+Task we should execute after we have edited the record.
 
 Default 'show' (re-displays the form you just edited with a status
 message)
 
-B<MY_ALLOW_SEARCH_FORM()> (bool)
+=head2 Customization
 
-Optional. Should the search form be viewed?
+B<_edit_customize( $object, \%old_data )>
 
-Default: true
+Called just before an object is saved to the datastore. This is most
+useful to perform any custom data retrieval, data manipulation or
+validation. Data present in the object before any modifications is
+passed as a hashref in the second argument.
 
-B<MY_ALLOW_SEARCH()> (bool)
+Return value is a two-element list: the first is the status -- either
+'OK' or 'ERROR' as exported by this module. The second is a hashref of
+options whose contents depend on whether you return 'OK' or 'ERROR'.
 
-Optional. Should searches be allowed?
+If you return 'ERROR', thenthe options specify what to do next. If you
+return 'OK', then the options get passed to the object C<save()> call,
+which can be useful if for instance you need to tell SPOPS that a the
+action is a creation even if it looks like an update.
 
-Default: true
+Example. Data validation might look something like:
 
-B<MY_ALLOW_SHOW()> (bool)
+ package My::Handler::MyHander;
 
-Optional. Should object display be allowed?
+ use OpenInteract::CommonHandler qw( OK ERROR );
 
-Default: true
+ my %required_label = ( name => 'Name', quest => 'Quest',
+                        favorite_color => 'Favorite Color' );
 
-B<MY_ALLOW_EDIT()> (bool)
+ # ... Override the various configuration routines ...
 
-Optional. Should edits be allowed?
+ sub _edit_customize {
+     my ( $class, $object, $old_data ) = @_;
+     my @msg = ();
+     foreach my $field ( keys %required_label ) {
+        unless ( $object->{ $field } ) {
+            push @msg, "$required_label{ $field } is a required field. " .
+                       "Please enter data for it.";
+        }
+     }
+     return ( OK, undef ) unless ( scalar @msg );
+     return ( ERROR, { error_msg => join( "<br>\n", @msg ),
+                       method    => 'show' } );
+ }
+
+So if any of the required fields are not filled in, the method returns
+'ERROR' and a hashref with the method to execute on error, in this
+case 'show' to redisplay the same object along with the error message
+to display.
+
+You can specify an action to execute in one of three ways:
+
+=over 4
+
+=item *
+
+B<method>: Calls C<$method()> in the current class.
+
+=item *
+
+B<class>, B<method>: Calls C<$class-E<gt>$method()>.
+
+=item *
+
+B<action>: Calls the method and class specified by C<$action>.
+
+=back
+
+=head1 TASK: REMOVE
+
+=head2 Configuration
+
+B<MY_ALLOW_REMOVE()> (bool) (optional)
+
+Should removals be allowed?
 
 Default: false
 
-B<MY_ALLOW_REMOVE()> (bool)
+=head2 Customization
 
-Optional. Should removals be allowed?
+B<_remove_customize( $object )>
+
+Called just before an object is removed from the datastore.
+
+=head1 TASK: NOTIFY
+
+=head2 Configuration
+
+B<MY_ALLOW_NOTIFY()> (bool) (optional)
+
+Should notify requests be fulfilled?
 
 Default: false
+
+B<MY_NOTIFY_FROM> ($) (optional)
+
+Address from which the message should come.
+
+Default: 'admin_email' value from server configuration (see
+L<OpenInteract::SPOPS|OpenInteract::SPOPS> for more info).
+
+B<MY_NOTIFY_ID_FIELD()> ($) (optional)
+
+Specify the field used to grab ID values for objects to notify.
+
+Default: C<MY_OBJECT_CLASS()>-E<gt>id_field();
+
+B<MY_NOTIFY_EMAIL_FIELD()> ($) (optional)
+
+Specify the field used for the address to which the notification
+should be sent.
+
+Default: 'email'
+
+B<MY_NOTIFY_NOTES_FIELD()> ($) (optional)
+
+Specify the field used for notes that will be sent along with the
+notification.
+
+Default: 'notes'
+
+B<MY_NOTIFY_SUBJECT()> ($) (optional)
+
+Subject of email to be sent out.
+
+Default: "Object notification: $num_objects objects in mail"
+
+=head2 Customization
+
+B<_notify_customize( \%params )>
+
+Data customization. The C<\%params> hashref has the following keys you
+can modify. All keys/values get sent on to the C<notify()> method of
+L<OpenInteract::SPOPS|OpenInteract::SPOPS>:
+
+=over 4
+
+=item *
+
+B<from_email>: Address message is from (C<MY_NOTIFY_FROM>)
+
+=item *
+
+B<email>: Address message is to (value in C<MY_NOTIFY_EMAIL_FIELD>)
+
+=item *
+
+B<subject>: Subject of message (C<MY_NOTIFY_SUBJECT>)
+
+=item *
+
+B<object>: Object(s) fetched from specified IDs (values in C<MY_NOTIFY_ID_FIELD>)
+
+=item *
+
+B<notes>: Notes in message (value in C<MY_NOTIFY_NOTES_FIELD>)
+
+=item *
+
+B<type>: Type of object (C<MY_OBJECT_TYPE>)
+
+=back
+
+=head1 TASK: WIZARD
+
+This class contains some simple support for search wizards. With such
+a wizard you can use OpenInteract in conjunction with JavaScript to
+implement a 'Find...' widget so you can link one object to another
+easily.
+
+=head2 Configuration
+
+B<MY_ALLOW_WIZARD()> (bool) (optional)
+
+Whether to enable the wizard.
+
+Default: false
+
+B<MY_WIZARD_FORM_TITLE()> ($) (optional)
+
+Title of wizard search form page.
+
+Default: 'Wizard: Search'
+
+B<MY_WIZARD_FORM_TEMPLATE()> ($) (optional)
+
+Name of wizard search form template.
+
+Default: 'wizard_form'
+
+=head2 Customization
+
+B<_wizard_form_customize( \%params )>
+
+Template customization.
+
+=head1 TASK: WIZARD SEARCH
+
+=head2 Configuration
+
+B<MY_ALLOW_WIZARD()> (bool) (optional)
+
+Whether to enable the wizard.
+
+Default: false
+
+B<MY_WIZARD_RESULTS_MAX()> ($) (optional)
+
+Max number of results to return.
+
+Default: 50
+
+B<MY_WIZARD_RESULTS_TITLE()> ($) (optional)
+
+Title of wizard search results page.
+
+Default: 'Wizard: Results'
+
+B<MY_WIZARD_RESULTS_TEMPLATE()> ($) (optional)
+
+Name of wizard search results template
+
+Default: 'wizard_results'
+
+=head2 Customization
+
+B<_wizard_search_customize( \%params )>
+
+Template customization. Customize output of the search results.
+
+=head1 INTERNAL BEHAVIOR
+
+B<_search_build_criteria()>
+
+Scans the GET/POST for relevant (as specified by C<MY_SEARCH_FIELDS>)
+search criteria and puts them into a hashref. Multiple values are put
+into an arrayref, single values into a scalar.
+
+We call C<_search_criteria_customize()> on the criteria just before
+they are passed back to the caller.
+
+Returns: Hashref of search fields and values entered.
+
+B<_search_build_where_clause( \%search_criteria )>
+
+Builds a WHERE clause suitable for a SQL SELECT statement. It can
+handle table links with configuration information available in
+C<MY_SEARCH_TABLE_LINKS>.
+
+Returns: Three-value array: the first value is an arrayref of tables
+used in the search, including the object table itself; the second
+value is the actual WHERE clause, the third value is an arrayref of
+the values used in the WHERE clause.
+
+We call C<_search_build_where_customize()> with the three arrayrefs
+just before returning them.
+
+B<_edit_assign_fields( $object )>
+
+If you override this method you will have to read all the information
+from the GET/POST to the object. See below C<FIELD VALUE BEHAVIOR> for
+useful methods in doing this.
+
+=head2 Object Retrieval
+
+B<fetch_object( $id, [ $id_field, $id_field, ... ] )>
+
+This method is slightly different than the rest. It retrieves a
+particular object for you, given either the ID value in C<$id> or
+given the ID value found in the first one of C<$id_field> that is
+defined in the GET/POST.
+
+Returns: This method B<always> returns an object. If it does not
+return an object it will C<die()>. If an object is not retrieved due
+to an ID value not being found or a matching object not being found, a
+B<new> (empty) object is returned.
+
+Depends on:
+
+C<MY_OBJECT_CLASS>
+
+=head2 Field Values
+
+B<_read_field( $apache_request, $field_name )>
+
+Just returns the value of C<$field_name> as read from the GET/POST.
+
+B<_read_field_toggled( $apache_request, $field_name )>
+
+If C<$field_name> is set to a true value, returns 'yes', otherwise
+returns 'no'.
+
+B<_read_field_date( $apache_request, $field_name )>
+
+By default, reads in the value of C<$field_name> which it assumes to
+be in the format 'YYYYMMDD' and puts it into 'YYYY-MM-DD' format,
+which it returns. This is probably the method you will most often
+override, depending on how you present dates to your users.
 
 =head1 BUGS
 
 None known.
 
 =head1 TO DO
-
-B<Finish documenting>
-
-Document customization methods and give examples.
-
-B<Add simple listing>
-
-Add an optional 'listing' method which allows you to just list all
-objects of a particular type.
 
 B<GenericDispatcher items available thru methods>
 

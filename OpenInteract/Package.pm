@@ -1,6 +1,6 @@
 package OpenInteract::Package;
 
-# $Id: Package.pm,v 1.25 2001/10/11 03:15:26 lachoy Exp $
+# $Id: Package.pm,v 1.27 2001/11/28 05:54:21 lachoy Exp $
 
 # This module manipulates information from individual packages to
 # perform some action in the package files.
@@ -16,9 +16,13 @@ use File::Copy         qw( cp );
 use File::Path         ();
 use SPOPS::HashFile    ();
 use SPOPS::Utility     ();
+require Exporter;
 
-@OpenInteract::Package::ISA       = qw();
-$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::Package::ISA       = qw( Exporter );
+$OpenInteract::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.27 $ =~ /(\d+)\.(\d+)/);
+@OpenInteract::Package::EXPORT_OK = qw( READONLY_FILE );
+
+use constant READONLY_FILE => '.no_overwrite';
 
 # Define the subdirectories present in a package
 
@@ -793,6 +797,51 @@ sub check {
     return $status;
 }
 
+# Copy all modules from a particular package (site directory AND base
+# directory) to another directory
+
+sub copy_modules {
+    my ( $class, $info, $to_dir ) = @_;
+
+    my $site_pkg_dir = join( '/', $info->{website_dir}, $info->{package_dir} );
+    my $site_modules = $class->_copy_module_files( $site_pkg_dir, $to_dir );
+
+    my $base_pkg_dir = join( '/', $info->{base_dir}, $info->{package_dir} );
+    my $base_modules = $class->_copy_module_files( $base_pkg_dir, $to_dir );
+
+    return [ sort @{ $base_modules }, @{ $site_modules } ];
+}
+
+
+sub _copy_module_files {
+    my ( $class, $pkg_dir, $to_dir ) = @_;
+    unless ( -d $pkg_dir ) {
+        die "Package directory ($pkg_dir) does not exist -- cannot copy files.\n";
+    }
+    unless ( -d $to_dir ) {
+        die "Destination for package modules ($to_dir) does not exist -- cannot copy files.\n";
+    }
+    my $current_dir = cwd;
+    chdir( $pkg_dir );
+    $to_dir =~ s|/$||;
+    my $pkg_files = ExtUtils::Manifest::maniread;
+    my @module_files = grep /\.pm$/, keys %{ $pkg_files };
+    my ( %dir_ok );
+    foreach my $filename ( @module_files ) {
+        my $full_dest_file = join( '/', $to_dir, $filename );
+        #warn "Trying to copy file ($filename) to ($full_dest_file)\n";
+        next if ( -f $full_dest_file );
+        my $full_dest_dir  = File::Basename::dirname( $full_dest_file );
+        unless ( $dir_ok{ $full_dest_dir } ) {
+            File::Path::mkpath( $full_dest_dir );
+            $dir_ok{ $full_dest_dir }++;
+        }
+        cp( $filename, $full_dest_file );
+    }
+    chdir( $current_dir );
+    return \@module_files;
+}
+
 
 sub read_data_file {
     my ( $class, $filename ) = @_;
@@ -935,6 +984,8 @@ sub find_file {
 
 
 # Put the base and website package directories into @INC
+#
+# NOTE: THIS WILL PROBABLY BE REMOVED
 
 sub add_to_inc {
     my ( $class, $info ) = @_;
@@ -945,7 +996,7 @@ sub add_to_inc {
         my $app_package_dir = join( '/', $info->{website_dir}, $info->{package_dir} );
         unshift @my_inc, $app_package_dir if ( -d $app_package_dir );
     }
-    unshift @INC, @my_inc;
+    #unshift @INC, @my_inc;
     return @my_inc;
 }
 
@@ -1129,21 +1180,27 @@ sub _copy_spops_config_file {
 
 sub _copy_action_config_file {
     my ( $class, $info, $CONFIG  ) = @_;
-    my $interact_pkg_dir = join( '/', $info->{base_dir}, $info->{package_dir} );
-    my $website_pkg_dir          = join( '/', $info->{website_dir}, $info->{package_dir} );
-    DEBUG && _w( 1, "Coping action info from ($interact_pkg_dir) to ($website_pkg_dir)" );
+    my $interact_pkg_dir = join( '/', $info->{base_dir},
+                                      $info->{package_dir} );
+    my $website_pkg_dir  = join( '/', $info->{website_dir},
+                                      $info->{package_dir} );
+    DEBUG && _w( 1, "Coping action info from ($interact_pkg_dir)",
+                    "to ($website_pkg_dir)" );
 
     my $action_conf = 'conf/action.perl';
     my $base_config_file = "$interact_pkg_dir/$action_conf";
-    my $action_base = eval { SPOPS::HashFile->new({ filename => $base_config_file }) };
+    my $action_base = eval { SPOPS::HashFile->new({
+                                        filename => $base_config_file }) };
     if ( $@ ) {
-        DEBUG && _w( 1, "No action info for $info->{name}-$info->{version} (generally ok: $@)" );
+        DEBUG && _w( 1, "No action info for $info->{name}-$info->{version}",
+                        "(generally ok: $@)" );
         return undef;
     }
 
     my $new_config_file = "$website_pkg_dir/$action_conf";
-    my $action_pkg  = eval { SPOPS::HashFile->new({ filename => $new_config_file,
-                                                    perm     => 'new' }) };
+    my $action_pkg  = eval { SPOPS::HashFile->new({
+                                        filename => $new_config_file,
+                                        perm     => 'new' }) };
 
     # Go through all of the actions and all of the keys and copy them
     # over to the new file. The only modification we make is to a field
@@ -1173,11 +1230,13 @@ sub _copy_action_config_file {
 sub _copy_package_files {
     my ( $class, $root_dir, $sub_dir, $file_list ) = @_;
     my @copy_file_list = grep /^$sub_dir/, @{ $file_list };
+    my %no_copy = map { $_ => 1 } $class->read_readonly_file( $root_dir );
 
     foreach my $sub_dir_file ( @copy_file_list ) {
         my $just_filename = $sub_dir_file;
         $just_filename =~ s|^$sub_dir/||;
         my $new_name = join( '/', $root_dir, $just_filename );
+        next if ( $no_copy{ $just_filename } );
         eval { $class->_create_full_path( $new_name ) };
         if ( $@ ) { die "Cannot create path to file ($new_name): $@" }
         eval { cp( $sub_dir_file, "$new_name" ) || die $! };
@@ -1192,17 +1251,39 @@ sub _copy_package_files {
 }
 
 
+sub read_readonly_file {
+    my ( $class, $dir ) = @_;
+    my $overwrite_check_file = join( '/', $dir, READONLY_FILE );
+    return () unless ( -f $overwrite_check_file );
+    my ( @no_write );
+    if ( open( NOWRITE, $overwrite_check_file ) ) {
+        while ( <NOWRITE> ) {
+            chomp;
+            next if ( /^\s*$/ );
+            next if ( /^\s*\#/ );
+            s/^\s+//;
+            s/\s+$//;
+            push @no_write, $_;
+        }
+        close( NOWRITE );
+    }
+    return @no_write;
+}
+
+
 # Copy handlers from the base installation to the website directory,
 # putting class names into the namespace of the website
 
 sub _copy_handler_files {
     my ( $class, $info, $base_files ) = @_;
-    my $website_pkg_dir = join( '/', $info->{website_dir}, $info->{package_dir} );
+    my $website_pkg_dir = join( '/', $info->{website_dir},
+                                     $info->{package_dir} );
 
     # We're only operating on the files that begin with
     # 'OpenInteract/Handler'...
 
-    my @handler_file_list = grep /^OpenInteract\/Handler/, keys %{ $base_files };
+    my @handler_file_list = grep /^OpenInteract\/Handler/,
+                                 keys %{ $base_files };
     foreach my $handler_filename ( @handler_file_list ) {
 
         # First create the old/new class names...
@@ -1221,10 +1302,14 @@ sub _copy_handler_files {
         # Now read in the old handler and write out the new one, replacing
         # the 'OpenInteract::Handler::xx' with '$WEBSITE_NAME::Handler::xx'
 
-        open( OLDHANDLER, $handler_filename ) || die "Cannot read handler ($handler_filename): $!";
+        open( OLDHANDLER, $handler_filename )
+              || die "Cannot read handler ($handler_filename): $!";
         eval { $class->_create_full_path( $new_filename ) };
-        if ( $@ ) { die "Cannot create a directory tree to handler ($new_filename): $@" }
-        open( NEWHANDLER, "> $new_filename" ) || die "Cannot write to handler ($new_filename): $!";
+        if ( $@ ) {
+            die "Cannot create a dir tree to handler ($new_filename): $@";
+        }
+        open( NEWHANDLER, "> $new_filename" )
+              || die "Cannot write to handler ($new_filename): $!";
         while ( <OLDHANDLER> ) {
             s/$handler_class/$new_handler_class/g;
             print NEWHANDLER;

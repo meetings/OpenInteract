@@ -1,6 +1,6 @@
 package OpenInteract::Error::Main;
 
-# $Id: Main.pm,v 1.5 2001/10/04 13:21:35 lachoy Exp $
+# $Id: Main.pm,v 1.6 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 require Exporter;
@@ -11,7 +11,7 @@ use Data::Dumper qw( Dumper );
 $ERROR_HOLD = 'error_hold';
 
 @OpenInteract::Error::Main::ISA       = qw( Exporter );
-$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::Main::VERSION   = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Error::Main::EXPORT_OK = qw( $ERROR_HOLD );
 
 
@@ -51,12 +51,13 @@ sub initialize {
     foreach my $action ( keys %{ $action_info } ) {
         $handler_info->{ lc $action } = $action_info->{ lc $action }{error};
     }
-    $handler_info->{'_DEFAULT_HANDLER'} = $p->{config}{default_error_handler};
+    $handler_info->{'_DEFAULT_HANDLER'} = $p->{config}{error}{default_error_handler} ||
+                                          $p->{config}{default_error_handler};
     $class->require_error_handlers( $handler_info );
-    my $stash_class = $p->{config}{stash_class};
+    my $stash_class = $p->{config}{server_info}{stash_class};
     $stash_class->set_stash( 'error_handlers', $handler_info );
-    $R->DEBUG && $R->scrib( 1, "Initialized DEFAULT_HANDLER for app ",
-                               "$p->{stash_class} to $handler_info->{'_DEFAULT_HANDLER'}" );
+    $R->DEBUG && $R->scrib( 1, "Initialized DEFAULT_HANDLER for app",
+                               "($stash_class) to ($handler_info->{'_DEFAULT_HANDLER'})" );
 }
 
 

@@ -13,7 +13,7 @@
 </tr>
 <tr bgcolor="[% INCLUDE row_color %]" align="[% align %]">
   [% END -%]
-    <td align="left" colspan="[% colspan %]">
+    <td align="center" colspan="[% colspan %]">
       [%- INCLUDE form_textarea -%]
     </td>
 </tr>

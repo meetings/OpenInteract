@@ -34,66 +34,74 @@ but some have not.
 
 With a plaintext editor (emacs, vi, pico, etc.) Edit the file:
 
- %%WEBSITE_DIR%%/conf/server.perl
+ %%WEBSITE_DIR%%/conf/server.ini
 
 Change the following values:
 
- 'smtp_host' 
+ [mail]
+ smtp_host = 127.0.0.1
 
    Set to an available server to use for an SMTP host. If you don't
    know, check whether localhost (127.0.0.1) works.
 
- 'admin_email'
+
+ [mail]
+ admin_email = admin@mycompany.com
 
    Set to your email address. You can change this later if you want.
 
- 'db_info'
+
+ [db_info]
 
    This tells OpenInteract how to connect to your database. Here are
    some sample values:
 
-       ...
-       'db_info' => {
-             'main' => {
-                   'db_owner'    => '',
-                   'username'    => 'dbuser',
-                   'password'    => 'dbpassword',
-                   'dsn'         => 'mysql',
-                   'db_name'     => 'MyAppDB',
-                   'driver_name' => 'mysql',
-             },
-       },
+      [db_info main]
+      db_owner      =
+      username      = dbuser
+      password      = dbpassword
+      dsn           = mysql
+      db_name       = MyAppDB
+      driver_name   = mysql
+      sql_install   =
+      long_read_len = 65536
+      long_trunc_ok = 0
 
    Note that you can configure multiple datasources -- 'main' is the
    default and is used when you don't specify a 'dataource'
-   configuration value in your SPOPS object.
+   configuration value in your SPOPS object. To specify another one,
+   just copy-and-paste the above, then change:
 
- 'ldap_info'
+     [db_info main]
+
+   to:
+
+     [db_info newdatasource]
+
+ [ldap_info]
 
    Skip this step if you're not using LDAP.
 
    This tells OpenInteract how to connect to your LDAP
    directories. Here are some sample values:
 
-       'ldap_info' => {
-             'main' => {
-                   host          => 'localhost',
-                   port          => '389',
-                   bind_dn       => '',
-                   bind_password => '',
-                   base_dn       => 'dc=mycompany,dc=com',
-                   timeout       => 120,
-                   version       => 2,
-                   sasl          => 0,
-                   debug         => 0,
-             },
-       },
+      [ldap_info main]
+      host          = localhost
+      port          = 389
+      bind_dn       =
+      bind_password =
+      base_dn       = dc=mycompany,dc=com
+      timeout       = 120
+      version       = 2
+      sasl          = 0
+      debug         = 0
 
    Note that you can configure multiple datasources -- 'main' is the
    default and is used when you don't specify a 'dataource'
-   configuration value in your SPOPS object.
+   configuration value in your SPOPS object. (See example above under
+   'db_info' for creating a new one.)
 
- 'session_info' 
+ [session_info]
 
    If you're using MySQL as your SQL database, you can leave this
    alone. Otherwise you'll probably want to change it to whatever is
@@ -105,6 +113,8 @@ That's it!
 (Note that you might want to be careful with permissions used on this
 file since it has sensitive username/password information.)
 
+There are, of course, many other modifications you can make to the
+server configuration, but these changes should get you up and running.
 
 (3) Create your database and test the connection
 
@@ -191,8 +201,8 @@ For instance, the 'base_user' package creates a 'superuser' user
 object and assigns it a random eight-character password. This password
 is displayed in the status messages, and if you chose 'crypt_password'
 in your configuration file you will NEVER be able to know the password
-for the superuser. If this happens, you'll have to just remove the
-directory tree with your website and reinstall. Yuck.
+for the superuser. If this happens, you can just drop the database,
+recreate it and re-run the 'install_sql' command.
 
 
 (6) Import templates (optional)
@@ -288,10 +298,10 @@ saw in step (4).
 
 Create a new user for yourself (click on the 'Users - new' link in the
 Admin Tools box), and then assign the user to the 'site admin' group
-(click on 'Groups - list' in the Admin Tools box and then the 'Detail'
-link next to the site admin group.)
+(click on 'Groups - list' in the Admin Tools box and then the name of
+the 'site admin' group to pull up a form).
 
 Now: have some fun!
 
 ========================================
-$Id: INSTALL.website,v 1.7 2001/08/28 21:30:25 lachoy Exp $
+$Id: INSTALL.website,v 1.9 2001/11/29 05:16:44 lachoy Exp $

@@ -1,10 +1,10 @@
 package OpenInteract::Error;
 
-# $Id: Error.pm,v 1.4 2001/08/28 21:38:07 lachoy Exp $
+# $Id: Error.pm,v 1.5 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 
-$OpenInteract::Error::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Error::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -89,7 +89,8 @@ sub throw {
         $p->{filename} = $cfile;
         $p->{line}     = $cline;
     }
-    my $error_obj_class = $R->CONFIG->{error_object_class};
+    my $error_obj_class = $R->CONFIG->{error}{error_object_class} ||
+                          $R->CONFIG->{error_object_class};
     return $error_obj_class->throw( $p );
 }
 

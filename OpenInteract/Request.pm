@@ -1,13 +1,13 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.11 2001/08/18 19:17:06 lachoy Exp $
+# $Id: Request.pm,v 1.13 2001/11/06 04:25:44 lachoy Exp $
 
 use strict;
 use Class::Singleton  ();
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 
@@ -59,7 +59,8 @@ sub template_object {
 
 sub db {
     my ( $self, $connect_key ) = @_;
-    $connect_key ||= $self->CONFIG->{default_connection_db};
+    $connect_key ||= $self->CONFIG->{datasource}{default_connection_db} ||
+                     $self->CONFIG->{default_connection_db};
     my $db = $self->get_stash( "db-$connect_key" );
     return $db if ( $db );
     require OpenInteract::DBI;
@@ -78,13 +79,16 @@ sub db {
 
 sub db_stash {
     my ( $self, $dbh, $connect_key ) = @_;
-    $connect_key ||= $self->CONFIG->{default_connection_db};
+    $connect_key ||= $self->CONFIG->{datasource}{default_connection_db} ||
+                     $self->CONFIG->{default_connection_db};
     return $self->stash( "db-$connect_key", $dbh );
 }
 
 
 sub ldap {
     my ( $self, $connect_key ) = @_;
+    $connect_key ||= $self->CONFIG->{datasource}{default_connection_ldap} ||
+                     $self->CONFIG->{default_connection_ldap};
     my $ldap = $self->get_stash( "ldap-$connect_key" );
     return $ldap if ( $ldap );
     require OpenInteract::LDAP;
@@ -104,7 +108,8 @@ sub ldap {
 
 sub ldap_stash {
     my ( $self, $ldap, $connect_key ) = @_;
-    $connect_key ||= $self->CONFIG->{default_connection_ldap};
+    $connect_key ||= $self->CONFIG->{datasource}{default_connection_ldap} ||
+                     $self->CONFIG->{default_connection_ldap};
     return $self->stash( "ldap-$connect_key", $ldap );
 }
 
@@ -115,7 +120,7 @@ sub ldap_stash {
 sub throw {
     my ( $self, $p ) = @_; 
     ( $p->{package}, $p->{filename}, $p->{line} ) = caller;
-    $p->{action} = $self->{current_context}->{action};
+    $p->{action} = $self->{current_context}{action};
     return $self->error->throw( $p );
 }
 
@@ -148,7 +153,7 @@ my %ALIAS           = ();
 my $ALIASES_SETUP   = 0;
 
 sub ALIAS           { return \%ALIAS }
-sub lookup_alias    { return $ALIAS{ $_[1] }->{ $_[0]->{stash_class} } }
+sub lookup_alias    { return $ALIAS{ $_[1] }{ $_[0]->{stash_class} } }
 
 
 # read in all the aliases in %ALIAS and setup subroutines
@@ -164,9 +169,9 @@ sub setup_aliases {
     $class->scrib( 1, "Aliases not yet setup. Setting up aliases for process ($$)" );
     no strict 'refs';
     foreach my $alias ( keys %ALIAS ) {
-        *{ $class . '::' . $alias } = sub { 
+        *{ $class . '::' . $alias } = sub {
             my $self = shift; $self = $self->instance unless ( ref $self );
-            return $ALIAS{ $alias }->{ $self->{stash_class} } 
+            return $ALIAS{ $alias }{ $self->{stash_class} }
         };
     }
     $ALIASES_SETUP++;
@@ -216,8 +221,8 @@ sub DEBUG {
 
 sub lookup_conductor {
     my ( $self, $action ) = @_;
-    $action ||= shift @{ $self->{path}->{current} };
-    $self->scrib( 1, "Find conductor for action <<$action>>" );
+    $action ||= shift @{ $self->{path}{current} };
+    $self->scrib( 1, "Find conductor for action ($action)" );
     my ( $action_info, $action_method ) = $self->lookup_action( $action, { return => 'info' } );
     $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
     my $conductor      = $action_info->{conductor};
@@ -225,7 +230,7 @@ sub lookup_conductor {
     # skip conductor for component-only actions
 
     return undef  if ( $conductor eq 'null' ); 
-    my $conductor_info = $self->CONFIG->{conductor}->{ lc $conductor };
+    my $conductor_info = $self->CONFIG->{conductor}{ lc $conductor };
     my $method         = $conductor_info->{method};
     return ( $conductor_info->{class}, $method );
 }
@@ -233,35 +238,37 @@ sub lookup_conductor {
 
 # Find the package/class corresponding to a particular 
 # action tag
-# 
+#
 # Possible $opt options:
 #   return => 'info' = return all action info
 #   skip_default => bool = if there is no action under $action_name, don't substitute the default
 
 sub lookup_action {
     my ( $self, $action_name, $opt ) = @_;
-    $action_name ||= shift @{ $self->{path}->{current} };
+    $action_name ||= shift @{ $self->{path}{current} };
     my $action_list = ( ref $action_name eq 'ARRAY' ) ? $action_name : [ $action_name ];
 
+    my $CONFIG = $self->CONFIG;
 ACTION:
     foreach my $action ( @{ $action_list } ) {
         $self->scrib( 1, "Find action corresponding to ($action)" );
-        my $action_info = $self->CONFIG->{action}->{ lc $action };
+        my $action_info = ( $action ) ? $CONFIG->{action}{ lc $action }
+                                      : $CONFIG->{action_info}{none};
         $self->scrib( 2, "Info for action:\n", Dumper( $action_info ) );
 
         # If we don't find a action, then we use the action from
-        # '_notfound_'; since we put this before the looping to find
+        # 'not_found'; since we put this before the looping to find
         # 'action' references, this can simply be a pointer
 
         unless ( $opt->{skip_default} or $action_info ) {
-            $action_info = $self->CONFIG->{action}->{ '_notfound_' };
+            $action_info = $CONFIG->{action_info}{not_found};
             $self->scrib( 1, "Using 'notfound' action" );
         }
 
         # Allow as many redirects as we need
 
         while ( my $action_redir = $action_info->{redir} ) {
-            $action_info = $self->CONFIG->{action}->{ lc $action_redir };
+            $action_info = $CONFIG->{action}{ lc $action_redir };
             $self->scrib( 3, "Info within redir ($action_redir):\n", Dumper( $action_info ) );
         }
         next ACTION unless ( $action_info );
@@ -285,11 +292,9 @@ sub finish_request {
     my $stash_class = $self->{stash_class};
     $stash_class->clean_stash;
 
-    # Clear out all the content
+    # Clear out all the content in the object
 
-    foreach my $key ( keys %{ $self } ) {
-        delete $self->{ $key };
-    }
+    delete $self->{ $_ } for ( keys %{ $self } );
 }
 
 1;

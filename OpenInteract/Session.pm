@@ -1,16 +1,16 @@
 package OpenInteract::Session;
 
-# $Id: Session.pm,v 1.4 2001/10/01 22:08:40 lachoy Exp $
+# $Id: Session.pm,v 1.5 2001/11/06 14:29:52 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Session::ISA     = ();
-$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Session::COOKIE_NAME = 'session';
 
-sub parse { 
+sub parse {
     my ( $class, $session_id ) = @_;
     my $R     = OpenInteract::Request->instance;
     $session_id ||= $R->{cookie}{in}{ $OpenInteract::Session::COOKIE_NAME };

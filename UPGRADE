@@ -53,9 +53,106 @@ Server configuration:
 --------------------
 
 As we improve OpenInteract, we occasionally add new configuration
-options to the 'server.perl' file. Since we have not yet developed a
-utility to integrate these changes automatically, check here to see
-what updates there have been between the versions.
+options to the 'server.perl' or 'server.ini' file. Since we have not
+yet developed a utility to integrate these changes automatically,
+check here to see what updates there have been between the versions.
+
+
+==============================
+UPGRADING TO 1.35
+==============================
+
+THIS IS A SUBSTANTIAL UPGRADE. PLEASE READ THIS AND MAKE APPROPROATE
+CHANGES TO YOUR CONFIGURATION FILE.
+
+OpenInteract configuration changes
+--------------------
+
+With the additional option of using a INI-style configuration file, we
+made a number of changes to the server configuration. It's probably
+easiest if you have the sample and your existing file open
+side-by-side for comparison.
+
+   - Moved 'template_ext'
+     to:   'template_info'->'template_ext'
+
+   - Moved 'default_connection_db'
+     to:   'datasource'->'default_connection_db'
+
+   - Moved 'default_connection_ldap'
+     to:   'datasource'->'default_connection_ldap'
+
+   - Moved 'error_object_class'
+     to:   'error'->'error_object_class'
+
+   - Moved 'default_error_handler'
+     to:   'error'->'default_error_handler'
+
+   - Moved 'smtp_host'
+     to:   'mail'->'smtp_host'
+
+   - Moved 'admin_email'
+     to:   'mail'->'admin_email'
+
+   - Moved 'content_email'
+     to:   'mail'->'content_email'
+
+   - Reverse and flatten the 'system_alias' hashref. For instance:
+
+        OpenInteract::Auth => [ qw/ auth auth_user auth_group / ]
+
+     becomes:
+
+        auth       => 'OpenInteract::Auth',
+        auth_user  => 'OpenInteract::Auth',
+        auth_group => 'OpenInteract::Auth',
+
+   - Moved 'action'->'_default_action_info'
+     to:   'action_info'->'default'
+
+   - Moved 'action'->'_notfound'
+     to:   'action_info'->'not_found'
+
+   - Moved 'action'->"''"
+     to:   'action_info'->'none'
+
+   - Moved 'stash_class'
+     to:   'server_info'->'stash_class'
+
+   - Moved 'request_class'
+     to:   'server_info'->'request_class'
+
+   - Moved 'website_name'
+     to:   'server_info'->'website_name'
+
+   - Added 'login'->'always_remember' (boolean; default false)
+
+
+Apache configuration changes
+--------------------
+
+The location and name of the variables set in your Apache
+configuration have changed. Instead of:
+
+  <Location /> 
+      SetHandler  perl-script 
+      PerlSetVar  StashClass  MySite::Stash
+      PerlHandler OpenInteract
+  </Location>
+ 
+
+Change it to:
+
+  PerlSetVar  OIStashClass      MySite::Stash
+
+  <Location /> 
+      SetHandler perl-script 
+      PerlHandler OpenInteract
+  </Location>
+
+So we modified the variable name to be more namespace-friendly and
+moved the declaration to the server rather than the Location.
+
 
 ==============================
 UPGRADING TO 1.3
@@ -71,7 +168,9 @@ The only required new configuration item is:
 
 You'll also need to create this directory in any websites you're
 upgrading. For websites created with 'oi_manage create_website' after
-the upgrade, you will not need to create this directory.
+the upgrade, you will not need to create this directory. Also ensure
+that it has permissions so that the website server user has permission
+to create and delete files.
 
 
 ==============================
@@ -309,4 +408,4 @@ process to have the changes take effect.
 
 
 ========================================
-$Id: UPGRADE,v 1.5 2001/10/15 05:38:01 lachoy Exp $
+$Id: UPGRADE,v 1.7 2001/11/20 04:10:10 lachoy Exp $

@@ -1,9 +1,11 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.22 2001/10/01 17:11:28 lachoy Exp $
+# $Id: Startup.pm,v 1.25 2001/11/28 05:55:07 lachoy Exp $
 
 use strict;
+use Cwd           qw( cwd );
 use Data::Dumper  qw( Dumper );
+use File::Path    qw();
 use Getopt::Long  qw( GetOptions );
 use OpenInteract::Config;
 use OpenInteract::Error;
@@ -12,12 +14,13 @@ use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
-my $REPOS_CLASS = 'OpenInteract::PackageRepository';
-my $PKG_CLASS   = 'OpenInteract::Package';
+my $TEMP_LIB_DIR = 'tmplib';
+my $REPOS_CLASS  = 'OpenInteract::PackageRepository';
+my $PKG_CLASS    = 'OpenInteract::Package';
 
 sub main_initialize {
     my ( $class, $p ) = @_;
@@ -38,8 +41,9 @@ sub main_initialize {
     $REPOS_CLASS->class_initialize( $C );
 
     # Read in our fundamental modules -- these should be in our @INC
-    # already, since the 'request_class' is in 'OpenInteract/OpenInteract'
-    # and the 'stash_class' is in 'MyApp/MyApp'
+    # already, since the 'request_class' is in
+    # 'OpenInteract/OpenInteract' and the 'stash_class' is in
+    # 'MyApp/MyApp'
 
     $class->require_module({ class => [ $bc->{request_class}, $bc->{stash_class} ] });
 
@@ -123,8 +127,8 @@ sub main_initialize {
     # website name since that's an SPOPS object and has already been
     # created
 
-    my @system_alias_keys = grep ! /^$bc->{website_name}/, keys %{ $C->{system_alias} };
-    $class->require_module({ class => \@system_alias_keys });
+    my @system_alias_classes = grep ! /^$bc->{website_name}/, values %{ $C->{system_alias} };
+    $class->require_module({ class => \@system_alias_classes });
 
     DEBUG && _w( 2, "Contents of INC: @INC" );
 
@@ -169,14 +173,17 @@ sub setup_static_environment {
         die "No base configuration file found in website directory ($website_dir)" ;
     }
 
+    $class->create_temp_lib( $bc );
+
     unshift @INC, $website_dir;
+
     my ( $init, $C ) = $class->main_initialize({ base_config => $bc,
                                                  alias_init  => 1,
                                                  spops_init  => 1 });
-    my $REQUEST_CLASS = $C->{request_class};
+    my $REQUEST_CLASS = $C->{server_info}{request_class};
     my $R = $REQUEST_CLASS->instance;
 
-    $R->{stash_class} = $C->{stash_class};
+    $R->{stash_class} = $C->{server_info}{stash_class};
     $R->stash( 'config', $C );
 
     # If we were given the superuser password, retrieve the user and
@@ -209,7 +216,8 @@ sub create_config {
     # Create the configuration file and set the base directory as configured;
     # also set other important classes from the config
 
-    my $config_file  = join( '/', $bc->{website_dir}, $bc->{config_dir}, $bc->{config_file} );
+    my $config_file  = join( '/', $bc->{website_dir},
+                                  $bc->{config_dir}, $bc->{config_file} );
     my $C = eval { OpenInteract::Config->instance( $bc->{config_type}, $config_file ) };
     if ( $@ ) {
         die "Cannot read configuration file! Error: $@\n";
@@ -219,14 +227,40 @@ sub create_config {
     # which should be as long as the apache child is alive if we're using
     # mod_perl, and will be set in the returned config object in any case
 
-    $C->{dir}{base}      = $bc->{website_dir};
-    $C->{dir}{interact}  = $bc->{base_dir};
-    $C->{request_class}    = $bc->{request_class};
-    $C->{stash_class}      = $bc->{stash_class};
-    $C->{website_name}     = $bc->{website_name};
+    $C->{dir}{base}                  = $bc->{website_dir};
+    $C->{dir}{interact}              = $bc->{base_dir};
+    $C->{server_info}{request_class} = $bc->{request_class};
+    $C->{server_info}{stash_class}   = $bc->{stash_class};
+    $C->{server_info}{website_name}  = $bc->{website_name};
     return $C;
 }
 
+
+# Method to copy all .pm files from all packages in a website to a
+# separate directory -- if it currently exists we clear it out first.
+
+sub create_temp_lib {
+    my ( $class, $base_config ) = @_;
+    my $site_dir = $base_config->{website_dir};
+
+    my $lib_dir  = "$site_dir/$TEMP_LIB_DIR";
+    unshift @INC, $lib_dir;
+
+    File::Path::rmtree( $lib_dir ) if ( -d $lib_dir );
+    mkdir( $lib_dir );
+
+    my $site_repos = $REPOS_CLASS->fetch( undef,
+                                          { directory => $base_config->{website_dir} } );
+    my $packages = $site_repos->fetch_all_packages();
+    my ( @all_files );
+    foreach my $package ( @{ $packages } ) {
+        DEBUG && _w( 2, "Trying to copy files for package $package->{name}" );
+        my $files_copied = $PKG_CLASS->copy_modules( $package, $lib_dir );
+        push @all_files, @{ $files_copied };
+    }
+    DEBUG && _w( 3, "Copied ", scalar @all_files, " module files to ($lib_dir)" );
+    return \@all_files;
+}
 
 
 sub read_package_list {
@@ -331,29 +365,16 @@ sub process_package {
     my $pkg_name = join( '-', $pkg_info->{name}, $pkg_info->{version} );
     DEBUG && _w( 1, "Trying to process package ($pkg_name)" );
 
-    # Note that app dir should be set earlier in the @INC list then the
-    # base dir, since the app can override base
-
-    my @package_dir_list = $PKG_CLASS->add_to_inc( $pkg_info );
-    DEBUG && _w( 1, "Included @package_dir_list for $pkg_name" );
-
-    # If we cannot find even one package directory, bail
-
-    unless ( scalar @package_dir_list ) {
-        _w( 0, "No package directories found for $pkg_name: was it installed correctly?" );
-        return undef;
-    }
-
-    # Now we want the app dir to be *last*, so reverse the order
-
-    @package_dir_list = reverse @package_dir_list;
+    my $site_pkg_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir} );
+    my $base_pkg_dir = join( '/', $pkg_info->{base_dir}, $pkg_info->{package_dir} );
+    DEBUG && _w( 1, "Pkg dirs: ($base_pkg_dir, $site_pkg_dir) for $pkg_name" );
 
     # Plow through the directories and find the module listings (to
     # include), action config (to parse and set) and the SPOPS config (to
-    # parse and set)
+    # parse and set). Base package first so its info can be overridden.
 
     my ( %spops, %action );
-    foreach my $package_dir ( @package_dir_list ) {
+    foreach my $package_dir ( $base_pkg_dir, $site_pkg_dir ) {
         my $conf_pkg_dir = "$package_dir/conf";
 
         # If the package does not have a 'list_module.dat', that's ok and the
@@ -503,8 +524,8 @@ sub read_perl_file {
 sub finalize_configuration {
     my ( $class, $p ) = @_;
     my $CONF = $p->{config};
-    my $REQUEST_CLASS      = $CONF->{request_class};
-    my $STASH_CLASS        = $CONF->{stash_class};
+    my $REQUEST_CLASS      = $CONF->{server_info}{request_class};
+    my $STASH_CLASS        = $CONF->{server_info}{stash_class};
 
     # Create all the packages and subroutines on the fly as necessary
 
@@ -538,12 +559,8 @@ sub finalize_configuration {
     }
 
     DEBUG && _w( 1, "Setting up System aliases" );
-    foreach my $sys_class ( keys %{ $CONF->{system_alias} } ) {
-        next if ( $sys_class =~ /^_/ );
-        foreach my $alias ( @{ $CONF->{system_alias}{ $sys_class } } ) {
-            DEBUG && _w( 1, "Tagging $alias in $STASH_CLASS to be $sys_class" );
-            $request_alias->{ $alias }{ $STASH_CLASS } = $sys_class;
-        }
+    foreach my $alias ( keys %{ $CONF->{system_alias} } ) {
+        $request_alias->{ $alias }{ $STASH_CLASS } = $CONF->{system_alias}{ $alias };
     }
     DEBUG && _w( 1, "Setup object and system aliases ok" );
     return $init_class;
@@ -587,7 +604,7 @@ __END__
 
 =head1 NAME
 
-OpenInteract::Startup -- Bootstrapper that reads in modules, manipulates @INC, etc.
+OpenInteract::Startup -- Bootstrapper that reads in modules and initializes the environment
 
 =head1 SYNOPSIS
 

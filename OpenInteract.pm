@@ -1,14 +1,15 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.13 2001/10/08 20:55:56 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.22 2001/11/26 13:42:25 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
+use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
-$OpenInteract::DIST_VERSION = '1.28';
+$OpenInteract::VERSION  = 1.35;
+
 
 # Generic separator used in display
 
@@ -43,7 +44,7 @@ sub handler ($$) {
 
     my ( $page );
     eval {
-        $class->setup_apache( $R, $apache );
+        $class->setup_server_interface( $R, $apache );
         $class->setup_cache( $R );
         $class->parse_uri( $R );
         $class->find_action_handler( $R );
@@ -80,7 +81,7 @@ sub setup_request {
     # Read the stash class from our httpd.conf and grab the config
     # object
 
-    my $STASH_CLASS = $apache->dir_config( 'StashClass' );
+    my $STASH_CLASS = $apache->dir_config( 'OIStashClass' );
     unless ( $REQ{ $STASH_CLASS } ) {
         eval "require $STASH_CLASS";
         die "Cannot require stash class ($STASH_CLASS)!\n" if ( $@ );
@@ -94,7 +95,7 @@ sub setup_request {
     # Create the base request object that contains other objects and
     # info
 
-    my $REQUEST_CLASS = $C->{request_class};
+    my $REQUEST_CLASS = $C->{server_info}{request_class};
     unless ( $REQ{ $REQUEST_CLASS } ) {
         eval "require $REQUEST_CLASS";
         die "Cannot require request class ($REQUEST_CLASS)!\n" if ( $@ );
@@ -114,7 +115,9 @@ sub setup_request {
 # address -- if you're using a proxy, be sure that this has been
 # passed from the front end server using mod_proxy_add_forward
 
-sub setup_apache {
+sub setup_apache { my $c = shift; return $c->setup_server_interface( @_ ) }
+
+sub setup_server_interface {
     my ( $class, $R, $apache ) = @_;
     my $apr = Apache::Request->new( $apache );
     $R->stash( 'apache', $apr );
@@ -216,7 +219,7 @@ sub find_action_handler {
                            system_msg => "Cannot find conductor for $R->{ui}{action}",
                            extra      => { url => $R->{path}{original} } }) };
         if ( $@ ) {
-            $R->send_html( $R->apache, $@, $R );
+            $class->send_html( $R->apache, $@, $R );
             die OK . "\n";
         }
     }
@@ -235,7 +238,7 @@ sub setup_cookies_and_session {
         $R->session->parse;
     };
     if ( $@ ) {
-        $R->send_html( $R->apache, $@, $R );
+        $class->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
     return undef;
@@ -252,7 +255,7 @@ sub finish_cookies_and_session {
                                                     values %{ $R->{cookie}{out} } ) );
     };
     if ( $@ ) {
-        $R->send_html( $R->apache, $@, $R );
+        $class->send_html( $R->apache, $@, $R );
         die OK . "\n";
     }
     return undef;
@@ -263,21 +266,23 @@ sub finish_cookies_and_session {
 
 sub setup_authentication {
     my ( $class, $R ) = @_;
-    unless ( $R->auth ) {
-        my $error_msg = "Authentication cannot be setup! Please ensure 'auth' is setup in your " .
-                        "server configuration under 'system_alias'";
-        $R->send_html( $R->apache, $error_msg, $R );
-        die OK . "\n";
+    my ( $error_msg );
+    if ( my $auth_class = $R->auth ) {
+        eval {
+            $auth_class->user;
+            $auth_class->group;
+            $auth_class->is_admin;
+        };
+        $error_msg = $@;
     }
-    eval {
-        $R->auth->user;
-        $R->auth->group;
-    };
-    if ( $@ ) {
-        $R->send_html( $R->apache, $@, $R );
-        die OK . "\n";
+    else {
+        $error_msg = "Authentication cannot be setup! Please ensure 'auth' " .
+                     "is setup in your server configuration under 'system_alias'";
     }
-    return undef;
+    return undef unless ( $error_msg );
+
+    $class->send_html( $R->apache, $error_msg, $R );
+    die OK . "\n";
 }
 
 
@@ -298,11 +303,12 @@ sub setup_theme {
         $R->throw({ code => 404 });
         $R->scrib( 0, "Error! Cannot retrieve theme! ( Class: ", $R->theme, ")",
                       "with error ($@ / $ei->{system_msg}) Help!" );
+        my $admin_email = $C->{mail}{admin_email} || $C->{admin_email};
         my $error_msg = <<THEMERR;
 Fundamental part of OpenInteract (themes) not functioning; please contact the
-system administrator (<a href="mailto:$C->{admin_email}">$C->{admin_email}</a>).
+system administrator (<a href="mailto:$admin_email">$admin_email</a>).
 THEMERR
-        $R->send_html( $R->apache, $error_msg, $R );
+        $class->send_html( $R->apache, $error_msg, $R );
         die OK . "\n";
     }
     return undef;
@@ -328,13 +334,19 @@ sub run_content_handler {
 
 sub send_static_file {
     my ( $class, $R ) = @_;
-    my $static_file = $R->{page}{send_file};
     my $fh = Apache->gensym;
-    eval { open( $fh, $static_file ) || die $!; };
+    eval { open( $fh, $R->{page}{send_file} ) || die $!; };
     if ( $@ ) {
-        $R->scrib( 0, "Cannot open static file from filesystem ($static_file): $@" );
+        $R->scrib( 0, "Cannot open static file from filesystem ($R->{page}{send_file}): $@" );
         return NOT_FOUND;
     }
+    unless ( $R->{page}{send_file_size} ) {
+        $R->{page}{send_file_size} = (stat $R->{page}{send_file})[7];
+    }
+    $R->apache->headers_out->{'Content-Length'} = $R->{page}{send_file_size};
+    $R->DEBUG && $R->scrib( 1, "Sending file ($R->{page}{send_file}) of size",
+                               "($R->{page}{send_file_size}) and type",
+                               "($R->{page}{content_type})" );
     $R->apache->send_http_header( $R->{page}{content_type} );
     $R->apache->send_fd( $fh );
     close( $fh );
@@ -345,12 +357,13 @@ sub send_static_file {
 
 sub send_html {
     my ( $class, $apache, $content, $R ) = @_;
-    $R ||= {};
+    if ( ref $R ) {
+        unless ( $R->CONFIG->{no_promotion} ) {
+            $apache->headers_out->{'X-Powered-By'} = "OpenInteract $OpenInteract::VERSION";
+        }
+    }
     my $content_type = $R->{page}{content_type} || $apache->content_type || 'text/html';
     $content_type = ( $content_type eq 'httpd/unix-directory' ) ? 'text/html' : $content_type;
-    unless ( $R->CONFIG->{no_promotion} ) {
-        $apache->headers_out->{'X-Powered-By'} = "OpenInteract $OpenInteract::DIST_VERSION";
-    }
     $apache->send_http_header( $content_type );
     $apache->print( $content );
 }
@@ -453,7 +466,8 @@ C<die> with Apache return code (e.g., 'OK' )
 =item *
 
 B<setup_authentication( $R )>: Authenticate the user and get the
-groups the user belongs to.
+groups the user belongs to, plus set for this request whether the user
+is an administrator.
 
 Return: nothing
 

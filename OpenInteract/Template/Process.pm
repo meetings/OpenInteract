@@ -1,6 +1,6 @@
 package OpenInteract::Template::Process;
 
-# $Id: Process.pm,v 1.15 2001/10/11 13:28:55 lachoy Exp $
+# $Id: Process.pm,v 1.18 2001/10/30 02:24:39 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
@@ -10,7 +10,7 @@ use OpenInteract::Template::Provider;
 use Template;
 
 $OpenInteract::Template::Process::VERSION  = '1.2';
-$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Process::Revision = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
 
@@ -89,9 +89,11 @@ sub handler {
 
     my ( $name, $to_process );
     if ( $template_source->{text} ) {
-        $to_process = \$template_source->{text};
+        $to_process = ( ref $template_source->{text} eq 'SCALAR' )
+                        ? $template_source->{text} : \$template_source->{text};
         $name       = '_anonymous_';
-        $R->DEBUG && $R->scrib( 1, "Using raw template source for processing" );
+        $R->DEBUG && $R->scrib( 1, "Using raw template source (",
+                                   ref $template_source->{text}, ") for processing" );
     }
     elsif ( $template_source->{object} ) {
         $to_process = \$template_source->{object}{template};
@@ -120,6 +122,13 @@ sub handler {
         $R->DEBUG && $R->scrib( 1, "Using template name ($name) for processing" );
     }
 
+    # Uh oh...
+
+    else {
+        $R->scrib( 0, "No template to process! Information given for source:\n",
+                      Dumper( $template_source ) );
+        die "No template to process!\n";
+    }
     # Grab the template object and the OI plugin, making the OI plugin
     # available to every template
 
@@ -174,7 +183,7 @@ sub _package_template_config {
         if ( ref $pkg->{template_block} eq 'HASH' ) {
             foreach my $block_class ( keys %{ $pkg->{template_block} } ) {
                 my $block_method = $pkg->{template_block}{ $block_class };
-                my $item_blocks = eval { $block_class->$block_method };
+                my $item_blocks = eval { $block_class->$block_method() };
                 foreach my $block_name ( keys %{ $item_blocks } ) {
                     $R->DEBUG && $R->scrib( 1, "Found template block ($block_name) in",
                                                "$block_class\->$block_method" );

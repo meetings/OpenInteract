@@ -12,7 +12,7 @@
      year_value   = chosen year
      month_value  = chosen month (number)
      day_value    = chosen day (number)
-     blank        = if true, start each SELECT with a blank option
+     is_blank     = if true, start each SELECT with a blank option
      year_field   = name for year SELECT
      month_field  = name for month SELECT
      day_field    = name for day SELECT

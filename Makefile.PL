@@ -5,7 +5,7 @@ use ExtUtils::MakeMaker;
 
 my %opts = (
     'NAME'	       => 'OpenInteract',
-    'VERSION_FROM' => 'VERSION',
+    'VERSION_FROM' => 'OpenInteract.pm',
     'EXE_FILES'    => [ qw( script/oi_manage ) ],
     'PREREQ_PM'    => {
       'SPOPS'            => 0.50,
@@ -26,6 +26,7 @@ my %opts = (
       'Class::Date'      => 1.00,
       'Pod::POM'         => undef,
       'MIME::Lite'       => 2.00,
+      'File::MMagic'     => undef,
     },
 );
 

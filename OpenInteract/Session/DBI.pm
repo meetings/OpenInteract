@@ -1,25 +1,25 @@
 package OpenInteract::Session::DBI;
 
-# $Id: DBI.pm,v 1.5 2001/10/01 22:08:52 lachoy Exp $
+# $Id: DBI.pm,v 1.6 2001/11/06 04:26:07 lachoy Exp $
 
 use strict;
 use OpenInteract::Session;
 
 @OpenInteract::Session::DBI::ISA     = qw( OpenInteract::Session );
-$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Session::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
-sub _create_session { 
+sub _create_session {
     my ( $class, $session_id ) = @_;
     my $R = OpenInteract::Request->instance;
     my $session_class  = $R->CONFIG->{session_info}{class};
     my $session_params = $R->CONFIG->{session_info}{params} || {};
-    $session_params->{Handle} = $R->db;
+    $session_params->{Handle} = $R->db( 'main' );
 
     # Detect Apache::Session::MySQL and modify parameters
     # appropriately
 
     if ( $session_class =~ /MySQL$/ ) {
-        $session_params->{LockHandle} = $R->db;
+        $session_params->{LockHandle} = $session_params->{Handle};
         $R->DEBUG && $R->scrib( 2, "Using MySQL session store, with LockHandle parameter" );
     }
     my %session = ();

@@ -1,9 +1,3 @@
-  <html>
-    <head>
-      <title>OpenInteract and LDAP: Setting it Up</title>
-    </head>
-    <body>
-<!-- <template_status>no_parse</template_status> -->
       <h1>OpenInteract and LDAP</h1>
       
       <p>With <tt>OpenInteract</tt> 1.2 and <tt>SPOPS</tt> 0.50, you
@@ -55,9 +49,9 @@
         -- host, port, base DN -- are there, and you can provide a
         standard bind DN and password as well. (Examples below.)</li>
 
-        <li>Set the key <tt>{default_connection_ldap}</tt> to the
-        connection to be used when an LDAP object doesn't specify a
-        datasource.</li>
+        <li>Set the key <tt>{datasource}{default_connection_ldap}</tt>
+        to the connection to be used when an LDAP object doesn't
+        specify a datasource.</li>
 
       </ul>
 
@@ -389,6 +383,3 @@ $config = {
           infromation.</p>
 
       </ol>
-
-</body>
-</html>

@@ -1,12 +1,12 @@
 package OpenInteract::Auth;
 
-# $Id: Auth.pm,v 1.10 2001/10/11 03:55:39 lachoy Exp $
+# $Id: Auth.pm,v 1.14 2001/11/20 04:09:53 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Auth::ISA     = ();
-$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 
 # Authenticate a user -- after calling this method if
@@ -16,77 +16,133 @@ $OpenInteract::Auth::VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.
 sub user {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    if ( my $uid = $R->{session}{user_id} ) {
-        $R->DEBUG && $R->scrib( 1, "Found session and uid ($uid); creating user." );
+    my $uid = $class->fetch_user_id;
+    if ( $uid ) {
+        $R->DEBUG && $R->scrib( 1, "Found session and uid ($uid); fetching user" );
 
-        # You MUST skip security here as a bootstrapping maneuver,
-        # otherwise the superuser can never login (since WORLD has
-        # SEC_LEVEL_NONE to the record)
-
-        $R->{auth}{user} = eval { $R->user->fetch( $uid,
-                                                   { skip_security => 1 } ) };
+        $R->{auth}{user} = eval { $class->fetch_user( $uid ) };
 
         # If there's a failure fetching the user, we need to ensure that
         # this user_id is not passed back to us again so we don't keep
         # going through this process...
 
         if ( $@ or ! $R->{auth}{user} ) {
-            OpenInteract::Error->set( SPOPS::Error->get );
-            $R->throw({ code => 311 });
-            $R->{session}{user_id} = undef;
-            return undef;
+            return $class->fetch_user_failed( $uid );
         }
 
-        # We use this to note that the user is logged in, since we'll
-        # shortly modify OI to create a record for a 'not-logged-in' user
-        # instead of leaving it empty.
-
+        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}{user}{login_name}" );
         $R->{auth}{logged_in} = 1;
 
-        $R->DEBUG && $R->scrib( 2, "User: ", Dumper( $R->{auth}{user} ) );
-        $R->DEBUG && $R->scrib( 1, "User found: $R->{auth}{user}{login_name}" );
-
-        # If there's a removal date, then this is the user's first
-        # login
-
-        # TODO: Check if this is working, if it's needed, ...
-
-        if ( $R->{auth}{user}{removal_date} ) {
-            $R->DEBUG && $R->scrib( 1, "First login for user! Do some cleanup." );
-            $R->{auth}{user}{removal_date} = undef;
-
-            # blank out the removal date -- note that this doesn't seem to
-            # work properly, and put the user in the public group
-
-            eval {
-                $R->{auth}{user}->save;
-                $R->{auth}{user}->make_public;
-            };
-
-            # need to check for save/security errors here
-        }
+        $class->check_first_login;
         return undef;
     }
     $R->DEBUG && $R->scrib( 1, "No uid found in session. Finding login info." );
 
-    # If the user didn't previously exist, try to create
-    # from the fields login_name and password
+    # If no user info found, check to see if the user logged in
+
+    $R->{auth}{user} = $class->login_user;
+
+    # If not, create an 'empty' user and we're done
+
+    unless ( $R->{auth}{user} ) {
+        $R->DEBUG && $R->scrib( 1, "Creating the not-logged-in user." );
+        $class->create_nologin_user;
+        return undef;
+    }
+
+    $R->{auth}{logged_in} = 1;
+    $class->remember_login;
 
     my $CONFIG = $R->CONFIG;
+    if ( my $custom_class = $CONFIG->{login}{custom_login_handler} ) {
+        my $custom_method = $CONFIG->{login}{custom_login_handler} || 'handler';
+        $R->scrib( 1, "Custom login handler/method being used: ($custom_class) ($custom_method)" );
+        eval { $custom_class->$custom_method() };
+        if ( $@ ) {
+            $R->scrib( 0, "Custom login handler died with: $@" );
+            $class->custom_login_failed;
+        }
+    }
+
+    return undef;
+}
+
+# Just grab the user_id from somewhere
+
+sub fetch_user_id {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return $R->{session}{user_id};
+}
+
+
+# Use the user_id to create a user (don't use eval {} around the
+# fetch(), this should die if it fails)
+
+sub fetch_user {
+    my ( $class, $uid ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return $R->user->fetch( $uid, { skip_security => 1 } );
+}
+
+
+# What to do if the user fetch fails
+
+sub fetch_user_failed {
+    my ( $class, $uid ) = @_;
+    my $R = OpenInteract::Request->instance;
+    OpenInteract::Error->set( SPOPS::Error->get );
+    $R->throw({ code => 311 });
+    $R->{session}{user_id} = undef;
+    return undef;
+}
+
+
+# If there's a removal date, then this is the user's first login
+
+# TODO: Check if this is working, if it's needed, ...
+
+sub check_first_login {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    if ( $R->{auth}{user}{removal_date} ) {
+        $R->DEBUG && $R->scrib( 1, "First login for user! Do some cleanup." );
+        $R->{auth}{user}{removal_date} = undef;
+
+        # blank out the removal date -- note that this doesn't seem to
+        # work properly, and put the user in the public group
+
+        eval {
+            $R->{auth}{user}->save;
+            $R->{auth}{user}->make_public;
+        };
+
+        # need to check for save/security errors here
+    }
+}
+
+
+# If no user found elsewhere, see if a login_name and password were
+# passed in; if so, try and login the user and track the info
+
+sub login_user {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+
+    my $apr    = $R->apache;
+    my $CONFIG = $R->CONFIG;
+
     my $login_field    = $CONFIG->{login}{login_field};
     my $password_field = $CONFIG->{login}{password_field};
-    my $remember_field = $CONFIG->{login}{remember_field};
     unless ( $login_field and $password_field ) {
         $R->throw({ code => 205, type => 'system' });
         return undef;
     }
 
-    my $login_name = $R->apache->param( $login_field );
-    unless ( $login_name ) {
-        $R->{auth}{user} = $class->create_nologin_user();
-        return undef;
-    }
+    my $login_name = $apr->param( $login_field );
+    return undef unless ( $login_name );
     $R->DEBUG && $R->scrib( 1, "Found login name from form: ($login_name)" );
+
     my $user = eval { $R->user->fetch_by_login_name( $login_name,
                                                      { return_single => 1,
                                                        skip_security => 1 } ) };
@@ -97,7 +153,7 @@ sub user {
     unless ( $user ) {
         $R->scrib( 0, "User with login ($login_name) not found. Throwing auth error" );
         $R->throw({ code  => 401,
-                    type  => 'authenticate', 
+                    type  => 'authenticate',
                     extra => { login_name => $login_name } });
         return undef;
     }
@@ -115,40 +171,44 @@ sub user {
     }
     $R->DEBUG && $R->scrib( 1, "Passwords matched; UID ($user->{user_id})" );
 
-    # If the user was matched up to a login_name and the password
-    # matched, put the user_id into the session and put the user into
-    # $R. Also, make the expiration transient (expires when browser
-    # closes) unless the user clicked the 'Remember Me' checkbox
+    # Persist the user ID via the session (whether the session is
+    # transient is handled in 'remember_login()')
 
-    unless ( $R->apache->param( $remember_field ) ) {
-        $R->{session}{expiration} = undef;
-    }
-    $R->{auth}{logged_in} = 1;
     $R->{session}{user_id} = $user->id;
-    $R->{auth}{user} = $user;
-
-    if ( my $custom_class = $CONFIG->{login}{custom_login_handler} ) {
-        my $custom_method = $CONFIG->{login}{custom_login_handler} || 'handler';
-        $R->scrib( 1, "Custom login handler/method being used: ($custom_class) ($custom_method)" );
-        eval { $custom_class->$custom_method() };
-        if ( $@ ) {
-            $R->scrib( 0, "Custom login handler died with: $@" );
-            $R->{auth}{logged_in} = 0;
-            delete $R->{session}{user_id};
-            delete $R->{auth}{user};
-        }
-    }
-
-    return undef;
+    return $user;
 }
 
+
+# If we created a user, make the expiration transient unless told otherwise.
+
+sub remember_login {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return unless ( $R->{auth}{user} );
+    return if ( $R->CONFIG->{login}{always_remember} );
+
+    my $remember_field = $R->CONFIG->{login}{remember_field};
+    if ( ! $remember_field or ! $R->apache->param( $remember_field )  ) {
+        $R->{session}{expiration} = undef;
+    }
+}
+
+# Create a 'dummy' user
 
 sub create_nologin_user {
     my ( $class ) = @_;
     my $R = OpenInteract::Request->instance;
-    return $R->user->new({ login_name => 'anonymous', first_name => 'Anonymous',
-                           last_name  => 'User',      user_id    => 99999 });
+    $R->{auth}{logged_in} = 0;
+    delete $R->{session}{user_id};
+    return $R->{auth}{user} = $R->user->new({ login_name => 'anonymous',
+                                              first_name => 'Anonymous',
+                                              last_name  => 'User',
+                                              user_id    => 99999 });
 }
+
+
+sub custom_login_failed { $_[0]->create_nologin_user }
+
 
 # If the user is logged in, retrieve the groups he/she/it belongs to
 
@@ -172,6 +232,30 @@ sub group {
     return undef;
 }
 
+
+sub is_admin {
+    my ( $class ) = @_;
+    my $R = OpenInteract::Request->instance;
+
+    return unless ( $R->{auth}{logged_in} );
+    return unless ( ref $R->{auth}{group} eq 'ARRAY' );
+
+    my $CONFIG = $R->CONFIG;
+
+    if ( $R->{auth}{user}->id eq $CONFIG->{default_objects}{superuser} ) {
+        return $R->{auth}{is_admin}++;
+    }
+
+    my $site_admin_id = $CONFIG->{default_objects}{site_admin_group};
+    my $supergroup_id = $CONFIG->{default_objects}{supergroup};
+    foreach my $group ( @{ $R->{auth}{group} } ) {
+        my $group_id = $group->id;
+        if ( $group_id eq $site_admin_id or $group_id eq $supergroup_id ) {
+            return $R->{auth}{is_admin}++ ;
+        }
+    }
+}
+
 1;
 
 __END__
@@ -193,10 +277,19 @@ OpenInteract::Auth - Authenticate the user object and create its groups
 
  OpenInteract::Auth->group;
 
+ # See whether this user is an administrator
+
+ OpenInteract::Auth->is_admin;
+
 =head1 DESCRIPTION
 
-This class is responsible for authenticating users to the system. It
-does this in one of two ways:
+This class/interface is responsible for authenticating users to the
+system and other authentication checks. If you have custom
+authentication needs you can specify your class in the server
+configuration and create your own or subclass this class and use
+pieces of it as needed.
+
+This class tries to create a user in one of two ways:
 
 =over 4
 
@@ -279,6 +372,149 @@ object belongs to and puts the arrayref of groups into:
 
  $R->{auth}{group}
 
+B<is_admin()>
+
+Looks at the user and groups and determines whether the user is an
+administrator. If the user is an administrator, then:
+
+ $R->{auth}{is_admin}
+
+is set to a true value.
+
+=head1 SUBCLASSING
+
+As of OpenInteract 1.35, this module is now more amenable to
+subclassing. Both the C<user()> and C<group()> methods are broken down
+into more discrete actions which you can override as you need.
+
+=head2 User Fetching Actions
+
+B<fetch_user_id()>
+
+Retrieves the user ID for this request.
+
+Default: get the 'user_id' key from the session.
+
+Returns: user ID value.
+
+B<fetch_user( $user_id )>
+
+Called only if a user ID is found using C<fetch_user_id()>. This
+method retrieves the user object corresponding to C<$user_id>.
+
+Note that if you are using SPOPS for this (recommended), you almost
+certainly want to pass a true value for the 'skip_security' parameter,
+such as:
+
+    return $R->user->fetch( $uid, { skip_security => 1 } );
+
+Because otherwise the superuser will never be able to login
+
+Default: get the SPOPS user object matching C<$user_id>.
+
+Returns: user object on success, undef if user object not found, a
+C<die> on failure.
+
+B<fetch_user_failed( $user_id )>
+
+Called only if C<fetch_user()> throws a C<die>.
+
+Default: Throws a code '311' error, blanks out the 'user_id' key of
+the session and returns undef.
+
+Returns: not checked
+
+B<check_first_login()>
+
+Called if C<fetch_user()> succeeds. Many times you want to execute
+certain actions when the user logs in for the first time. This is a
+hook for you to do so.
+
+Default: Make the user part of the 'public' group (this should
+probably done elsewhere)
+
+Returns: not checked
+
+B<login_user()>
+
+Called if C<fetch_user_id()> does not find a user ID. This should look
+at the form values passed in and find at least a login name and
+password. If values for these are not found, the function returns undef.
+
+If these values are found, the function should fetch the user and
+authenticate the user by whatever means are appropriate. If the user
+is properly authenticated, the function should set whatever values are
+necessary to ensure the user can be found by C<fetch_user_id()> -- by
+default, this means setting 'user_id' in the session, but your
+application might use a different means to track the user.
+
+Default: Look at the 'login_field' and 'password_field' as set in the
+server configuration under 'login' for the username and password.
+
+Returns: A user object. If you cannot create one, just return undef.
+
+B<remember_login()>
+
+Default is to make sessions (along with user identification) transient
+-- once the browser that created the session is closed, the cookie
+expires. The user can choose to have the system and their browser
+remember the session for a longer period of time (specified in the
+server config key 'session'->'expiration').
+
+This method makes the session non-transient if either the user checks
+off the 'remember_field' checkbox (the fieldname is specified in the
+server config key 'login'->'remember_field') or if the server config
+setting for 'login'->'always_remember' is true.
+
+B<custom_login_failed()>
+
+Executed if the execution of the custom login handler fails. (The
+custom login handler is specified by the class and method defined in
+the server configuration under 'login', 'custom_login_handler' and
+'custom_login_method'.)
+
+Default: Run C<create_nologin_user()>.
+
+Returns: not checked
+
+B<create_nologin_user()>
+
+If a user is not logged in, we create transient user object so that
+all OpenInteract handlers have something they can refer to. It is not
+a valid user and it gets created anew with every request where the
+user is not logged in.
+
+If you want to rename the login_name, first/last name, etc, just
+subclass this class, create your own method, then specify your class
+in the server configuration under 'auth'.
+
+This method should ensure that the system knows a user is not logged
+in by setting:
+
+ $R->{auth}{logged_in} = undef;
+
+and by blanking out any tracking information your application sets in
+the session.
+
+Finally, the method should set:
+
+ $R->{auth}{user}
+
+To the transient user object you have created.
+
+=head2 Group Fetching Actions
+
+None! The C<group()> method is so simple that we thought breaking it
+into pieces would make it overly complex. If you override it, your
+code should look something like:
+
+ if ( $R->{auth}{logged_in} ) {
+    $R->{auth}{group} = $R->{auth}{user}->group;
+ }
+
+Which is basically all this method does, with some error checking and
+debugging thrown in.
+
 =head1 TO DO
 
 B<Ticket handling>
@@ -294,9 +530,9 @@ None known.
 
 =head1 SEE ALSO
 
-L<OpenInteract::User>
+L<OpenInteract::User|OpenInteract::User>
 
-L<OpenInteract::Group>
+L<OpenInteract::Group|OpenInteract::Group>
 
 =head1 COPYRIGHT
 

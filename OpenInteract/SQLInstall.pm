@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.16 2001/10/05 12:52:17 lachoy Exp $
+# $Id: SQLInstall.pm,v 1.17 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 use Class::Date;
@@ -9,7 +9,7 @@ use OpenInteract::Package;
 use SPOPS::SQLInterface;
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -255,7 +255,8 @@ sub process_data_file {
     # item of data
 
     elsif ( my $object_class = $action->{spops_class} ) {
-        $object_class = $class->sql_class_to_website( $p->{config}{website_name}, $object_class );
+        my $website_name = $p->{config}{server_info}{website_name} || $p->{config}{website_name};
+        $object_class = $class->sql_class_to_website( $website_name, $object_class );
         DEBUG && _w( 1, "Reading data for class $object_class" );
         my $fields = $action->{field_order};
         my $num_fields = scalar @{ $fields };
@@ -366,7 +367,7 @@ sub transform_data {
 
 sub _transform_class_to_website {
     my ( $class, $action, $data_list, $p ) = @_;
-    my $website_name = $p->{config}{website_name};
+    my $website_name = $p->{config}{server_info}{website_name} || $p->{config}{website_name};
     foreach my $data ( @{ $data_list } ) {
         foreach my $website_field ( @{ $action->{transform_class_to_website} } ) {
             my $idx = $p->{field_order}{ $website_field };
@@ -380,7 +381,7 @@ sub _transform_class_to_website {
 
 sub _transform_class_to_oi {
     my ( $class, $action, $data_list, $p ) = @_;
-    my $website_name = $p->{config}{website_name};
+    my $website_name = $p->{config}{server_info}{website_name} || $p->{config}{website_name};
     foreach my $data ( @{ $data_list } ) {
         foreach my $website_field ( @{ $action->{transform_class_to_oi} } ) {
             my $idx = $p->{field_order}{ $website_field };

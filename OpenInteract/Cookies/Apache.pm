@@ -1,12 +1,13 @@
 package OpenInteract::Cookies::Apache;
 
-# $Id: Apache.pm,v 1.2 2001/10/01 22:08:52 lachoy Exp $
+# $Id: Apache.pm,v 1.4 2001/11/06 14:31:44 lachoy Exp $
 
 use strict;
+use Apache::Cookie;
 use Data::Dumper qw( Dumper );
 
 @OpenInteract::Cookies::Apache::ISA     = ();
-$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cookies::Apache::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 
 # Retrieve the cookies using Apache::Request
@@ -69,8 +70,7 @@ OpenInteract::Cookies::Apache - handler to parse/output cookies from/to the clie
  # Use Apache::Cookie (from Apache::Request)
 
  'system_alias' => {
-       'OpenInteract::Cookies::Apache'    => [ qw/ cookies / ],
-       ...,
+       cookies => 'OpenInteract::Cookies::Apache', ...
  }
 
  # Retrieve the cookies from the client request
@@ -109,17 +109,17 @@ actions. They adhere to the same interface but perform the actions
 using different helper modules. This module uses L<Apache::Cookie> to
 do the actual cookie actions.
 
-Note that C<Apache::Cookie> does not work on all platforms,
-particularly Win32 (as of this writing). If C<Apache::Cookie> does not
-work for you, please use the L<OpenInteract::Cookies::CGI> module
+Note that L<Apache::Cookie|Apache::Cookie> does not work on all
+platforms, particularly Win32 (as of this writing). If
+L<Apache::Cookie|Apache::Cookie> does not work for you, please use the
+L<OpenInteract::Cookies::CGI|OpenInteract::Cookies::CGI> module
 instead.
 
 To use this implementation, set the following key in the
 C<conf/server.perl> file for your website:
 
  system_aliases => {
-   ...,
-   'OpenInteract::Cookies::Apache' => [ qw/ cookies / ],
+   cookies => 'OpenInteract::Cookies::Apache', ...
  },
 
 =head1 METHODS
@@ -183,9 +183,13 @@ headers.
 
 Nothing.
 
-=head1 BUGS 
+=head1 BUGS
 
 None known.
+
+=head1 SEE ALSO
+
+L<Apache::Cookie|Apache::Cookie>
 
 =head1 COPYRIGHT
 

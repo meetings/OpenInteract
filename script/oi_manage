@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: oi_manage,v 1.45 2001/10/10 13:55:07 lachoy Exp $
+# $Id: oi_manage,v 1.55 2001/11/28 15:21:28 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
@@ -9,7 +9,7 @@ use ExtUtils::Manifest;
 use File::Copy            qw( cp );
 use File::Path;
 use Getopt::Long          qw( GetOptions );
-use OpenInteract::Package;
+use OpenInteract::Package qw( READONLY_FILE );
 use OpenInteract::PackageRepository;
 use OpenInteract::Startup;
 use Pod::Usage            qw( pod2usage );
@@ -17,7 +17,7 @@ use SPOPS::Secure         qw( :level :scope );
 use SPOPS::HashFile       ();
 use Text::Wrap            qw( wrap );
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.45 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.55 $ =~ /(\d+)\.(\d+)/);
 
 $Text::Wrap::columns = 60;
 
@@ -28,12 +28,15 @@ use constant DEBUG => 0;
 
 my %COMMANDS          = map { $_ => 1 }
                         qw( initial_packages list_packages list_actions list_objects
-                            install upgrade create_skeleton export_package check_package
-                            create_website install_sql test_db test_ldap change_spops_driver
-                            install_package apply_package remove_package upgrade_package
+                            install upgrade create_skeleton
+                            export_package check_package change_spops_driver
+                            create_website install_sql test_db test_ldap
+                            install_package apply_package upgrade_package
+                            remove_package
                             install_template dump_template remove_template
                             refresh_doc refresh_widget update_object
-                            upgrade_website_repository upgrade_installation_repository );
+                            upgrade_website_repository
+                            upgrade_installation_repository );
 
 # These are aliases people might type by accident instead of the
 # proper command; add as necessary (alias on the left, correct command
@@ -64,9 +67,9 @@ my @WEBSITE_SUBDIR    = qw( cache cache/tt conf data doc error
 # Packages shipped with OI -- the 'base' packages necessary to run the system
 
 my @WEBSITE_BASE_PKG  = qw( base base_box base_component base_error
-                            base_group base_security base_template
-                            base_theme base_user lookup results_manage 
-                            static_page system_doc );
+                            base_group base_page base_security base_template
+                            base_theme base_user lookup object_activity
+                            results_manage system_doc );
 
 # Extra packages shipped with OI -- small applications that show how things work
 
@@ -267,7 +270,7 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
                              "or rename the specified directory and rerun the command, " .
                              "or choose a new one and run the command with the new directory.\n";
         }
-        unless ( -f 'VERSION' and -d 'pkg' ) {
+        unless ( -d 'pkg' ) {
             push @error_msg, "Command 'install' must be run from the OpenInteract source " .
                              "directory. Please go there and run this command again.\n";
     }
@@ -288,7 +291,7 @@ my $DEV_LIST          = 'openinteract-dev@lists.sourceforge.net';
             push @error_msg, "Command 'upgrade' requires the parameter 'base_dir' to be set to an " .
                              "OpenInteract base installation directory.";
         }
-        unless ( -f 'VERSION' and -d 'pkg' ) {
+        unless ( -d 'pkg' ) {
             push @error_msg, "Command 'upgrade' must be run from the OpenInteract source " .
                              "directory. Please change to that directory run this command again.\n";
         }
@@ -461,7 +464,7 @@ CREATEMSG
         }
         print "The following documents were considered:\n\n",
                 $doc_status,
-                "\n$SEP\nFinished listing actions!\n";
+                "\n$SEP\nFinished refreshing docs!\n";
         exit(0);
     }
 
@@ -491,7 +494,7 @@ CREATEMSG
         }
         print "The following widgets were considered:\n\n",
                 $widget_status,
-                "\n$SEP\nFinished listing actions!\n";
+                "\n$SEP\nFinished refreshing widgets!\n";
         exit(0);
     }
 
@@ -1132,35 +1135,48 @@ sub refresh_doc {
 
 sub refresh_widget {
     my ( $p ) = @_;
-    my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
-    if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
-                                         error => $@, sub => 'refresh_widget' }) }
+    my $bc = eval { OpenInteract::Startup->read_base_config({
+                                             dir => $p->{website_dir} }) };
+    if ( $@ ) {
+        base_config_file_error({ website_dir => $p->{website_dir},
+                                 error => $@, sub => 'refresh_widget' });
+    }
 
-    my $base_widget = "$bc->{base_dir}/template";
-    my $site_widget = "$p->{website_dir}/template";
-    File::Path::mkpath( $site_widget, 0775, undef ) unless ( -d $site_widget );
-    opendir( BASE, $base_widget ) || die "Cannot open base widget directory! ($!)";
-    opendir( SITE, $site_widget ) || die "Cannot open website widget directory! ($!)";
-    my %base_info = map { $_ => (stat( "$base_widget/$_" ))[7] }
-                          grep { -f "$base_widget/$_" }
+    my $base_widget_dir = "$bc->{base_dir}/template";
+    my $site_widget_dir = "$p->{website_dir}/template";
+    unless ( -d $site_widget_dir ) {
+        File::Path::mkpath( $site_widget_dir, 0775, undef );
+    }
+    opendir( BASE, $base_widget_dir )
+             || die "Cannot open base widget directory! ($!)";
+    opendir( SITE, $site_widget_dir )
+             || die "Cannot open website widget directory! ($!)";
+    my %base_info = map { $_ => (stat( "$base_widget_dir/$_" ))[7] }
+                          grep { -f "$base_widget_dir/$_" }
                           grep ! /old$/,
                           readdir( BASE );
-    my %site_info = map { $_ => (stat( "$site_widget/$_" ))[7] }
-                          grep { -f "$site_widget/$_" }
+    my %site_info = map { $_ => (stat( "$site_widget_dir/$_" ))[7] }
+                          grep { -f "$site_widget_dir/$_" }
                           grep ! /old$/,
                           readdir( SITE );
     close( SITE );
     close( BASE );
 
+    my %no_write = map { $_ => 1 } $PKG_CLASS->read_readonly_file( $site_widget_dir );
+
     my @status = ();
     foreach my $base_filename ( keys %base_info ) {
+        next if ( $no_write{ $base_filename } );
         if ( $base_info{ $base_filename } != $site_info{ $base_filename } ) {
-            eval { cp( "$base_widget/$base_filename", "$site_widget/$base_filename" ) || die $! };
+            eval { cp( "$base_widget_dir/$base_filename",
+                       "$site_widget_dir/$base_filename" ) || die $! };
             if ( $@ ) {
-                push @status, { filename => $base_filename, ok => 0, error => $@ };
+                push @status, { filename => $base_filename,
+                                ok => 0, error => $@ };
             }
             else {
-                push @status, { filename => $base_filename, ok => 1, copied => 1 };
+                push @status, { filename => $base_filename,
+                                ok => 1, copied => 1 };
             }
         }
         else {
@@ -1177,7 +1193,8 @@ sub refresh_widget {
 
 sub list_actions {
     my ( $p ) = @_;
-    my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
+    my $bc = eval { OpenInteract::Startup->read_base_config({
+                                             dir => $p->{website_dir} }) };
     if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
                                          error       => $@,
                                          sub         => 'list_actions' }) }
@@ -1190,7 +1207,6 @@ sub list_actions {
     my @actions = ();
 ACTION:
     foreach my $action ( sort keys %{ $C->{action} } ) {
-        next ACTION if ( $action eq '_default_action_info_' );
         if ( ! $action or $action =~ /^_/ ) {
             my $redir_action = $C->{action}{ $action }{redir};
             push @actions, { action => "SYSTEM ($action) redirected to ($redir_action)" };
@@ -1213,7 +1229,8 @@ ACTION:
 
 sub list_objects {
     my ( $p ) = @_;
-    my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
+    my $bc = eval { OpenInteract::Startup->read_base_config({
+                                             dir => $p->{website_dir} }) };
     if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
                                          error       => $@,
                                          sub         => 'list_objects' }) }
@@ -1250,8 +1267,8 @@ sub install_oi {
     # Create the new install dir
 
     if ( -d $p->{base_dir} ) {
-        die "[oi_manage]: Installation directory ($p->{base_dir}) already exists!\n",
-            "Please remove it before continuing.\n";
+        die "[oi_manage]: Installation directory ($p->{base_dir}) already ",
+            "exists! Please remove it before continuing.\n";
     }
     mkdir( $p->{base_dir}, 0775 )
            || die "Cannot create installation directory! Error: $!";
@@ -1260,14 +1277,14 @@ sub install_oi {
 
     foreach my $sub_dir ( @BASE_SUBDIR ) {
         mkdir( "$p->{base_dir}/$sub_dir", 0775 )
-               || die "Cannot create subdirectory ($p->{base_dir}/$sub_dir). Error: $!";
+               || die "Cannot create dir ($p->{base_dir}/$sub_dir). Error: $!";
     }
 
     # Copy some files that are specified above
 
     foreach my $file_frag ( @INITIAL_FILES ) {
         cp( $file_frag, "$p->{base_dir}/$file_frag" )
-            || _w( 0,  "Could not copy file ($file_frag) to new directory! Error: $!" );
+            || _w( 0,  "Could not copy ($file_frag) to new dir! Error: $!" );
     }
 
     # Now copy over everything in the 'conf/', 'doc/' and 'template/'
@@ -1277,14 +1294,16 @@ COPYDIR:
     foreach my $dir_name ( qw( conf doc template ) ) {
         eval { opendir( CPDIR, $dir_name ) || die $! };
         if ( $@ ) {
-            _w( 0, "Cannot open copy directory $dir_name for reading! ($@) Continuing..." );
+            _w( 0, "Cannot open ($dir_name) for reading! ($@) Continuing..." );
             next COPYDIR;
         }
-        my @file_list = grep ! /old$/, grep { -f "$dir_name/$_" } readdir( CPDIR );
+        my @file_list = grep ! /old$/,
+                             grep { -f "$dir_name/$_" } readdir( CPDIR );
         closedir( CPDIR );
         foreach my $file_name ( @file_list ) {
             cp( "$dir_name/$file_name", "$p->{base_dir}/$dir_name/$file_name" )
-                || _w( 0, "Could not copy file ($dir_name/$file_name) to new directory! Error: $!" );
+                || _w( 0, "Could not copy file ($dir_name/$file_name)",
+                          "to new directory! Error: $!" );
         }
     }
 
@@ -1303,13 +1322,14 @@ PKG:
         DEBUG && _w( 1, " -- Trying to install package $package_name" );
         my $status = { ok => 0, name => $package_name };
         unless ( $package_match->{ $package_name } ) {
-            $status->{msg} = "Cannot match package ($package_name) to file in distribution! Not installed!";
+            $status->{msg} = "Cannot match package ($package_name) to file " .
+                             "in distribution! Not installed!";
             push @package_status, $status;
         }
 
         my $pkg = eval { $PKG_CLASS->install_distribution({
-                              repository   => $repository,
-                              package_file => $package_match->{ $package_name } }) };
+                             repository   => $repository,
+                             package_file => $package_match->{ $package_name } }) };
         if ( $@ ) {
             _w( 0, "Error installing: $@" );
             $status->{msg} = $@;
@@ -1341,7 +1361,8 @@ sub upgrade_oi {
     my $gdbm_file = "$p->{base_dir}/conf/package_install.gdbm";
     DEBUG && _w( 1, "Test to see if GDBM repository ($gdbm_file) exists." );
     if ( -f $gdbm_file ) {
-        DEBUG && _w( 1, "GDBM-based repository exists, need to transfer contents to text-based." );
+        DEBUG && _w( 1, "GDBM-based repository exists, need to transfer",
+                        "contents to text-based." );
         my $rv = upgrade_repository( $p->{base_dir} );
         unless ( $rv ) {
             die <<NOREPOS;
@@ -1376,18 +1397,20 @@ REPOSMSG
     foreach my $file_frag ( @INITIAL_FILES ) {
         rename( "$base_dir/$file_frag",
                 "$base_dir/$file_frag.old" )
-                || _w( 0, "Could not rename $base_dir/$file_frag -> $base_dir/$file_frag.old" );
+                || _w( 0, "Could not rename $base_dir/$file_frag -> ",
+                          "$base_dir/$file_frag.old" );
         cp( $file_frag, "$base_dir/$file_frag" )
-            || _w( 0,  "Could not copy file ($file_frag) to new directory! Error: $!" );
+            || _w( 0,  "Could not copy ($file_frag) to new dir! Error: $!" );
     }
 
-    # Now copy over everything in the 'conf/', 'doc/' and 'template/' directories
+    # Now copy over everything in the 'conf/', 'doc/' and 'template/'
+    # directories
 
 COPYDIR:
     foreach my $dir_name ( qw( conf doc template ) ) {
         eval { opendir( CPDIR, $dir_name ) || die $! };
         if ( $@ ) {
-            _w( 0, "Cannot open copy directory $dir_name for reading! ($@) Continuing..." );
+            _w( 0, "Cannot open ($dir_name) for reading! ($@) Continuing..." );
             next COPYDIR;
         }
         eval { File::Path::mkpath( "$base_dir/$dir_name", undef, 0775 ) };
@@ -1395,13 +1418,15 @@ COPYDIR:
             _w( 0, "Cannot create path ($base_dir/$dir_name): $@" );
             next;
         }
-        my @file_list = grep ! /old$/, grep { -f "$dir_name/$_" } readdir( CPDIR );
+        my @file_list = grep ! /old$/,
+                             grep { -f "$dir_name/$_" } readdir( CPDIR );
         closedir( CPDIR );
         foreach my $file_name ( @file_list ) {
             rename( "$base_dir/$dir_name/$file_name",
                     "$base_dir/$dir_name/$file_name.old" );
             cp( "$dir_name/$file_name", "$base_dir/$dir_name/$file_name" )
-                || _w( 0, "Could not copy file ($dir_name/$file_name) to new directory! Error: $!" );
+                || _w( 0, "Could not copy file ($dir_name/$file_name) ",
+                          "to new directory! Error: $!" );
         }
     }
 
@@ -1415,13 +1440,14 @@ PKG:
         DEBUG && _w( 1, " -- Trying to install package $package_name" );
         my $status = { ok => 0, name => $package_name };
         unless ( -f $package_match->{ $package_name } ) {
-            $status->{msg} = "Cannot match $package_name to file in distribution! Not installed!";
+            $status->{msg} = "Cannot match $package_name to file in " .
+                             "distribution! Not installed!";
             push @package_status, $status;
             next;
         }
         my $info = eval { $PKG_CLASS->install_distribution({
-                              repository => $repository,
-                              package_file => $package_match->{ $package_name } }) };
+                             repository => $repository,
+                             package_file => $package_match->{ $package_name } }) };
         DEBUG && _w( 2, "Results of install_distribution() for package ",
                         "($package_name)\n", Dumper( $info ) );
 
@@ -1443,13 +1469,15 @@ PKG:
 
 sub _match_base_packages {
     my ( $dir ) = @_;
-    die "No valid directory specified to find base packages! (Given: $dir)\n" unless ( -d $dir );
+    unless ( -d $dir ) {
+        die "No valid dir specified to find base packages! (Given: $dir)\n";
+    }
 
     # Match up the package names in our initial and extra list with the
     # filename of the package distributed
 
     opendir( PKG, "$dir/pkg/" )
-             || die "Cannot open package directory ($dir/pkg/) for reading! Error: $!";
+             || die "Cannot open package dir ($dir/pkg/) for reading! Error: $!";
     my @package_files = grep { -f "pkg/$_" } grep /\.tar\.gz$/, readdir( PKG );
     closedir( PKG );
     my ( %package_match );
@@ -1477,10 +1505,13 @@ sub check_installed_package {
     my $use_dir  = $p->{base_dir};
     if ( $p->{website_dir} ) {
         $use_dir = $p->{website_dir};
-        my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
-        if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
-                                             error       => $@,
-                                             sub         => 'check_installed_package' }) }
+        my $bc = eval { OpenInteract::Startup->read_base_config({
+                                                  dir => $p->{website_dir} }) };
+        if ( $@ ) {
+            base_config_file_error({ website_dir => $p->{website_dir},
+                                     error       => $@,
+                                     sub         => 'check_installed_package' });
+        }
         $app_name = $bc->{website_name};
     }
     my $repository = $REPOS_CLASS->fetch( undef, { directory => $use_dir } );
@@ -1491,7 +1522,7 @@ PKG:
         unless ( $info ) {
             push @status, { name => $package_name,
                             ok   => 0,
-                            msg  => 'Package $package_name not found! Cannot check package.' };
+                            msg  => 'Package $package_name not found.' };
             next PKG;
         }
         my $package_dir = join( '/', $use_dir, $info->{package_dir} );
@@ -1528,8 +1559,12 @@ sub export_package {
     #  the third.
 
     if ( ref $p->{package} eq 'ARRAY' and scalar @{ $p->{package} } ) {
-        opendir( PKGDIR, $p->{package_dir} ) || die "Cannot read $p->{package_dir}: $!";
-        my %package_dirs = map { $_ => 1 } grep ! /^\./, grep { -d "$p->{package_dir}/$_" } readdir( PKGDIR );
+        opendir( PKGDIR, $p->{package_dir} )
+                 || die "Cannot read $p->{package_dir}: $!";
+        my %package_dirs = map { $_ => 1 }
+                               grep ! /^\./,
+                               grep { -d "$p->{package_dir}/$_" }
+                               readdir( PKGDIR );
         closedir( PKGDIR );
         DEBUG && _w( 1, "Found package directories: ", Dumper( \%package_dirs ) );
 
@@ -1592,15 +1627,18 @@ sub create_website {
     # Create the main directory and subdirectories
 
     mkdir( $p->{website_dir}, 0775 )
-           || die "[oi_manage]: Cannot complete comamnd: cannot create website directory ($p->{website_dir}): $!";
+           || die "[oi_manage]: Cannot complete comamnd: cannot create ",
+                  "website directory ($p->{website_dir}): $!";
     foreach my $sub_dir ( @WEBSITE_SUBDIR, $p->{website_name} ) {
         mkdir ( "$p->{website_dir}/$sub_dir", 0775 )
-                || die "[oi_manage]: Cannot complete command: failed creating subdir ($p->{website_dir}/$sub_dir): $!";
+                || die "[oi_manage]: Cannot complete command: failed ",
+                       "creating subdir ($p->{website_dir}/$sub_dir): $!";
     }
 
     # Do the conf and other files
 
-    cp( "$p->{base_dir}/conf/sample-apache.dat", "$p->{website_dir}/conf/apache.dat" )
+    cp( "$p->{base_dir}/conf/sample-apache.dat",
+        "$p->{website_dir}/conf/apache.dat" )
         || die "[oi_manage]: Failure! Cannot copy apache module listing: $!";
 
     # Copy over all OI system documentation. (This can be refreshed to
@@ -1610,7 +1648,7 @@ sub create_website {
     my $html_doc_root = "$p->{website_dir}/html/oi_docs";
     eval { mkdir( $html_doc_root, 0775 ) || die $! };
     if ( $@ ) {
-        _w( 0, "Cannot create directory 'html/oi_docs' in website directory, \n",
+        _w( 0, "Cannot create dir 'html/oi_docs' in website directory, \n",
                "so I cannot copy OpenInteract documentation to viewable ",
                "location. Continuing..." );
     }
@@ -1618,15 +1656,18 @@ sub create_website {
         my $oi_doc_root = "$p->{base_dir}/doc";
         eval { opendir( DOC, $oi_doc_root ) || die $! };
         if ( $@ ) {
-            _w( 0, "Cannot read system documentation from ($oi_doc_root). Please ask\n",
+            _w( 0, "Cannot read system docs from ($oi_doc_root). Please ask\n",
                    "your system administrator to install it there..\n",
                    "Continuing without system documentation available." );
         }
         else {
-            my @file_list = grep ! /old$/, grep { -f "$oi_doc_root/$_" } readdir( DOC );
+            my @file_list = grep ! /old$/,
+                                 grep { -f "$oi_doc_root/$_" }
+                                 readdir( DOC );
             foreach my $file_name ( @file_list ) {
                 cp( "$oi_doc_root/$file_name", "$html_doc_root/$file_name" )
-                    || _w( 0,  "Could not copy ($file_name) from system documentation directory ($!)." );
+                    || _w( 0, "Could not copy ($file_name) from system ",
+                              "documentation directory ($!)." );
             }
         }
     }
@@ -1639,16 +1680,27 @@ sub create_website {
     my $base_template_root = "$p->{base_dir}/template";
     eval { opendir( DOC, $base_template_root ) || die $! };
     if ( $@ ) {
-        _w( 0, "Cannot read template widgets from ($base_template_root). Please ask\n",
-               "your system administrator to install it there..\n",
+        _w( 0, "Cannot read template widgets from ($base_template_root).",
+               "Please ask your administrator to install it there.\n",
                "Continuing without template widgets available." );
     }
     else {
-        my @file_list = grep ! /old$/, grep { -f "$base_template_root/$_" } readdir( DOC );
+        my @file_list = grep ! /old$/,
+                             grep { -f "$base_template_root/$_" }
+                             readdir( DOC );
         foreach my $file_name ( @file_list ) {
             cp( "$base_template_root/$file_name", "$site_template_root/$file_name" )
                 || _w( 0,  "Could not copy ($file_name) from base template widget ($!)." );
         }
+        my $template_msg = <<TMPLMSG;
+# These are templates that will not be overwritten
+# when you run 'oi_manage refresh_widget' (one
+# template filename per line)
+
+base_main
+base_simple
+TMPLMSG
+        create_readonly_file( $site_template_root, $template_msg );
     }
 
     # Copy over files from the base installation to the website, doing
@@ -1656,14 +1708,15 @@ sub create_website {
     # use the template toolkit for this, eh?)
 
     my %file_match = (
-        "conf/sample-Stash.pm"           => "$p->{website_name}/Stash.pm",
-        "conf/sample-httpd_modperl.conf" => "conf/httpd_modperl.conf",
-        "conf/sample-httpd_modperl_solo.conf" => "conf/httpd_modperl_solo.conf",
-        "conf/sample-httpd_static.conf"  => "conf/httpd_static.conf",
-        "conf/sample-base.conf"          =>  "conf/base.conf",
-        "conf/sample-server.perl"        => "conf/server.perl",
-        "conf/sample-startup.pl"         => "conf/startup.pl",
-        "INSTALL.website"                => "INSTALL.website"
+      "conf/sample-Stash.pm"                => "$p->{website_name}/Stash.pm",
+      "conf/sample-httpd_modperl.conf"      => "conf/httpd_modperl.conf",
+      "conf/sample-httpd_modperl_solo.conf" => "conf/httpd_modperl_solo.conf",
+      "conf/sample-httpd_static.conf"       => "conf/httpd_static.conf",
+      "conf/sample-base.conf"               => "conf/base.conf",
+      "conf/sample-server.perl"             => "conf/server.perl",
+      "conf/sample-server.ini"              => "conf/server.ini",
+      "conf/sample-startup.pl"              => "conf/startup.pl",
+      "INSTALL.website"                     => "INSTALL.website"
     );
     my $replace_keys = [ '%%INTERACT_DIR%%', '%%WEBSITE_DIR%%',
                          '%%WEBSITE_NAME%%', '%%STASH_CLASS%%',
@@ -1680,10 +1733,23 @@ sub create_website {
                                        to_text   => $replace_vals });
     }
 
-    return apply_package({ package      => \@WEBSITE_BASE_PKG,
-                           base_dir     => $p->{base_dir},
-                           website_name => $p->{website_name},
-                           website_dir  => $p->{website_dir} });
+    # First apply all the packages...
+
+    my $status_list = apply_package({ package      => \@WEBSITE_BASE_PKG,
+                                      base_dir     => $p->{base_dir},
+                                      website_name => $p->{website_name},
+                                      website_dir  => $p->{website_dir} });
+
+    # Then create a nowrite flag for the index.html page
+
+    my $html_msg = <<HTMLMSG;
+# If a file is listed here it will not be updated when
+# the package to which it belongs is updated.
+
+index.html
+HTMLMSG
+    create_readonly_file( "$p->{website_dir}/html", $html_msg );
+    return $status_list;
 }
 
 
@@ -1700,9 +1766,11 @@ sub apply_package {
 
     unless ( $p->{base_dir} and $p->{website_name} ) {
         my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
-        if ( $@ ) { base_config_file_error({ website_dir => $p->{website_dir},
-                                             error       => $@,
-                                             sub         => 'apply_package' }) }
+        if ( $@ ) {
+            base_config_file_error({ website_dir => $p->{website_dir},
+                                     error       => $@,
+                                     sub         => 'apply_package' });
+        }
         $p->{website_name} ||= $bc->{website_name};
         $p->{base_dir}     ||= $bc->{base_dir};
     }
@@ -1710,15 +1778,18 @@ sub apply_package {
 
     my $CONFIG = OpenInteract::Startup->create_config({ website_dir => $p->{website_dir} });
 
-    my $base_repos    = $REPOS_CLASS->fetch( undef, { directory => $p->{base_dir} } );
-    my $website_repos = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir},
-                                                      perm      => 'write-new' } );
+    my $base_repos    = $REPOS_CLASS->fetch( undef,
+                                             { directory => $p->{base_dir} } );
+    my $website_repos = $REPOS_CLASS->fetch( undef,
+                                             { directory => $p->{website_dir},
+                                               perm      => 'write-new' } );
 
     # Ensure that the packages passed in are actual packages by
     # fetching the ones named
 
     my $pkg_exist = $base_repos->verify_package( @{ $p->{package} } );
-    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' ) ? $pkg_exist : [ $pkg_exist ];
+    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' )
+                           ? $pkg_exist : [ $pkg_exist ];
 
     # We create a hash of all the packages passed in and for each
     # existing one remove it -- anything left after processing all
@@ -1750,7 +1821,8 @@ PACKAGE:
         $website_info->{website_dir}    = $p->{website_dir};
         $website_info->{website_name}   = $p->{website_name};
         $website_info->{installed_on}   = $base_repos->now;
-        eval { $PKG_CLASS->install_to_website( $base_repos, $website_repos, $website_info, $CONFIG ) };
+        eval { $PKG_CLASS->install_to_website(
+                            $base_repos, $website_repos, $website_info, $CONFIG ) };
         if ( $@ ) {
             $this_status->{msg} = "Cannot install package to website. Error: $@\n";
         }
@@ -1763,11 +1835,13 @@ PACKAGE:
             # below.
 
             $this_status->{ok}++;
-            my $notes_file = join( '/', $website_info->{base_dir}, $website_info->{package_dir}, 'INSTALL' );
+            my $notes_file = join( '/', $website_info->{base_dir},
+                                        $website_info->{package_dir}, 'INSTALL' );
             if ( -f $notes_file ) {
                 eval { open( NOTES, $notes_file ) || die $! };
                 if ( $@ ) {
-                    $this_status->{notes} = "Failed to open package installation notes file. Error: $@";
+                    $this_status->{notes} = "Failed to open package installation " .
+                                            "notes file. Error: $@";
                 }
                 else {
                     local $/ = undef;
@@ -1936,14 +2010,20 @@ sub install_sql {
     my ( $p ) = @_;
     require OpenInteract::SQLInstall;
     $p->{action} ||= 'all';
-    my ( $handles, $CONFIG ) = initialize_db_actions({ website_dir => $p->{website_dir},
-                                                       action      => 'install SQL' });
+    my ( $handles, $CONFIG ) = initialize_db_actions({
+                                        website_dir => $p->{website_dir},
+                                        action      => 'install SQL' });
+    my $base_config = OpenInteract::Startup->read_base_config({
+                                        website_dir => $p->{website_dir} });
+    OpenInteract::Startup->create_temp_lib( $base_config );
 
     # Grab the repository and existing packages
 
-    my $repository     = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} } );
+    my $repository     = $REPOS_CLASS->fetch( undef,
+                                              { directory => $p->{website_dir} } );
     my $pkg_exist      = $repository->verify_package( @{ $p->{package} } );
-    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' ) ? $pkg_exist : [ $pkg_exist ];
+    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' )
+                           ? $pkg_exist : [ $pkg_exist ];
 
     my @status     = ();
     my %pkg_status = ();
@@ -1970,7 +2050,8 @@ sub install_sql {
 
     if ( $p->{action} =~ /^(all|structure)$/ ) {
         foreach my $info ( @{ $pkg_exist_list } ) {
-            DEBUG && _w( 1, "Starting structure install for $info->{name}-$info->{version}" );
+            DEBUG && _w( 1, "Starting structure install for",
+                            "$info->{name}-$info->{version}" );
             my $installer_class = $pkg_status{ $info->{name} }{installer};
             next unless ( $installer_class );
             $args{package} = $info;
@@ -1988,9 +2069,15 @@ sub install_sql {
             }
             else {
                 $pkg_status{ $info->{name} }{structure} =
-                                        join( "\n  * ", "Structure:", map { $_->{msg} } @{ $struct_status } );
-                my @notes = grep { defined $_ } map { $_->{note} } @{ $struct_status };
-                if ( @notes ) { $pkg_status{ $info->{name} }{note} = join( "\n", @notes ) }
+                                        join( "\n  * ", "Structure:",
+                                                        map { $_->{msg} }
+                                                            @{ $struct_status } );
+                my @notes = grep { defined $_ }
+                                 map { $_->{note} }
+                                     @{ $struct_status };
+                if ( @notes ) {
+                    $pkg_status{ $info->{name} }{note} = join( "\n", @notes );
+                }
             }
         }
     }
@@ -2011,7 +2098,8 @@ sub install_sql {
 
     if ( $p->{action} =~ /^(all|all_data|data)$/ ) {
         foreach my $info ( @{ $pkg_exist_list } ) {
-            DEBUG && _w( 1, "Starting data install for $info->{name}-$info->{version}" );
+            DEBUG && _w( 1, "Starting data install for ",
+                            "$info->{name}-$info->{version}" );
             next if ( $error_track{ $info->{name} } );
             my $installer_class = $pkg_status{ $info->{name} }{installer};
             next unless ( $installer_class );
@@ -2025,29 +2113,38 @@ sub install_sql {
             }
             else {
                 $pkg_status{ $info->{name} }{data} =
-                                            join( "\n  * ", 'Data: ', map { $_->{msg} } @{ $data_status } );
-                my @notes = grep { defined $_ } map { $_->{note} } @{ $data_status };
-                if ( @notes ) { $pkg_status{ $info->{name} }{note} .= join( "\n", @notes ) }
+                                        join( "\n  * ", 'Data: ',
+                                                        map { $_->{msg} }
+                                                            @{ $data_status } );
+                my @notes = grep { defined $_ }
+                                 map { $_->{note} }
+                                     @{ $data_status };
+                if ( @notes ) {
+                    $pkg_status{ $info->{name} }{note} .= join( "\n", @notes );
+                }
             }
         }
     }
 
     if ( $p->{action} =~ /^(all|all_data|security)$/ ) {
         foreach my $info ( @{ $pkg_exist_list } ) {
-            DEBUG && _w( 1, "Starting server install for $info->{name}-$info->{version}" );
+            DEBUG && _w( 1, "Starting server install for ",
+                            "$info->{name}-$info->{version}" );
             next if ( $error_track{ $info->{name} } );
             my $installer_class = $pkg_status{ $info->{name} }{installer};
             next unless ( $installer_class );
             $args{package} = $info;
             my $security_status = eval { $installer_class->apply({
-                                                   %args, action => 'install_security' }) };
+                                             %args, action => 'install_security' }) };
             if ( $@ ) {
                 $pkg_status{ $info->{name} }{ok} = 0;
                 $error_track{ $info->{name} }++;
             }
             else {
                 $pkg_status{ $info->{name} }{security} =
-                                        join( "\n  * ", 'Security: ', map { $_->{msg} } @{ $security_status } );
+                                join( "\n  * ", 'Security: ',
+                                                map { $_->{msg} }
+                                                    @{ $security_status } );
                 my @notes = grep { defined $_ } map { $_->{note} } @{ $security_status };
                 if ( @notes ) { $pkg_status{ $info->{name} }{note} .= join( "\n", @notes ) }
             }
@@ -2063,16 +2160,20 @@ sub install_sql {
                             name    => $name,
                             version => $pkg_status{ $name }{version} };
         if ( $pkg_status{ $name }{installer} ) {
-            my $msg_struct = $pkg_status{ $name }{structure} || 'No structure installation done.';
-            my $msg_data   = $pkg_status{ $name }{data}      || 'No data installation done.';
-            my $msg_secure = $pkg_status{ $name }{security}  || 'No security installation done.';
+            my $msg_struct = $pkg_status{ $name }{structure} ||
+                             'No structure installation done.';
+            my $msg_data   = $pkg_status{ $name }{data}      ||
+                             'No data installation done.';
+            my $msg_secure = $pkg_status{ $name }{security}  ||
+                             'No security installation done.';
             $this_status->{msg} = "\n\n" . join( "\n", $msg_struct,
                                                        $msg_data,
                                                        $msg_secure ) ."\n";
             $this_status->{note} = $pkg_status{ $name }{note};
         }
         else {
-            $this_status->{msg} = "No installer defined, no changes made for package.\n";
+            $this_status->{msg} = "No installer defined, no changes " .
+                                  "made for package.\n";
         }
         push @status, $this_status;
     }
@@ -2099,9 +2200,11 @@ sub install_template {
     # Cycle through the packages in the website package db and bring
     # in all their templates
 
-    my $repository = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} } );
+    my $repository = $REPOS_CLASS->fetch( undef,
+                                          { directory => $p->{website_dir} } );
     my $pkg_exist = $repository->verify_package( @{ $p->{package} } );
-    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' ) ? $pkg_exist : [ $pkg_exist ];
+    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' )
+                           ? $pkg_exist : [ $pkg_exist ];
 
     my @status = ();
 
@@ -2115,8 +2218,11 @@ PACKAGE:
         # First, find all the .meta files in the package -- every
         # template must have a .meta file
 
-        opendir( META, $template_dir ) || die "Cannot open directory ($template_dir): $!";
-        my @meta_files = grep { -f "$template_dir/$_" } grep /\.$META_EXT$/, readdir( META );
+        opendir( META, $template_dir )
+                 || die "Cannot open directory ($template_dir): $!";
+        my @meta_files = grep { -f "$template_dir/$_" }
+                              grep /\.$META_EXT$/,
+                                   readdir( META );
         closedir( META );
 
         # Now cycle through them, read them in and parse them,
@@ -2148,10 +2254,10 @@ PACKAGE:
             # the package/name combo
 
             my $tmpl_list = $TMPL_CLASS->fetch_group({
-                                       where         => 'package = ? AND name = ?',
-                                       value         => [ $ti->{package}, $ti->{name} ],
-                                       skip_security => 1,
-                                       skip_cache    => 1 });
+                                   where         => 'package = ? AND name = ?',
+                                   value         => [ $ti->{package}, $ti->{name} ],
+                                   skip_security => 1,
+                                   skip_cache    => 1 });
 
             # ... if so, just set the title and description right now
 
@@ -2159,7 +2265,8 @@ PACKAGE:
             if ( $tmpl ) {
                 $tmpl->{title}       = $ti->{title};
                 $tmpl->{description} = $ti->{description};
-                $this_status_msg .= "$ti->{name} found in database ($tmpl->{template_id}), updating... ";
+                $this_status_msg .= "$ti->{name} found in database " .
+                                    "($tmpl->{template_id}), updating... ";
             }
 
             # Otherwise, create a new template object and set all the
@@ -2173,8 +2280,10 @@ PACKAGE:
             # Read in the full template, which also includes the
             # script part of the object
 
-            my $full_template_file = join( '/', $template_dir, "$part_meta.$TMPL_EXT" );
-            open( TMPL, $full_template_file ) || die "Cannot open template file: $full_template_file: $!";
+            my $full_template_file = join( '/', $template_dir,
+                                                "$part_meta.$TMPL_EXT" );
+            open( TMPL, $full_template_file )
+                  || die "Cannot open template file: $full_template_file: $!";
             {
                 local $/ = undef;
                 $tmpl->{template} = <TMPL>;
@@ -2191,7 +2300,8 @@ PACKAGE:
                                  skip_cache    => 1 }) };
             if ( $@ ) {
                 my $ei = SPOPS::Error->get;
-                $this_status_msg .= "failed! Could not save template object. Error: $@ -- $ei->{system_msg}";
+                $this_status_msg .= "failed! Could not save template " .
+                                    "object. Error: $@ -- $ei->{system_msg}";
             }
 
             # If save ok, we need to set security
@@ -2228,16 +2338,19 @@ sub remove_template {
 
     foreach my $package_name ( @{ $p->{package} } ) {
         my $this_status = { name => $package_name, ok => 1 };
-        my $template_list = $TMPL_CLASS->fetch_group({ where => 'package = ?',
-                                                       value => [ $package_name ] });
+        my $template_list = $TMPL_CLASS->fetch_group({
+                                             where => 'package = ?',
+                                             value => [ $package_name ] });
         foreach my $tmpl ( @{ $template_list } ) {
             eval { $tmpl->remove({ skip_security => 1, skip_log => 1 }) };
             if ( $@ ) {
                 $this_status->{ok} = 0;
-                push @{ $this_status->{msg_list} }, "Template $tmpl->{name}: Failed to remove - $@";
+                push @{ $this_status->{msg_list} },
+                                   "Template $tmpl->{name}: Failed to remove - $@";
             }
             else {
-                push @{ $this_status->{msg_list} }, "Template $tmpl->{name}: removed ok";
+                push @{ $this_status->{msg_list} },
+                                   "Template $tmpl->{name}: removed ok";
             }
         }
         $this_status->{msg} = join( "\n", @{ $this_status->{msg_list} } );
@@ -2256,13 +2369,15 @@ sub remove_template {
 sub dump_template {
     my ( $p ) = @_;
     my $R = initialize_request({ website_dir => $p->{website_dir},
-                                    action      => 'dump templates' });
+                                 action      => 'dump templates' });
     my $TMPL_CLASS = $R->site_template;
     my @status = ();
 
-    my $repository = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} } );
+    my $repository = $REPOS_CLASS->fetch( undef,
+                                          { directory => $p->{website_dir} } );
     my $pkg_exist = $repository->verify_package( @{ $p->{package} } );
-    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' ) ? $pkg_exist : [ $pkg_exist ];
+    my $pkg_exist_list = ( ref $pkg_exist eq 'ARRAY' )
+                           ? $pkg_exist : [ $pkg_exist ];
 
 PKG:
     foreach my $info ( @{ $pkg_exist_list } ) {
@@ -2281,7 +2396,7 @@ PKG:
                 File::Path::rmtree( $template_dir, undef, undef );
             }
             mkdir( $template_dir, 0775 )
-                   || die "[oi_manage]: Cannot create template directory $template_dir: $!";
+                   || die "[oi_manage]: Cannot create ($template_dir): $!";
         }
         my $template_list = $TMPL_CLASS->fetch_group({
                                   where => 'package = ?',
@@ -2296,15 +2411,20 @@ PKG:
             # First dump the template itself, then the script information
 
             my $template_file = "$new_base.$TMPL_EXT";
-            open( TMPL, "> $template_file" ) || die "Cannot open ($template_file) for writing: $!";
+            open( TMPL, "> $template_file" )
+                  || die "Cannot open ($template_file) for writing: $!";
             print TMPL $tmpl->{template};
-            print TMPL  qq(\n\n<script language="Javascript">\n$tmpl->{script}\n</script>)  if ( $tmpl->{script} );
+            if ( $tmpl->{script} ) {
+                print TMPL qq(\n\n<script language="Javascript">\n),
+                           qq($tmpl->{script}\n</script>);
+            }
             close( TMPL );
 
             # Then do the meta information
 
             my $meta_file = "$new_base.$META_EXT";
-            open( META, "> $meta_file" ) || die "Cannot open $meta_file for writing: $!";
+            open( META, "> $meta_file" )
+                  || die "Cannot open $meta_file for writing: $!";
             print META "name: $tmpl->{name}\n",
                        "title: $tmpl->{title}\n",
                        "package: $info->{name}\n",
@@ -2331,7 +2451,8 @@ sub change_spops_driver {
     # Go through the packages installed to the website and find all the
     # 'conf/spops.conf' files
 
-    my $repository = $REPOS_CLASS->fetch( undef, { directory => $p->{website_dir} });
+    my $repository = $REPOS_CLASS->fetch( undef,
+                                          { directory => $p->{website_dir} });
     my $package_list = $repository->fetch_all_packages();
     my @conf_files = ();
     foreach my $pkg ( @{ $package_list } ) {
@@ -2374,14 +2495,13 @@ sub change_spops_driver {
 
 sub update_objects {
     my ( $p ) = @_;
-    my $R = OpenInteract::Startup->setup_static_environment( $p->{website_dir} );
-    unless ( $R ) {
-        die "Cannot create OpenInteract environment! (Database connection error?)\n";
-    }
+    my $R = initialize_request({ website_dir => $p->{website_dir},
+                                 action      => 'update objects' });
     my $object_tag = $p->{object_tag};
     my $class = $R->$object_tag();
     unless ( $class ) {
-        die "Cannot find a valid class for the object you specified ($p->{object_tag})\n";
+        die "Cannot find a valid class for the object you specified " .
+            "($p->{object_tag})\n";
     }
     my $iter = $class->fetch_iterator({ skip_security => 1 });
 
@@ -2389,10 +2509,12 @@ sub update_objects {
     my $id_field = $class->id_field;
     while ( my $object = $iter->get_next ) {
         $object->has_change;
-        eval { $object->save({ skip_security => 1, skip_log => 1, skip_cache => 1 }) };
+        eval { $object->save({ skip_security => 1, skip_log => 1,
+                               skip_cache    => 1 }) };
         if ( $@ ) {
             my $ei = SPOPS::Error->get;
-            push @{ $status->{error} }, "Error with ID ($object->{ $id_field }): $ei->{system_msg}";
+            push @{ $status->{error} }, "Error with ID ($object->{ $id_field }): " .
+                                        $ei->{system_msg};
         }
         else {
             $status->{save}++;
@@ -2414,7 +2536,8 @@ sub test_db_connection {
 
     # Grab the base config, then the config object
 
-    my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
+    my $bc = eval { OpenInteract::Startup->read_base_config({
+                                                dir => $p->{website_dir} }) };
     if ( $@ ) {
         base_config_file_error({ website_dir => $p->{website_dir},
                                  error       => $@,
@@ -2425,10 +2548,12 @@ sub test_db_connection {
     # Perform initial sanity checks
 
     if ( ref $C->{db_info} ne 'HASH' ) {
-        $status->{msg} = "The key 'db_info' in your configuration must be a hashref. No connection attempted.";
+        $status->{msg} = "The key 'db_info' in your configuration must " .
+                         "be a hashref. No connection attempted.";
     }
     elsif ( ! scalar keys %{ $C->{db_info} } ) {
-        $status->{msg} = "You have no DBI datasources defined. No connection attempted.";
+        $status->{msg} = "You have no DBI datasources defined. No " .
+                         "onnection attempted.";
     }
     return $status if ( $status->{msg} );
 
@@ -2439,12 +2564,14 @@ sub test_db_connection {
 
 DBKEY:
     foreach my $db_key ( keys %{ $C->{db_info} } ) {
-        my $default_status = ( $db_key eq $C->{default_connection_db} )
+        my $default_status = ( $db_key eq $C->{datasource}{default_connection_db} ||
+                               $db_key eq $C->{default_connection_db} )
                                ? " (default connection) " : '';
         push @msg, "\nStatus of connection <<$db_key>>$default_status\n$SEP";
         if ( ! $C->{db_info}{ $db_key }{dsn} ) {
             $status->{ok}  = 0;
-            push @msg, "Failed. You must at least define 'dsn' in the configuration information.";
+            push @msg, "Failed. You must at least define 'dsn' in the " .
+                       "configuration information.";
             next DBKEY;
         }
         my $db = eval { OpenInteract::DBI->connect( $C->{db_info}{ $db_key } ) };
@@ -2470,7 +2597,8 @@ DBKEY:
         my $test_table = 'oi_test_create';
         push @msg, "-- Basic connect: ok",
                    "-- Use database: ok";
-        eval { $db->do( "CREATE TABLE $test_table ( oi_id int not null, primary key( oi_id ) )" ) };
+        eval { $db->do( "CREATE TABLE $test_table " .
+                        "( oi_id int not null, primary key( oi_id ) )" ) };
         if ( $@ ) {
             push @msg, "-- Create table: failed -- $@";
         }
@@ -2478,7 +2606,8 @@ DBKEY:
             push @msg, "-- Create table: ok";
             eval { $db->do( "DROP TABLE $test_table" ) };
             if ( $@ ) {
-                push @msg, "(NOTE: 'DROP TABLE' failed -- $@; please remove table ($test_table) manually.)";
+                push @msg, "(NOTE: 'DROP TABLE' failed -- $@; " .
+                           "please remove table ($test_table) manually.)";
             }
         }
         $db->disconnect;
@@ -2500,7 +2629,8 @@ sub test_ldap_connection {
 
     # Grab the base config, then the config object
 
-    my $bc = eval { OpenInteract::Startup->read_base_config({ dir => $p->{website_dir} }) };
+    my $bc = eval { OpenInteract::Startup->read_base_config({
+                                             dir => $p->{website_dir} }) };
     if ( $@ ) {
         base_config_file_error({ website_dir => $p->{website_dir},
                                  error       => $@,
@@ -2511,10 +2641,12 @@ sub test_ldap_connection {
     # Perform initial sanity checks
 
     if ( ref $C->{ldap_info} ne 'HASH' ) {
-        $status->{msg} = "The key 'ldap_info' in your configuration must be a hashref. No connection attempted.";
+        $status->{msg} = "The key 'ldap_info' in your configuration must " .
+                         "be a hashref. No connection attempted.";
     }
     elsif ( ! scalar keys %{ $C->{ldap_info} } ) {
-        $status->{msg} = "You have no LDAP datasources defined. No connection attempted.";
+        $status->{msg} = "You have no LDAP datasources defined. No " .
+                         "connection attempted.";
     }
     return $status if ( $status->{msg} );
 
@@ -2525,20 +2657,24 @@ sub test_ldap_connection {
 
 LDAPKEY:
     foreach my $ldap_key ( keys %{ $C->{ldap_info} } ) {
-        my $default_status = ( $ldap_key eq $C->{default_connection_ldap} )
+        my $default_status = ( $ldap_key eq $C->{datasource}{default_connection_ldap} ||
+                               $ldap_key eq $C->{default_connection_ldap} )
                                ? " (default connection) " : '';
         push @msg, "\nStatus of connection <<$ldap_key>>$default_status\n$SEP";
         if ( ! $C->{ldap_info}{ $ldap_key }{host} ) {
             $status->{ok}  = 0;
-            push @msg, "Failed. You must at least define 'host' in the configuration information.";
+            push @msg, "Failed. You must at least define 'host' in the " .
+                       "configuration information.";
             next LDAPKEY;
         }
         elsif ( ! $C->{ldap_info}{ $ldap_key }{base_dn} ) {
             $status->{ok}  = 0;
-            push @msg, "Failed. You must at least define 'base_dn' in the configuration information.";
+            push @msg, "Failed. You must at least define 'base_dn' in " .
+                       "the configuration information.";
             next LDAPKEY;
         }
-        my $ldap = eval { OpenInteract::LDAP->connect_and_bind( $C->{ldap_info}{ $ldap_key } ) };
+        my $ldap = eval { OpenInteract::LDAP->connect_and_bind(
+                                                 $C->{ldap_info}{ $ldap_key } ) };
         if ( $@ ) {
             my ( $error ) = $@ =~ /failed:\s*(.*)$/;
             $error ||= $@;
@@ -2565,16 +2701,32 @@ LDAPKEY:
 
 
 #
+# create_readonly_file
+#
+
+sub create_readonly_file {
+    my ( $dir, $msg ) = @_;
+    my $no_overwrite_file = join( '/', $dir, READONLY_FILE );
+    open( NOWRITE, "> $no_overwrite_file" )
+          || _w( 0, "Could not create ($no_overwrite_file): $!" );
+    print NOWRITE $msg;
+    close( NOWRITE );
+}
+
+
+#
 # initialize_db_actions
 #
 
 sub initialize_db_actions {
     my ( $p ) = @_;
-    my $C = OpenInteract::Startup->create_config({ website_dir => $p->{website_dir} });
+    my $C = OpenInteract::Startup->create_config({
+                                        website_dir => $p->{website_dir} });
     my %handles = ();
     require OpenInteract::DBI;
     foreach my $db_key ( keys %{ $C->{db_info} } ) {
-        $handles{ $db_key } = eval { OpenInteract::DBI->connect( $C->{db_info}{ $db_key } ) };
+        $handles{ $db_key } = eval { OpenInteract::DBI->connect(
+                                                  $C->{db_info}{ $db_key } ) };
         die "Cannot open datasource ($db_key): $@"  if ( $@ );
     }
     return ( \%handles, $C );
@@ -2587,7 +2739,8 @@ sub initialize_db_actions {
 
 sub initialize_request {
     my ( $p ) = @_;
-    my $R = eval { OpenInteract::Startup->setup_static_environment( $p->{website_dir} ) };
+    my $R = eval { OpenInteract::Startup->setup_static_environment(
+                                                  $p->{website_dir} ) };
 
     if ( $@ ) {
         my $error_msg = <<MSG;
@@ -2610,7 +2763,8 @@ sub base_config_file_error {
                                                  $p->{website_dir} );
     my $msg = "[oi_manage]: Failure! Cannot find base configuration or " .
               "configuration is invalid. Does the file: ($base_conf_file) " .
-              "exist in your website?  (Specific error: <<$p->{error}>> from routine <<$p->{sub}>>)";
+              "exist in your website? " .
+              "(Specific error: <$p->{error}> from routine <$p->{sub}>)";
     die wrap( undef, undef, "$msg\n" );
 }
 
@@ -2630,7 +2784,8 @@ sub print_status_line {
     my $indent = ( $status->{ok} ) ? '      ' : '           ';
     $line .= ': ' . wrap( undef, $indent, $status->{msg} )   if ( $status->{msg} );
     if ( $status->{notes} ) {
-        $line .= "\n\nNotes from Package Author (READ THESE)\n$status->{notes}\n$SEP\n";
+        $line .= "\n\nNotes from Package Author (READ THESE)\n" .
+                 "$status->{notes}\n$SEP\n";
     }
     return $line;
 }
@@ -3912,6 +4067,6 @@ usability, documentation and functionality comments.
 
 =head1 REVISION
 
-Revision: $Revision: 1.45 $
+Revision: $Revision: 1.55 $
 
 =cut

@@ -1,17 +1,20 @@
 package OpenInteract::SPOPS::DBI;
 
-# $Id: DBI.pm,v 1.6 2001/10/07 14:26:17 lachoy Exp $
+# $Id: DBI.pm,v 1.11 2001/11/01 05:37:22 lachoy Exp $
 
 use strict;
 use OpenInteract::SPOPS;
+use SPOPS::ClassFactory qw( OK NOTIFY );
 
 @OpenInteract::SPOPS::DBI::ISA     = qw( OpenInteract::SPOPS );
-$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 sub global_datasource_handle {
     my ( $self, $connect_key ) = @_;
-    $connect_key ||= $self->CONFIG->{datasource};
-    return OpenInteract::Request->instance->db( $connect_key );
+    my $R = OpenInteract::Request->instance;
+    $connect_key ||= $self->CONFIG->{datasource} ||
+                     $R->CONFIG->{datasource}{default_connection_db};
+    return $R->db( $connect_key );
 }
 
 sub global_db_handle { goto &global_datasource_handle }
@@ -19,9 +22,43 @@ sub global_db_handle { goto &global_datasource_handle }
 sub connection_info {
     my ( $self, $connect_key ) = @_;
     my $R = OpenInteract::Request->instance;
-    $connect_key ||= $self->CONFIG->{datasource} || $R->CONFIG->{default_connection_db};
+    $connect_key ||= $self->CONFIG->{datasource} ||
+                     $R->CONFIG->{datasource}{default_connection_db} ||
+                     $R->CONFIG->{default_connection_db};
     $connect_key = $connect_key->[0] if ( ref $connect_key eq 'ARRAY' );
     return \%{ $self->CONFIG->{db_info}->{ $connect_key } };
+}
+
+########################################
+# CLASS FACTORY BEHAVIOR
+########################################
+
+sub behavior_factory {
+    my ( $class ) = @_;
+    return { manipulate_configuration => \&discover_fields };
+}
+
+sub discover_fields {
+    my ( $class ) = @_;
+    my $CONFIG = $class->CONFIG;
+    unless ( $CONFIG->{field_discover} and $CONFIG->{field_discover} eq 'yes' ) {
+        return ( OK, undef );
+    }
+
+    my $dbh = $class->global_datasource_handle( $CONFIG->{datasource} );
+    unless ( $dbh ) {
+      return ( NOTIFY, "Cannot discover fields because no DBI database " .
+                       "handle available to class ($class)" );
+    }
+    my $sql = $class->sql_fetch_types( $CONFIG->{base_table} );
+    my ( $sth );
+    eval {
+        $sth = $dbh->prepare( $sql );
+        $sth->execute;
+    };
+    return ( NOTIFY, "Cannot discover fields\n -> $sql\n -> $@" ) if ( $@ );
+    $CONFIG->{field} = $sth->{NAME};
+    return ( OK, undef );
 }
 
 1;
@@ -37,6 +74,9 @@ OpenInteract::SPOPS::DBI - Common SPOPS::DBI-specific methods for objects
  # In configuration file
  'myobj' => {
     'isa'   => [ qw/ ... OpenInteract::SPOPS::DBI ... / ],
+
+    # Yes, I want OI to find my fields for me.
+    'field_discover' => 'yes',
  }
 
 =head1 DESCRIPTION
@@ -70,6 +110,25 @@ datasource from the server configuration.
 See the server configuration file for documentation on what is in the
 hashref.
 
+=head2 SPOPS::ClassFactory Methods
+
+You will never need to call the following methods from your object,
+but you should be aware of them.
+
+B<behavior_factory( $class )>
+
+Creates the 'discover_fields' behavior (see below) in the
+'manipulate_configuration' slot of the
+L<SPOPS::ClassFactory|SPOPS::ClassFactory> process.
+
+B<discover_fields( $class )>
+
+If 'field_discover' is set to 'yes' in your class configuration, this
+will find the fields in your database table and set the configuration
+value 'field' as appropriate. Pragmatically, this means you do not
+have to list your fields in your class configuration -- every time the
+server starts up the class interrogates the table for its properties.
+
 =head1 BUGS
 
 None known.
@@ -81,6 +140,10 @@ Nothing known.
 =head1 SEE ALSO
 
 L<SPOPS::DBI|SPOPS::DBI>
+
+L<SPOPS::ClassFactory|SPOPS::ClassFactory>
+
+L<SPOPS::Manual::CodeGeneration|SPOPS::Manual::CodeGeneration>
 
 =head1 COPYRIGHT
 

@@ -1,6 +1,22 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.35  Thu Nov 29 00:46:51 EST 2001
+
+  - Tons of configuration changes -- please see UPGRADE if you're
+  upgrading. You can now use a INI-style configuration for the server
+  information.
+
+  - Added 'object_activity' package to display what activity
+  (create/update/delete) has transpired on all objects that choose to
+  participate
+
+  - Replace 'static_page' package with 'base_page' package, with lots
+  of improvements
+
+  - Modified the Apache startup procedure to be cleaner
+
+
 1.30 Mon Oct 15 01:35:03 EDT 2001
 
   - New OpenInteract::CommonHandler makes common
@@ -132,4 +148,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.12 2001/10/15 05:26:05 lachoy Exp $
+$Id: RELEASE,v 1.14 2001/11/29 05:28:01 lachoy Exp $

@@ -1,12 +1,12 @@
 package OpenInteract::Cookies::CGI;
 
-# $Id: CGI.pm,v 1.2 2001/10/01 22:08:52 lachoy Exp $
+# $Id: CGI.pm,v 1.3 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 use CGI::Cookie  qw();
 
 @OpenInteract::Cookies::CGI::ISA     = ();
-$OpenInteract::Cookies::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cookies::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 
 # Parse the cookies using CGI::Cookie
@@ -64,8 +64,7 @@ OpenInteract::Cookies::CGI - handler to parse/output cookies from/to the client 
  # Use CGI::Cookie
 
  'system_alias' => {
-       'OpenInteract::Cookies::CGI'    => [ qw/ cookies / ],
-       ...,
+       cookies => 'OpenInteract::Cookies::CGI', ...
  }
  # Retrieve the cookies from the client request
 
@@ -78,7 +77,7 @@ OpenInteract::Cookies::CGI - handler to parse/output cookies from/to the client 
  # Retrieve a cookie value in an OpenInteract content handler
 
  $params->{search} = $R->{cookie}{in}{search_value};
- 
+
  # Create a new cookie
 
  $R->cookies->create_cookie({ name => 'search_value',
@@ -108,8 +107,7 @@ To use this implementation, set the following key in the
 C<conf/server.perl> file for your website:
 
  system_aliases => {
-   ...,
-   'OpenInteract::Cookies::CGI' => [ qw/ cookies / ],
+   cookies => 'OpenInteract::Cookies::CGI', ...
  },
 
 =head1 METHODS
@@ -176,9 +174,13 @@ B<Fully CGI-ify>
 Instead of calling $r->headers_out(...), put the cookies into an
 arrayref which can be picked up by the header printer.
 
-=head1 BUGS 
+=head1 BUGS
 
 None known.
+
+=head1 SEE ALSO
+
+L<CGI|CGI>
 
 =head1 COPYRIGHT
 

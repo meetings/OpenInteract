@@ -1,6 +1,6 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.16 2001/10/08 20:39:04 lachoy Exp $
+# $Id: Provider.pm,v 1.18 2001/10/18 12:02:30 lachoy Exp $
 
 use strict;
 use Data::Dumper       qw( Dumper );
@@ -10,7 +10,7 @@ use Template::Provider;
 
 @OpenInteract::Template::Provider::ISA      = qw( Template::Provider );
 $OpenInteract::Template::Provider::VERSION  = '1.2';
-$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Template::Provider::Revision = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
@@ -185,9 +185,7 @@ sub _load {
 
     unless ( $tmpl_package and $tmpl_name ) {
         my $website_dir = $R->CONFIG->get_dir( 'template' );
-        my $tmpl_ext    = ( defined $R->CONFIG->{template_ext} )
-                            ? $R->CONFIG->{template_ext}
-                            : DEFAULT_TEMPLATE_EXTENSION;
+        my $tmpl_ext    = $self->_find_template_extension( $R->CONFIG );
         my $common_template_name     = "$website_dir/$name";
         my $common_template_name_ext = "$common_template_name.$tmpl_ext";
         $R->DEBUG && $R->scrib( DEBUG_LEVEL, "Test filenames: ($common_template_name)",
@@ -451,7 +449,7 @@ sub _find_package_template_filename {
                                 undef, { directory => $R->CONFIG->{dir}{base} } );
     my $info = $repository->fetch_package_by_name({ name => $package });
     if ( $info ) {
-        my $template_ext = $R->CONFIG->{template_ext} || DEFAULT_TEMPLATE_EXTENSION;
+        my $template_ext = $self->_find_template_extension( $R->CONFIG );
         my @template_files = ( DEFAULT_PACKAGE_TEMPLATE_DIR . $template_name,
                                DEFAULT_PACKAGE_TEMPLATE_DIR . "$template_name.$template_ext" );
         my $full_filename = $R->package->find_file( $info, @template_files );
@@ -465,6 +463,14 @@ sub _find_package_template_filename {
     $R->scrib( 0, "Cannot find template from filesystem because package ",
                   "information for ($package) not found in repository!" );
     return undef;
+}
+
+
+sub _find_template_extension {
+    my ( $self, $CONFIG ) = @_;
+    return $CONFIG->{template_info}{template_ext} ||
+           $CONFIG->{template_ext} ||
+           DEFAULT_TEMPLATE_EXTENSION;
 }
 
 

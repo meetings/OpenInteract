@@ -54,6 +54,12 @@ $data = {
      },
 
 
+     'datasource' => {
+       'default_connection_db'   => 'main',
+       'default_connection_ldap' => 'main',
+     },
+
+
      ########################################
      # DBI Datasource Definitions
      #
@@ -88,7 +94,6 @@ $data = {
      #     whether it's okay to truncate TEXT/LOB values that exceed
      #     long_read_len (see DBI docs under 'LongTruncOk')
 
-     'default_connection_db' => 'main',
      'db_info' => { 
            main => {
               'db_owner'      => '',
@@ -136,7 +141,6 @@ $data = {
      #   debug
      #     See entry in Net::LDAP->new() for possible values
 
-     'default_connection_ldap' => 'main',
      'ldap_info' => {
            main => {
               host          => '',
@@ -189,32 +193,35 @@ $data = {
      ########################################
      # Login Information
      #
+     #
      # Define login information. In the future you'll be able to define
      # the object(s) used for logging in and possibly more.
+     #
+     # crypt_password: Set whether you want to store encrypted passwords in
+     # the database (set by default and recommended). Note that if you're
+     # using LDAP or some SMB authentication you want to set this to '0'
+     # since the backend will take care of that for you.
+     #
+     # *_field: These are the fields used to read in the username and
+     # password from the user and are used in the 'login_box' component
+     # shipped with OpenInteract and found in the 'base_box' package. Note
+     # that if 'remember_field' is not defined then we don't display the
+     # checkbox in the login box.
+     #
+     # custom_login_*: Class and method that specify an action that
+     # executes when a user logs in (Optional)
+     #
+     # always_remember: if true then we always remember the login (and
+     # don't display the checkbox)
 
      'login' => {
-
-       # Set whether you want to store encrypted passwords in the
-       # database (set by default and recommended). Note that if
-       # you're using LDAP or some SMB authentication you want to set
-       # this to '0' since the backend will take care of that for you.
-
-       crypt_password   => 1,
-
-       # These are the fields used to read in the username and
-       # password from the user and are used in the 'login_box'
-       # component shipped with OpenInteract and found in the
-       # 'base_box' package.
-
-       login_field      => 'login_login_name',
-       password_field   => 'login_password',
-       remember_field   => 'login_remember',
-
-       # This handler defines custom actions that happen when a user
-       # logs in.
-
+       crypt_password       => 1,
+       login_field          => 'login_login_name',
+       password_field       => 'login_password',
+       remember_field       => 'login_remember',
        custom_login_handler => '',
        custom_login_method  => '',
+       always_remember      => undef,
      },
 
      ########################################
@@ -307,6 +314,11 @@ $data = {
 
        'compile_ext' => '.ttc',
 
+       # Extension for template files -- used to lookup files by
+       # the TT provider module (shouldn't need to change).
+
+       'template_ext' => 'tmpl',
+
      },
 
      ########################################
@@ -320,17 +332,21 @@ $data = {
      # need to use 'OpenInteract::Cookies::CGI')
 
      'system_alias' => {
-       'OpenInteract::Cookies::Apache'    => [ qw/ cookies / ],
-       'OpenInteract::Session::DBI'       => [ qw/ session / ],
-       'OpenInteract::Template::Process'  => [ qw/ template / ],
-       'OpenInteract::PackageRepository'  => [ qw/ repository / ],
-       'OpenInteract::Package'            => [ qw/ package / ],
-       'OpenInteract::Error'              => [ qw/ error / ],
-       'OpenInteract::Auth'               => [ qw/ auth auth_user auth_group / ],
-       '%%WEBSITE_NAME%%::Security'       => [ qw/ security_object object_security security / ],
-       'SPOPS::Secure'                    => [ qw/ secure / ],
-       'OpenInteract::Error::Main'        => [ qw/ error_handler / ],
-       'OpenInteract::Handler::Component' => [ qw/ component / ],
+       cookies         => 'OpenInteract::Cookies::Apache',
+       session         => 'OpenInteract::Session::DBI',
+       template        => 'OpenInteract::Template::Process',
+       repository      => 'OpenInteract::PackageRepository',
+       package         => 'OpenInteract::Package',
+       error           => 'OpenInteract::Error',
+       auth            => 'OpenInteract::Auth',
+       auth_user       => 'OpenInteract::Auth',
+       auth_group      => 'OpenInteract::Auth',
+       security_object => '%%WEBSITE_NAME%%::Security',
+       object_security => '%%WEBSITE_NAME%%::Security',
+       security        => '%%WEBSITE_NAME%%::Security',
+       secure          => 'SPOPS::Secure',
+       error_handler   => 'OpenInteract::Error::Main',
+       component       => 'OpenInteract::Handler::Component',
      },
 
      ########################################
@@ -400,23 +416,17 @@ $data = {
      ########################################
      # Errors
      #
-     # Class of error object (shouldn't need to change)
-
-     'error_object_class'    => '%%WEBSITE_NAME%%::ErrorObject',
-
-     # Class of default error handler -- one that can handle
-     # every error thrown by OpenInteract (shouldn't need to
+     # error_object_class: Class of error object (shouldn't need to
      # change)
+     # default_error_handler: Class of default error handler -- one
+     # that can handle every error thrown by OpenInteract (shouldn't
+     # need to change)
 
-     'default_error_handler' => 'OpenInteract::Error::System',
+     'error' => {
+        'error_object_class'    => '%%WEBSITE_NAME%%::ErrorObject',
+        'default_error_handler' => 'OpenInteract::Error::System',
+     },
 
-     ########################################
-     # File Extensions
-     #
-     # Extension for template files -- used to lookup files by
-     # the TT provider module (shouldn't need to change).
-
-     'template_ext'     => 'tmpl',
 
      ########################################
      # Site-Specific Classes
@@ -424,9 +434,11 @@ $data = {
      # Don't change these three! Whatever you enter will be
      # overwritten at server startup.
 
-     'stash_class'      => '',
-     'website_name'     => '',
-     'request_class'    => '',
+     'server_info' => {
+        'stash_class'      => '',
+        'website_name'     => '',
+        'request_class'    => '',
+     },
 
      ########################################
      # Conductors
@@ -451,22 +463,18 @@ $data = {
      # individual package's 'conf/action.perl' file); we also define
      # how OpenInteract should respond to a null action (under the ''
      # key) and how it should respond to an action that is not found
-     # (under '_notfound_')
+     # (under 'not_found')
 
-     # Note that we used to use 'default' instead of
-     # '_default_action_info_' -- the former is now deprecated, so you
-     # should move to the new one!
-
-     'action' => {
-       '_default_action_info_' => {
+     'action_info' => {
+       'default' => {
            'template_processor'  => 'OpenInteract::Template::Process',
            'conductor' => 'main',
            'method'    => 'handler',           
        },
-       '' => {
+       'none' => {
            'redir'     => 'basicpage',
        },
-       '_notfound_' => {
+       'not_found' => {
            'redir'     => 'basicpage',
        },
      },
@@ -481,5 +489,5 @@ $data = {
      # OpenInteract development community figure out from which
      # version your configuration originated
 
-     'ConfigurationRevision' => '$Revision: 1.26 $',
+     'ConfigurationRevision' => '$Revision: 1.28 $',
 };

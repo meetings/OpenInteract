@@ -1,5 +1,282 @@
 Revision history for Perl extension OpenInteract.
 
+1.35  Thu Nov 29 00:46:51 EST 2001
+
+Overall:
+
+ - Lots of configuration file changes. (PLEASE read the 'UPGRADE' file
+ to ensure you get all the changes.) You can now use a .ini-style
+ configuration file instead of the perl data structure file. (Hint:
+ one is a lot easier to read.) The perl-structure config file was also
+ modified quite a bit, and many files throughout OI modified to
+ accommodate the changes. The changes included backward compatibility
+ where possible, so it should be transparent to use an old-style
+ (perl) configuration file with the newer releases.
+
+ - Added 'object_activity' package to browse object activity
+ logs. Hopefully this won't encourage any latent bigbrotherish
+ tendencies you might have...
+
+ - The new package 'base_page' replaces 'static_page'. The new package
+ allows you to edit files in the filesystem and keep the metadata
+ (title, authors, boxes, etc.) in the database while keeping the
+ content elsewhere. Not only can you can also use it to
+ manage non-HTML files (PDFs, Excel spreadsheets, tarballs, etc.), but
+ you can also use its aliasing and URL-mapping features to link to or
+ bring in content from other locations on your site or anywhere on the
+ web. (The URL-mapping is still crude, but it works.)  A migration
+ script is provided.
+
+ - Modified the Apache startup procedures so we have a single, non
+ anonymous child initialization subroutine. This requires small
+ modifications to your Apache configuration -- see 'UPGRADE' for
+ details.
+
+ - Get rid of the monster @INC, re-creating a temporary library
+ directory on every server restart.
+
+Individual:
+
+ * conf/sample-server.perl:
+
+   - Moved 'template_ext' ==> 
+              'template_info'->'template_ext'
+
+   - Moved 'default_connection_db' ==>
+              'datasource'->'default_connection_db'
+
+   - Moved 'default_connection_ldap' ==>
+              'datasource'->'default_connection_ldap'
+
+   - Moved 'error_object_class' ==>
+              'error'->'error_object_class'
+
+   - Moved 'default_error_handler' ==>
+              'error'->'default_error_handler'
+
+   - Moved 'smtp_host' ==>
+              'mail'->'smtp_host'
+
+   - Moved 'admin_email' ==>
+              'mail'->'admin_email'
+
+   - Moved 'content_email' ==>
+              'mail'->'content_email'
+
+   - Reverse and flatten the 'system_alias' hashref. For instance:
+
+        OpenInteract::Auth => [ qw/ auth auth_user auth_group / ]
+
+     becomes:
+
+        auth       => 'OpenInteract::Auth',
+        auth_user  => 'OpenInteract::Auth',
+        auth_group => 'OpenInteract::Auth',
+
+   - Moved 'action'->'_default_action_info' ==>
+              'action_info'->'default'
+
+   - Moved 'action'->'_notfound' ==>
+              'action_info'->'not_found'
+
+   - Moved 'action'->"''" ==>
+              'action_info'->'none'
+
+   - Moved 'stash_class' ==>
+              'server_info'->'stash_class'
+
+   - Moved 'request_class' ==>
+              'server_info'->'request_class'
+
+   - Moved 'website_name' ==>
+              'server_info'->'website_name'
+
+   - Added 'login'->'always_remember' to give sites the option of
+   always remembering logins
+
+ * doc/admin.html: 
+
+   - Fixed html bug noticed by Drew Taylor <drew@drewtaylor.com>
+
+ * doc/fruit-0.09.tar.gz:
+
+   - Updated the simple example package to version 0.09. This version
+   works with OI 1.30+ and includes the new template widgets. Thanks to
+   Steven Devijver <steven@devijver.be> for prompting its revision.
+
+ * OpenInteract.pm:
+
+   - Renamed 'setup_apache' to 'setup_server_interface' but kept old
+   method for backward compatibility
+
+   - Set the content-length in send_static_file()
+
+ * OpenInteract/ApacheStartup.pm:
+
+   - Rewrote much of this so that we do all SPOPS initialization in
+   the ChildInit handler rather than the server handler, since we were
+   in some cases asking for a database handle in the server and never
+   letting it go. (This can be bad.) See 'UPGRADE' for simple but
+   necessary changes to your Apache config.
+
+   - Also modified the startup procedure to read and the child init
+   handler to write information to a package variable in lieu of using
+   PerlSetVar in the configuration file. (Encountered some nastiness
+   on Solaris under 5.005_03/1.3.22/1.26 and the PerlSetVar items not
+   being there. Whatever.)
+
+   - Tell OI::Startup to copy all the relevant package files on
+   *server* startup, since it modifies @INC
+
+ * OpenInteract/Auth.pm:
+
+   - Added 'is_admin()' which checks to see if the user is an
+   administrator. By default this is defined as being the superuser or
+   being a member of the 'site admin' group. You can subclass this
+   class, override the method and specify the class in the server
+   configuration to provide your own criteria for who is an
+   administrator.
+
+   - Broke the 'user()' method down into pieces so it can be
+   overridden more easily. (See docs for details.) Thanks to Stefano
+   di Sandro <stefano@antartide.org> for suggesting it.
+
+   - Honor the new 'login'->'always_remember' setting in the server
+   config.
+
+ * OpenInteract/CommonHandler.pm:
+
+   - Reorganized documentation and added lots of it, documenting every
+   configuration key and customization method.
+
+   - Added the 'notify()' task to send objects in human-readable
+   format over email
+
+   - Added the 'create()' task which is just a wrapper around the
+   'show()' task with certain parameters checked beforehand and set.
+
+ * OpenInteract/UI/Main.pm:
+
+   - Don't assume that the template will be a fully-qualified name, or
+   that a non-qualified name will be in the base_theme package. Also
+   add/clarify some docs.
+
+ * OpenInteract/Package.pm:
+
+   - Files copied from a base_installation package to the website
+   check the contents of a file in the directory (.no_overwrite)
+   before doing so. This way your /index.html file won't get
+   overwritten with each new base_page upgrade.
+
+   - Add copy_modules() method, which copies all the modules from both
+   a website pkg directory and its base pkg directory to a temporary
+   library location.
+
+ * OpenInteract/SPOPS.pm:
+
+   - Removed the html_encode and html_decode methods; they're in the
+   template plugin, and if you really need them elsewhere you can call
+   the HTML::Entities methods by hand.
+
+   - rename 'ruleset_add' -> 'ruleset_factory'
+
+ * OpenInteract/SPOPS/DBI.pm:
+
+   - Added 'discover_fields' SPOPS::ClassFactory behavior, which
+   allows you to leave the 'field' key in your object configuration
+   blank and have it filled at run-time. To use it you must set the
+   'field_discover' key to 'yes' in your object configuration.
+
+ * OpenInteract/Startup.pm:
+
+   - Add create_temp_lib() method to create a temporary library
+   directory, asking each of the packages to copy their relevant
+   module files there.
+
+   - Remove code that relied on putting all the package directories in
+   @INC, and add an extra call to setup_static_environment() to copy
+   the modules for all packages in a website to a temporary library,
+   which is also put in @INC. (For Apache the call to copy is in
+   OI::ApacheStartup)
+
+ * OpenInteract/Template/Plugin.pm:
+
+   - Fixed dumb POD error that prevented 'perldoc' from working
+   (identified itself as OI::Template::Provider in the head - doh!)
+
+   - Add 'is_admin' property to the template plugin that returns
+   whether the current user is an administrator. (See
+   OpenInteract/Auth.pm for what this means.)
+
+   - Add 'server_config' property which returns the results of
+   $R->CONFIG to a template.
+
+ * OpenInteract/Template/Process.pm:
+
+   - Properly catch when we weren't passed content.
+
+ * script/oi_manage:
+
+   - Enable a file in the $WEBSITE_DIR/template directory to specify
+   which templates oi_manage should never overwrite during a
+   'refresh_widget' command. (This file is created when you create a
+   website to include the base_main and base_simple templates.)
+
+   - Don't test for 'VERSION' anymore when doing an upgrade, since the
+   version is now pulled from OpenInteract.pm
+
+  - When creating a new website, mark in .no_overwrite the
+  html/index.html file so it won't be overwritten by package
+  upgrades. Also mark the template/base_main and template/base_simple
+  files.
+
+  - When installing SQL, call OI::Startup->create_temp_lib() directly;
+  other actions that use the full OI environment don't have to do this
+  because it's called in setup_static_environment(), which we can't do
+  when installing SQL due to bootstrapping issues.
+
+ * template/base_(main|simple):
+
+   - Moved the base template and the base 'simple' template (for
+   popups and such) from the 'base_theme' package to the server
+   root. That way they will not get overwritten every time you update
+   the package.
+
+ * template/error_(not_found|task_forbidden|task_no_default):
+
+   - Moved these error messages from the base_error package to the
+   global template directory so they're easier to customize for your
+   site.
+
+ * template/*:
+
+   - Other widget template files had changes too minor to note here.
+
+
+Packages changed:
+
+   OpenInteract     1.30 -> 1.35
+   ----------------------------
+   base:            1.62 -> 1.63
+   base_box:        0.33 -> 0.41
+   base_component:  1.30 -> 1.30
+   base_error:      1.32 -> 1.37
+   base_group:      1.26 -> 1.30
+   base_page:        n/a -> 0.40
+   base_security:   1.51 -> 1.53
+   base_template:   1.27 -> 1.27
+   base_theme:      1.27 -> 1.29
+   base_user:       1.37 -> 1.45
+   lookup:          0.15 -> 0.18
+   object_activity:  n/a -> 0.10
+   results_manage:  0.05 -> 0.06
+   system_doc:      1.25 -> 1.28
+   classified:      1.28 -> 1.32
+   full_text:       1.27 -> 1.30
+   news:            1.33 -> 1.33
+   static_page:     1.51 -> 1.52
+
+
 1.30  Mon Oct 15 01:35:03 EDT 2001
 
 Overall:

@@ -1,8 +1,9 @@
 package OpenInteract::Config;
 
-# $Id: Config.pm,v 1.4 2001/07/11 12:26:27 lachoy Exp $
+# $Id: Config.pm,v 1.5 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
+use OpenInteract::Error;
 require Exporter;
 
 # AUTOLOAD not being used any longer... see below
@@ -10,10 +11,11 @@ require Exporter;
 #$AUTOLOAD = '';
 
 @OpenInteract::Config::ISA       = qw( Exporter );
-$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::VERSION   = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Config::EXPORT_OK = qw( _w DEBUG );
 my %CONFIG_TYPES = (
    'perl' => 'OpenInteract::Config::PerlFile',
+   'ini'  => 'OpenInteract::Config::IniFile',
 );
 
 use constant DEBUG => 0;
@@ -34,7 +36,7 @@ sub instance {
     # Backwards compatibility fix -- this probably won't be here forever.
 
     $type ||= 'perl';
-    my $class = $CONFIG_TYPES{ $type };  
+    my $class = $CONFIG_TYPES{ $type };
     die "No configuration class corresponding to type ($type)" unless ( $class );
     eval "require $class";
     if ( $@ ) {
@@ -53,17 +55,17 @@ sub instance {
 
 sub flatten_action_config {
     my ( $self ) = @_;
-    my $default_action = $self->{action}->{_default_action_info_} || $self->{action}->{default};
+    my $default_action = $self->{action_info}{default} || $self->{action}{_default_action_info_};
     my @names = ();
     foreach my $action_key ( keys %{ $self->{action} } ) {
         next if ( $action_key eq 'default' or $action_key =~ /^_/ );
         foreach my $def ( keys %{ $default_action } ) {
-            $self->{action}->{ $action_key }->{ $def } ||= $default_action->{ $def };
+            $self->{action}{ $action_key }{ $def } ||= $default_action->{ $def };
         }
 
         # Also ensure that the action information knows its own key
 
-        $self->{action}->{ $action_key }->{name} = $action_key;
+        $self->{action}{ $action_key }{name} = $action_key;
         push @names, $action_key;
     }
     return \@names;
@@ -136,6 +138,24 @@ sub get_dir {
     return $dir;
 }
 
+
+
+sub is_file_valid {
+    my ( $self, $filename ) = @_;
+
+    unless ( -f $filename ) {
+        my $msg = 'Cannot read configuration file!';
+        my $system_msg = "No valid filename ($filename) for reading configuration information!";
+        OpenInteract::Error->set({ user_msg   => $msg,
+                                   type       => 'config',
+                                   system_msg => $system_msg,
+                                   method     => 'read_config',
+                                   extra      => { filename => $filename } });
+        die $msg;
+    }
+    return 1;
+}
+
 # Allow you to call config keys as methods -- we should probably get
 # rid of this and force you to use it as a hashref...
 
@@ -181,22 +201,21 @@ OpenInteract::Config -- centralized configuration information
                          $config->{db_password}
                          { RaiseError => 1 } );
 
- if ( my $debug = $config->{debugging} ) {
-   print $LOG "Trace level $debug: fetching user $user_id...";
-   if ( my $user = $self->fetch( $user_id ) ) {
-      print $LOG "successful fetching $user_id\n";
-   }
-   else { 
-      print $LOG "No such user with ID $user_id", 
-                 ;
-   }
+ if ( my $debug = $config->{DEBUG} ) {
+     print $LOG "Trace level $debug: fetching user $user_id...";
+     if ( my $user = $self->fetch( $user_id ) ) {
+         print $LOG "successful fetching $user_id\n";
+     }
+     else {
+         print $LOG "No such user with ID $user_id";
+     }
  }
 
 =head1 DESCRIPTION
 
-Allows you to embed a configuration object that responds 
-to get/set requests. Different from just using key/value 
-pairs within your object since you do not have to worry 
+Allows you to embed a configuration object that responds
+to get/set requests. Different from just using key/value
+pairs within your object since you do not have to worry
 about writing get/set methods, cluttering up your AUTOLOAD
 routine, or things like that. It also allows us to create
 configuration objects per module, or even per module instance,
@@ -224,7 +243,7 @@ or:
 
  my $font_face = $config->set( font_face => 'Arial, Helvetica' );
 
-Note that you might want to use the get/set method calls 
+Note that you might want to use the get/set method calls
 more frequently for the sake of clarity. Or not. TMTOWTDI.
 
 =head2 METHODS
@@ -247,7 +266,7 @@ Parameters:
 
 =over 4
 
-=item * 
+=item *
 
 B<type> ($)
 
@@ -301,7 +320,7 @@ undef) values passed in are reflected properly.
 B<get_dir( 'directory-tag' )>
 
 Retrieves the directory name for 'directory-tag', which
-within the Config object may depend on other settings. 
+within the Config object may depend on other settings.
 For instance, you could have:
 
  $c->set( 'base_dir', '/home/cwinters/work/cw' );

@@ -1,49 +1,22 @@
 package OpenInteract::Utility;
 
-# $Id: Utility.pm,v 1.2 2001/10/08 18:19:52 lachoy Exp $
+# $Id: Utility.pm,v 1.5 2001/10/30 02:24:19 lachoy Exp $
 
 use strict;
 use Mail::Sendmail ();
 use MIME::Lite     ();
 
 @OpenInteract::Utility::ISA     = ();
-$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Utility::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_SUBJECT        => 'Mail sent from OpenInteract';
 use constant DEFAULT_ATTACH_MESSAGE => 'Emailing attachments';
 
+# All other types except those listed here are 'base64' encoding
 
-my %ATTACH_TYPES = (
-  csv  => [ 'text/csv', '8bit' ],
-  gif  => [ 'image/gif', 'base64' ],
-  tiff => [ 'image/tiff', 'base64' ],
-  tif  => [ 'image/tiff', 'base64' ],
-  jpeg => [ 'image/jpeg', 'base64' ],
-  jpg  => [ 'image/jpeg', 'base64' ],
-  png  => [ 'image/png', 'base64' ],
-  css  => [ 'text/css', 'base64' ],
-  html => [ 'text/html', '8bit' ],
-  htm  => [ 'text/html', '8bit' ],
-  txt  => [ 'text/plain', '8bit' ],
-  xml  => [ 'text/xml', '8bit' ],
-  pdf  => [ 'application/pdf', 'base64' ],
-  doc  => [ 'application/msword', 'base64' ],
-  ps   => [ 'application/postscript', 'base64' ],
-  xls  => [ 'application/vnd.ms-excel', 'base64' ],
-  ppt  => [ 'application/vnd.ms-powerpoint', 'base64' ],
-  wpd  => [ 'application/wordperfect', 'base64' ],
-  js   => [ 'application/x-javascript', '8bit' ],
-  tar  => [ 'application/x-tar', 'base64' ],
-  zip  => [ 'application/zip', 'base64' ],
-  gz   => [ 'application/gzip', 'base64' ],
-  mp3  => [ 'audio/mpeg', 'base64' ],
-  wav  => [ 'audio/x-wav', 'base64' ],
-  avi  => [ 'video/x-msvideo', 'base64' ],			
-  mov  => [ 'video/quicktime', 'base64' ],
-  mpg  => [ 'video/mpeg', 'base64' ],
-  mpeg => [ 'video/mpeg', 'base64' ],
-);
-
+my %TEXT_ENCODINGS = map { $_ => '8bit' }
+                     qw( text/csv text/html text/html text/plain text/xml
+                         application/x-javascript application/x-perl );
 
 sub send_email {
     my ( $class, $p ) = @_;
@@ -79,6 +52,8 @@ sub _send_email_attachment {
     my $attachments = ( ref $p->{attach} eq 'ARRAY' ) ? $p->{attach} : [ $p->{attach} ];
     return $class->send_email( $p )  unless ( scalar @{ $attachments } > 0 );
 
+    my $R = OpenInteract::Request->instance;
+
     my %header_info = $class->_build_header_info( $p );
     my $initial_text = $p->{message} || DEFAULT_ATTACH_MESSAGE;
     my $msg = new MIME::Lite( %header_info,
@@ -88,9 +63,10 @@ sub _send_email_attachment {
         my $cleaned_name = $class->_clean_attachment_filename( $filename );
         next unless ( $cleaned_name );
         my ( $ext ) = $cleaned_name =~ /\.(\w+)$/;
-        my $type = $ATTACH_TYPES{ lc $ext } || [ 'text/plain', '8bit' ];
-        $msg->attach( Type     => $type->[0],
-                      Encoding => $type->[1],
+        my $mime_type = $R->content_type->mime_type_by_extension( lc $ext );
+        my $encoding = $TEXT_ENCODINGS{ $mime_type } || 'base64';
+        $msg->attach( Type     => $mime_type,
+                      Encoding => $encoding,
                       Path     => $cleaned_name );
     }
 
@@ -102,7 +78,7 @@ sub _send_email_attachment {
         OpenInteract::Error->set({ user_msg   => $msg,
                                    type       => 'email',
                                    system_msg => $@,
-                                   extra      => { %header_info, attachments -> $attachments } });
+                                   extra      => { %header_info, attachments => $attachments } });
         die $msg;
     }
 
@@ -113,7 +89,7 @@ sub _build_header_info {
     my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
     return ( To      => $p->{to}      || $p->{email},
-             From    => $p->{from}    || $R->CONFIG->{admin_email},
+             From    => $p->{from}    || $R->CONFIG->{mail}{admin_email} || $R->CONFIG->{admin_email},
              Subject => $p->{subject} || DEFAULT_SUBJECT );
 }
 
@@ -121,7 +97,7 @@ sub _build_header_info {
 sub _get_smtp_host {
     my ( $class, $p ) = @_;
     my $R = OpenInteract::Request->instance;
-    return $p->{smtp} || $R->CONFIG->{smtp_host};
+    return $p->{smtp} || $R->CONFIG->{mail}{smtp_host} || $R->CONFIG->{smtp_host};
 }
 
 
@@ -227,7 +203,7 @@ are fine.
 B<from> ($) (optional)
 
 From whom the email will be sent. If not specified we use the value of
-the 'admin_email' key in your server configuration
+the 'mail'->'admin_email' key in your server configuration
 (C<conf/server.perl> file).
 
 =item *
@@ -311,7 +287,7 @@ B<Additional options>
 
 In the server configuration file, be able to do something like:
 
- 'email' => {
+ 'mail' => {
      'smtp_host'     => '127.0.0.1',
      'admin_email'   => 'admin@mycompany.com',
      'content_email' => 'content@mycompany.com',

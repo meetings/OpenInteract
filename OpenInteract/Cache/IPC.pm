@@ -1,35 +1,35 @@
 package OpenInteract::Cache::IPC;
 
-# $Id: IPC.pm,v 1.1 2001/07/11 12:33:04 lachoy Exp $
+# $Id: IPC.pm,v 1.2 2001/10/17 04:47:07 lachoy Exp $
 
 use strict;
 use vars qw( $AUTOLOAD );
 use IPC::Cache;
 
 @OpenInteract::Cache::IPC::ISA     = ();
-$OpenInteract::Cache::IPC::VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Cache::IPC::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 $AUTOLOAD = undef;
 
 my $DEFAULT_EXPIRE = 0;
 
-sub class_initialize { 
+sub class_initialize {
     my ( $class, $p ) = @_;
 
-    # Allow values that are passed in to override anything 
+    # Allow values that are passed in to override anything
     # set in the config object
 
     my $max_expire  = $p->{expires_in};
     my $cache_key   = $p->{key};
 
     # If we were given a config object, fill in the empty values
-  
+
     if ( ref $p->{config} ) {
-        my $cache_info = $p->{config}->{cache_info}->{ipc};
+        my $cache_info = $p->{config}{cache_info}{ipc};
         $max_expire  ||= $cache_info->{max_expire};
         $cache_key   ||= $cache_info->{key};
     }
-  
+
     # If a value isn't set, use the default from the class
     # configuration above.
 
@@ -37,10 +37,10 @@ sub class_initialize {
 
     my $R = OpenInteract::Request->instance;
     $R->DEBUG && $R->scrib( 1, "Using the following settings:\n", "Expire: $max_expire\n   Key: $cache_key" );
-    my $cache = IPC::Cache->new( { expires_in => $max_expire, 
+    my $cache = IPC::Cache->new( { expires_in => $max_expire,
                                    cache_key  => $cache_key } )
                                || warn " (Cache/IPC): Cannot create cache!\n";
-    my $stash_class = $p->{config}->{stash_class};
+    my $stash_class = $p->{config}{server_info}{stash_class};
     $stash_class->set_stash( 'ipc-cache', $cache );
     return 1;
 }
@@ -48,21 +48,21 @@ sub class_initialize {
 
 # params: 0 = class ; 1 = key
 
-sub _get_meta { 
+sub _get_meta {
     return OpenInteract::Request->instance->get_stash( 'ipc-cache' )->get( $_[1] );
 }
 
 
 # params: 0 = class ; 1 = key ; 2 = data ; 3 = expires (in seconds)
 
-sub _set_meta { 
+sub _set_meta {
     return OpenInteract::Request->instance->get_stash( 'ipc-cache' )->set( $_[1], $_[2], $_[3] );
 }
 
 
 # params: 0 = class ; 1 = key ; 2 = data for comparison
 
-sub check_meta { 
+sub check_meta {
     return $_[2] == OpenInteract::Request->instance->get_stash( 'ipc-cache' )->get( $_[1] );
 }
 

@@ -1,47 +1,39 @@
 package OpenInteract::SampleStash;
 
+# $Id: sample-Stash.pm,v 1.2 2001/11/02 17:58:30 lachoy Exp $
+
 use strict;
 
 @OpenInteract::SampleStash::ISA     = ();
-$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
-my $DEBUG = 1;
+# This is where we do the stashing
+
 my %ITEMS = ();
 
 # Specify the items that will survive the purge by clean_stash(),
 # which is typically called at the end of every request.
-my %KEEP  = ( cache => 1, 'ipc-cache' => 1, config => 1, 
-              template_object => 1, error_handlers => 1 );
 
-sub get_stash {
- my $class = shift;
- my $item  = shift;
- return $ITEMS{ lc $item };
-}
+my %KEEP  = map { $_ => 1 }
+            qw( cache ipc-cache config template_object error_handlers );
 
-sub set_stash {
- my $class = shift;
- my $item  = shift;
- my $obj   = shift;
- return $ITEMS{ lc $item } = $obj;
-}
+sub get_stash { return $ITEMS{ lc $_[1] } }
+
+sub set_stash { return $ITEMS{ lc $_[1] } = $_[2] }
 
 sub clean_stash {
- my $class = shift;
- foreach my $item ( keys %ITEMS ) {
-   next if $KEEP{ $item };
-   delete $ITEMS{ $item };
- }
+    foreach my $item ( keys %ITEMS ) {
+        delete $ITEMS{ $item } unless ( $KEEP{ $item } );
+    }
 }
- 
+
 1;
 
 =pod
 
 =head1 NAME
 
-OpenInteract::SampleStash - Default stash class and an example of what
-one looks like
+OpenInteract::SampleStash - Default stash class and an example of what one looks like
 
 =head1 SYNOPSIS
 
@@ -50,6 +42,9 @@ one looks like
  StashClass    MyApp::Stash
 
 =head1 DESCRIPTION
+
+Note: This class template is used when generating a new website via
+'oi_manage' and is not meant to be used directly.
 
 The existence of the 'stash class' is necessitated by the fact that we
 can have more than one application running at the same time. Certain
