@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.22 2002/01/10 13:34:18 lachoy Exp $
+# $Id: SPOPS.pm,v 1.23 2002/03/03 17:52:34 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use HTML::Entities  ();
 use OpenInteract::Utility;
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 use constant OBJECT_KEY_TABLE => 'object_keys';
 
@@ -240,6 +240,17 @@ sub fetch_updates {
 ########################################
 # SECURITY
 ########################################
+
+# Override method in SPOPS::Secure since we already know the
+# user/group information from $R
+
+sub get_security_scopes {
+    my ( $self, $p ) = @_;
+    my $R = OpenInteract::Request->instance;
+    return ( $R->{auth}{user}, $R->{auth}{group} );
+}
+
+
 
 # Let SPOPS::Secure know what the IDs are for the superuser and
 # supergroup

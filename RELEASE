@@ -1,6 +1,13 @@
 RELEASE NOTES: OpenInteract
 =========================
 
+1.39  Mon Mar  4 07:45:35 EST 2002
+
+ - Bugfix in OpenInteract.pm
+
+ - Potential speedup when finding security for objects/actions
+
+
 1.38  Mon Feb 25 22:27:22 EST 2002
 
   - You can now tell OI to store user/group/theme objects in the
@@ -175,4 +182,4 @@ RELEASE NOTES: OpenInteract
      you want to use AUTO_INCREMENT fields for MySQL.
 
 ==========================
-$Id: RELEASE,v 1.17 2002/02/26 03:02:40 lachoy Exp $
+$Id: RELEASE,v 1.18 2002/03/04 12:17:42 lachoy Exp $

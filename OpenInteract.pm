@@ -1,6 +1,6 @@
 package OpenInteract;
 
-# $Id: OpenInteract.pm,v 1.30 2002/02/26 03:07:22 lachoy Exp $
+# $Id: OpenInteract.pm,v 1.32 2002/03/04 12:15:10 lachoy Exp $
 
 use strict;
 use Apache::Constants qw( :common :remotehost );
@@ -8,7 +8,7 @@ use Apache::Request;
 use Data::Dumper      qw( Dumper );
 
 @OpenInteract::ISA      = ();
-$OpenInteract::VERSION  = 1.38;
+$OpenInteract::VERSION  = 1.39;
 
 
 # Generic separator used in display
@@ -345,7 +345,7 @@ THEMERR
     # Find all the properties before we potentially cache
 
     $R->{theme}->discover_properties;
-    elsif ( $theme_refresh > 0 ) {
+    if ( $theme_refresh > 0 ) {
         $R->{session}{_oi_cache}{theme} = $R->{theme};
         $R->{session}{_oi_cache}{theme_refresh_on} = time + ( $theme_refresh + 60 );
         $R->DEBUG && $R->scrib( 1, "Set theme to session cache, expires ",
