@@ -1,6 +1,0 @@
-[%########################################
-  form_submit( name, value, field_label )
-     Submit button
-  ########################################-%]
-[%- DEFAULT name = 'form_submit' -%]
-<input type="submit" value="[% value %]" name="[% name %]"> [% field_label %]

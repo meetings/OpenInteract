@@ -2,8 +2,6 @@
 ~$
 \.old$
 \.bak$
-\.backup$
-\.err$
+^MANIFEST\.
 ^tmp
-^notes
 ^_
