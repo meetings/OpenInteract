@@ -1,11 +1,11 @@
 package OpenInteract::Template::Context;
 
-# $Id: Context.pm,v 1.5 2002/08/25 00:09:21 lachoy Exp $
+# $Id: Context.pm,v 1.60 2002/09/16 20:21:29 lachoy Exp $
 
 use strict;
 use base qw( Template::Context );
 
-$OpenInteract::Template::Context::VERSION  = substr(q$Revision: 1.5 $, 10);
+$OpenInteract::Template::Context::VERSION  = sprintf("%d.%02d", q$Revision: 1.60 $ =~ /(\d+)\.(\d+)/);
 
 # Overriding Template::Context so we can get around the issue of the
 # template name 'x::y' being interpreted as a directive to have a

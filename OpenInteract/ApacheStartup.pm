@@ -1,6 +1,6 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.25 2002/09/09 03:05:09 lachoy Exp $
+# $Id: ApacheStartup.pm,v 1.26 2002/09/16 20:16:40 lachoy Exp $
 
 use strict;
 use Apache;
@@ -11,7 +11,7 @@ use OpenInteract::Startup;
 
 use constant DEBUG => 0;
 
-$OpenInteract::ApacheStartup::VERSION   = substr(q$Revision: 1.25 $, 10);
+$OpenInteract::ApacheStartup::VERSION   = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 
 # Create a handler to put the X-Forwarded-For header into the IP
 # address -- thanks Stas! (perl.apache.org/guide/)
@@ -188,7 +188,8 @@ sub cleanup_cache {
     my ( $class, $dir ) = @_;
     return unless ( $dir );
     File::Path::rmtree( $dir ) if ( -d $dir );
-    File::Path::mkpath( $dir, 0, 0777 ); # this may be bad, but...
+    File::Path::mkpath( $dir, 0, 0777 );
+    chmod( 0777, $dir );  # this may be bad, but...
 }
 
 

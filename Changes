@@ -1,5 +1,37 @@
 Revision history for Perl extension OpenInteract.
 
+1.52  Mon Sep 16 16:19:33 EDT 2002
+
+Individual:
+
+ * doc/caching.html:
+
+   -Add note about admin users and caching.
+
+ * OpenInteract/ApacheStartup.pm:
+
+   - When cleaning up the content and TT caches, set the permissions
+   on the directories to 0777 so the webserver doesn't complain about
+   not being able to write to the cache.
+
+ * OpenInteract/Component.pm:
+
+   - Fix VERSION so it's newer than 1.50. (How this got downgraded is
+   anyone's guess... probably a pasted VERSION converter w/o a
+   commit.) Thanks to merlyn, as usual.
+
+ * OpenInteract/Handler/GenericDispatcher.pm:
+
+   - If the user is an admin, we neither read from nor write to the
+   cache.
+
+   - If the action parameter 'skip_cache' is set, we neither read from
+   nor write to the cache.
+
+
+Package updates: none
+
+
 1.51  Sun Sep  8 23:07:24 EDT 2002
 
 Individual:
@@ -64,7 +96,7 @@ Individual:
 
 Packages updated:
 
-   OpenInteract     1.50 -> 1.50
+   OpenInteract     1.50 -> 1.51
    ----------------------------
    base:            1.70 -> 1.70
    base_box:        1.00 -> 1.01

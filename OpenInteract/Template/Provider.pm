@@ -1,6 +1,6 @@
 package OpenInteract::Template::Provider;
 
-# $Id: Provider.pm,v 1.24 2002/09/08 20:55:35 lachoy Exp $
+# $Id: Provider.pm,v 1.25 2002/09/16 20:18:35 lachoy Exp $
 
 use strict;
 use base qw( Template::Provider );
@@ -8,7 +8,7 @@ use Data::Dumper       qw( Dumper );
 use Digest::MD5        qw();
 use File::Spec         qw();
 
-$OpenInteract::Template::Provider::VERSION  = substr(q$Revision: 1.24 $, 10);
+$OpenInteract::Template::Provider::VERSION  = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_MAX_CACHE_TIME       => 60 * 30;
 use constant DEFAULT_TEMPLATE_EXTENSION   => 'template';

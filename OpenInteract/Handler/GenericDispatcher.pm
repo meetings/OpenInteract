@@ -1,6 +1,6 @@
 package OpenInteract::Handler::GenericDispatcher;
 
-# $Id: GenericDispatcher.pm,v 1.7 2002/09/09 02:57:46 lachoy Exp $
+# $Id: GenericDispatcher.pm,v 1.90 2002/09/16 20:20:55 lachoy Exp $
 
 use strict;
 use base qw( Exporter );
@@ -10,7 +10,7 @@ use constant DEFAULT_SECURITY_KEY => 'DEFAULT';
 
 my $CLASS_TRACKING_KEY = 'class_cache_track';
 
-$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::GenericDispatcher::VERSION = sprintf("%d.%02d", q$Revision: 1.90 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::Handler::GenericDispatcher::EXPORT_OK = qw( DEFAULT_SECURITY_KEY );
 
 
@@ -167,6 +167,9 @@ sub _check_task_security {
 sub check_cache {
     my ( $class, $p, $key_params ) = @_;
     my $R = OpenInteract::Request->instance;
+    return undef if ( $R->{auth}{is_admin} );
+    return undef if ( $p->{skip_cache} );
+
     my $key = $class->_make_cache_key( $p, $key_params );
     return undef unless ( $key );
     my $data = $R->cache->get({ key => $key });
@@ -202,6 +205,9 @@ sub generate_content {
     }
     my $R = OpenInteract::Request->instance;
     my $content = $R->template->handler( $template_params, $variables, $template_source );
+    return $content if ( $R->{auth}{is_admin} );
+    return $content if ( $p->{skip_cache} );
+
     my $key = $class->_make_cache_key( $p, $key_params );
     if ( $key ) {
         my $cache_expire = $p->{ACTION}{cache_expire} || {};
@@ -415,6 +421,12 @@ Yes, this is awkward. But the current version of OpenInteract content
 handlers is stateless -- they use class methods rather than
 objects. The next version will take care of this, but in the meantime
 we need to pass around more parameters than normal.
+
+Also note that users who are administrators -- as defined in
+L<OpenInteract::Auth|OpenInteract::Auth> or a relevant subclass -- do
+not view or save cached content. This is to prevent OpenInteract from
+caching a view that includes admin-only links, such as 'Edit' or
+'Remove' that normal users do not see.
 
 B<generate_content( \%params, \%key_params, \%template_params,
                     \%template_variables, \%template_source )>

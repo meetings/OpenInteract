@@ -1,6 +1,6 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.32 2002/08/12 03:46:49 lachoy Exp $
+# $Id: Startup.pm,v 1.33 2002/09/16 20:18:36 lachoy Exp $
 
 use strict;
 use Cwd           qw( cwd );
@@ -14,7 +14,7 @@ use OpenInteract::Package;
 use OpenInteract::PackageRepository;
 use SPOPS::ClassFactory;
 
-$OpenInteract::Startup::VERSION = substr(q$Revision: 1.32 $, 10);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 

@@ -1,13 +1,13 @@
 package OpenInteract::Config::IniFile;
 
-# $Id: IniFile.pm,v 1.4 2002/04/22 05:05:17 lachoy Exp $
+# $Id: IniFile.pm,v 1.50 2002/09/16 20:20:28 lachoy Exp $
 
 use strict;
+use base qw( OpenInteract::Config );
 use OpenInteract::Config qw( _w DEBUG );
 use OpenInteract::Config::Ini;
 
-@OpenInteract::Config::IniFile::ISA     = qw( OpenInteract::Config );
-$OpenInteract::Config::IniFile::VERSION = substr(q$Revision: 1.4 $, 10);
+$OpenInteract::Config::IniFile::VERSION = sprintf("%d.%02d", q$Revision: 1.50 $ =~ /(\d+)\.(\d+)/);
 
 use constant META_KEY => '_INI';
 

@@ -1,6 +1,6 @@
 package OpenInteract::Template::Process;
 
-# $Id: Process.pm,v 1.23 2002/08/25 00:10:08 lachoy Exp $
+# $Id: Process.pm,v 1.24 2002/09/16 20:18:36 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
@@ -9,7 +9,7 @@ use OpenInteract::Template::Plugin;
 use OpenInteract::Template::Provider;
 use Template;
 
-$OpenInteract::Template::Process::VERSION  = substr(q$Revision: 1.23 $, 10);
+$OpenInteract::Template::Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_COMPILE_EXT => '.ttc';
 use constant DEFAULT_CACHE_SIZE  => 75;

@@ -1,6 +1,6 @@
 package OpenInteract::CommonHandler;
 
-# $Id: CommonHandler.pm,v 1.42 2002/08/26 05:15:10 lachoy Exp $
+# $Id: CommonHandler.pm,v 1.43 2002/09/16 20:18:36 lachoy Exp $
 
 use strict;
 use Data::Dumper    qw( Dumper );
@@ -9,7 +9,7 @@ use SPOPS::Secure   qw( :level );
 require Exporter;
 
 @OpenInteract::CommonHandler::ISA       = qw( OpenInteract::Handler::GenericDispatcher );
-$OpenInteract::CommonHandler::VERSION   = substr(q$Revision: 1.42 $, 10);
+$OpenInteract::CommonHandler::VERSION   = sprintf("%d.%02d", q$Revision: 1.43 $ =~ /(\d+)\.(\d+)/);
 @OpenInteract::CommonHandler::EXPORT_OK = qw( OK ERROR );
 
 use constant OK    => '1';

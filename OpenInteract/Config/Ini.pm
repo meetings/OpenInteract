@@ -1,11 +1,11 @@
 package OpenInteract::Config::Ini;
 
-# $Id: Ini.pm,v 1.8 2002/04/22 05:05:17 lachoy Exp $
+# $Id: Ini.pm,v 1.90 2002/09/16 20:20:03 lachoy Exp $
 
 use strict;
 use OpenInteract::Config qw( _w DEBUG );
 
-$OpenInteract::Config::Ini::VERSION = substr(q$Revision: 1.8 $, 10);
+$OpenInteract::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.90 $ =~ /(\d+)\.(\d+)/);
 
 # Stuff in metadata (_m):
 #   sections (\@): all full sections, in the order they were read

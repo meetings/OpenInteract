@@ -1,12 +1,12 @@
 package OpenInteract::Component;
 
-# $Id: Component.pm,v 1.1 2002/09/08 20:49:36 lachoy Exp $
+# $Id: Component.pm,v 2.16 2002/09/16 19:53:34 lachoy Exp $
 
 use strict;
 use SPOPS::Secure qw( :level );
 use Data::Dumper  qw( Dumper );
 
-$OpenInteract::Component::VERSION = substr(q$Revision: 1.1 $, 10);
+$OpenInteract::Component::VERSION = sprintf("%d.%02d", q$Revision: 2.16 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_METHOD    => 'handler';
 use constant NOTFOUND_SECURITY => SEC_LEVEL_NONE;

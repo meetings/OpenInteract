@@ -274,6 +274,23 @@
     <tt>save()</tt> on the object, the previously cached content will
     have been deleted and the content will be regenerated anew.</p>
 
+    <h2>When Not to Cache</h2>
+
+    <p>If you're an admin user you frequently see functionality that
+    normal users do not see: <b>Edit</b> or <b>Remove</b> links next
+    to an object, etc. You do not want to cache this content, since
+    users shouldn't see this information. (Normal users modifying the
+    object shouldn't be an issue, since security should take care of
+    it.)</p>
+
+    <p>As a result, any user defined as an administrator will not view
+    or save cached content. "Defined as an administrator" means that a
+    call to the following will return true:</p>
+
+    <pre>
+    my $is_admin = $R->{auth}{is_admin};
+    </pre>
+
     <h2>Example: news</h2>
 
     <p>The 'news' package shipped with OpenInteract has an
