@@ -1,6 +1,6 @@
 package OpenInteract::ApacheStartup;
 
-# $Id: ApacheStartup.pm,v 1.17 2001/02/01 05:27:40 cwinters Exp $
+# $Id: ApacheStartup.pm,v 1.4 2001/02/22 12:46:17 lachoy Exp $
 
 use strict;
 use OpenInteract::Startup;
@@ -53,15 +53,14 @@ sub initialize {
  # init handler below
   
   my ( $init_class, $C ) = OpenInteract::Startup->main_initialize({ 
-                               base_config => $BASE_CONFIG 
-                           });
+                               base_config => $BASE_CONFIG });
   die "No configuration object returned from initialization!\n" unless ( $C );
-  _w( 1, " --main intialization completed ok." );
+  _w( 1, " --main initialization completed ok." );
   
   # Figure out how to do this more cleanly in the near future -- maybe
   # just do it by hand for this special class?
   
-  push @{ $init_class }, 'OpenInteract::Package';
+  push @{ $init_class }, 'OpenInteract::PackageRepository';
 
  # Stas Beckman (stas@stason.org) wrote up a section in the mod_perl
  # developer guide about how this 'install_driver' thing saves
@@ -69,6 +68,7 @@ sub initialize {
   
   my $db_info = $C->{db_info};
   DBI->install_driver( $db_info->{driver_name} );
+  _w( 1, " --installed DBD driver ($db_info->{driver_name}) ok." );
   
   # Check to see if the proxy subroutine has been loaded; if not, create it
   
@@ -77,6 +77,7 @@ sub initialize {
     _w( 1, "Creating proxy subroutine" );
     eval $PROXY_SUB;   
     die "Cannot create proxy subroutine! $@" if ( $@ );
+    _w( 1, " --installed proxy subroutine ok." );
   }
 
  # Setup caching info for use in the child init handler below

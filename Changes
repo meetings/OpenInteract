@@ -1,5 +1,164 @@
 Revision history for Perl extension OpenInteract.
 
+1.06  Sun Feb 25 15:16:43 EST 2001
+
+ * OpenInteract/Package*: Split out previous OpenInteract/Package.pm
+   into OpenInteract/PackageRepository.pm (SPOPS::HashFile object
+   representing a package respository) and OpenInteract/Package.pm
+   (class methods operating on simple hashrefs representing individual
+   packages). In certain ways both are simpler and easier to
+   understand, and this allows you to think of and work with a package
+   repository as a single item rather than solely on individual packages.
+
+   This has a couple of effects:
+
+     1) GDBM is no longer used by OpenInteract. This was the primary
+     motivator behind the change.
+
+     2) You MUST modify all repositories from the old GDBM format to
+     the new format. If you run the new 'upgrade' command from
+     oi_manage when you download and install this distribution the base
+     installation repository will be translated for you. Here's a
+     list of commands for a manual upgrade:
+
+       > tar -zxvf OpenInteract-1.06.tar.gz
+       > cd OpenInteract-1.06
+       > perl Makefile.PL
+       > make
+       > make test
+       > make install
+       > oi_manage upgrade --base_dir=/opt/OpenInteract 
+
+     And if you're using CPAN:
+
+       > perl -MCPAN -e shell
+       cpan> install OpenInteract::Package
+       cpan> exit
+       > cd ~/.cpan/build/OpenInteract-1.06
+       > oi_manage upgrade --base_dir=/opt/OpenInteract 
+
+     However, after you do this you also need to translate the website
+     repositories like this:
+
+       oi_manage upgrade_repository --website_dir=<website-directory>
+
+     If you want to do things the hard way, there's also a script in
+     the 'eg/' directory called 'new_package_repository.pl' which will
+     translate a package repository from GDBM to the new format.
+
+     3) Any code you've written that operates on packages must be
+     redone. Sorry about this, but hopefully not too many people have
+     gone scouting around the package repositories in the first place,
+     and the benefits outweigh the costs at this relatively early
+     stage of OI development.
+
+     Here's a simple example:
+
+     Old: 
+        my $pkg = OpenInteract::Package->fetch_by_name( 
+                                          { name => 'blah',
+                                            directory => '/blah/blah' });
+
+     New:
+        my $repository = OpenInteract::PackageRepository->fetch( 
+                                          undef, { directory => '/blah/blah });
+        my $info = $repository->fetch_package_by_name({ name => 'blah' });
+
+     If you've actually done work with packages and need some help,
+     email Chris <chris@cwinters.com> for more detailed guidelines.
+    
+ * script/oi_manage, OpenInteract/ApacheStartup.pm,
+   OpenInteract/Startup.pm, OpenInteract/SQLInstall.pm: Modified
+   all functions dealing with packages to work with new system.
+ 
+ * OpenInteract/Package.pm: 
+
+   -- Fixed file handling bug in revised module method
+   install_distribution() which checked $_ (empty) rather than
+   $p->{package_file}. Thanks to Takanori Ugai <ugai@jp.fujitsu.com>
+   for the catch and patch.
+
+   -- Fixed new behavior of remove() which removed the directory in
+   addition to the entry from the repository. You can pass in 'remove'
+   as the third argument to have it remove the directory, otherwise
+   the directory is kept, which was the default behavior before the
+   new stuff was written.
+
+   -- Added 'script/' as set of files to be copied over when applying
+   a package from the base installation to a website.
+
+ * conf/sample-server.perl: new keys: 
+
+     {session_info}->{expiration} = '+3M',
+
+     (allows you to set a default expiration time for the session
+     cookie)
+
+     {system_alias}->{'OpenInteract::PackageRepository'} = 'repository',
+
+     (alias used to reference the repository class)
+
+     {box}->{custom_box_handler} = '',
+
+     (allows you to define a handler to be called on every request to
+     create/inspect/modify boxes)
+
+   You'll probably want to copy the items over into your server
+   configuration, although this brings up the interesting point as to
+   how to insert new configuration options into existing
+   websites. Perhaps we need a utility like that used in Win32
+   environments with the registry -- you can distribute a simple file
+   which is used by oi_manage to insert new keys into a website's
+   server.perl file.
+
+ * script/oi_manage:
+
+   -- Modified format to be more readable; added more documentation.
+
+   -- Mdified all calls to 'open_base_config()' to call the routine in
+   OpenInteract::Startup
+
+   -- Added checks for 'website_name' in the 'create_website' command,
+   since the parameter must refer to a valid Perl package identifier.
+
+   -- Added new action 'upgrade' (just like 'install' but we don't
+   create a new directory)
+
+   -- Added new action 'refresh_doc' (allow a website to get the
+   latest version of the documentation in the base installation
+   directory).
+
+ * OpenInteract/Startup.pm: Modified name of parameter passed into
+   'read_base_config()' (shouldn't affect anyone); added
+   'create_base_config_filename()' so we have one place to generate
+   it.
+
+ * OpenInteract/SPOPS.pm: added the URL to view the object to the
+   email sent by notify()
+
+ * doc/admin.html: Cleaned up and added some more information
+
+ * Several packages were also modified, but each of these has its own
+   changelog for the specific changes. Many of the changes were quite
+   small, including conf/spops.perl modifications to accommodate
+   changes in SPOPS key generation (add an 'increment_field => 1' for
+   those classes using a MySQL AUTO_INCREMENT field).
+
+   base:           1.20 -> 1.30
+   base_box:       0.13 -> 0.14
+   base_component: 1.11 -> 1.14
+   base_error:     1.13 -> 1.14
+   base_group:     1.10 -> 1.11
+   base_security:  1.18 -> 1.20
+   base_template:  1.09 -> 1.11
+   base_theme:     1.09 -> 1.11
+   base_user:      1.14 -> 1.15
+   static_page:    1.21 -> 1.24
+   classified:     1.07 -> 1.12
+   full_text:      1.09 -> 1.11
+   news:           1.13 -> 1.15
+
+
 1.05  Thu Feb  1 00:26:14 EST 2001
 
   Added 'setup_static_environment' to OpenInteract/Startup.pm -- this
@@ -138,5 +297,3 @@ Revision history for Perl extension OpenInteract.
 1.00  Sep 28 2000
 
   First public version. Everything is new!
-
-

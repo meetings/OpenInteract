@@ -205,6 +205,10 @@ Latest news, package repository, everything else.
 
  http://www.openinteract.org/
 
+=head1 REVISION
+
+This document is for version B<1.06> of OpenInteract.
+
 =head1 CONTACT
 
 Thanks for trying out OpenInteract! If you have any questions,
@@ -248,6 +252,10 @@ OpenInteract::Error
 =item *
 
 OpenInteract::Package
+
+=item *
+
+OpenInteract::PackageRepository
 
 =item *
 

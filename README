@@ -5,6 +5,9 @@ QUICK INSTALL
 
  - Read the 'INSTALL' file also located in this directory.
 
+ - If you're upgrading from version 1.05 or earlier, please read the
+ UPGRADE file in this directory.
+
 WHAT IS IT?
 =========================
 
@@ -16,10 +19,10 @@ entirely via the web browser. It includes:
  your data just about any way that you can think of.
 
  - A very flexible separation of presentation and data access: you can
- use one template for accessing data from different sources using one
- template (e.g., a listing of users from the system, from an LDAP
- server, from an NT/SMB authentication controller, etc.) or you can
- use one set of data to fill multiple templates.
+ use one template for accessing data from different sources (e.g., a
+ listing of users from the system, from an LDAP server, from an NT/SMB
+ authentication controller, etc.) or you can use one set of data to
+ fill multiple templates.
 
  - A consistent security mechanism allowing you to control security
  for users and groups not only at the task level, but also at the
@@ -168,3 +171,7 @@ And the following application packages:
 
 Every other package, whether developed by intes.net, inc. or other
 party, is licensed under its own terms.
+
+
+=========================
+$Id: README,v 1.3 2001/02/25 20:47:02 lachoy Exp $

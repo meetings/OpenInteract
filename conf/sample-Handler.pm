@@ -1,6 +1,6 @@
 package OpenInteract::Handler::%%UC_FIRST_NAME%%;
 
-# $Id: sample-Handler.pm,v 1.3 2001/01/08 03:07:26 cwinters Exp $
+# $Id: sample-Handler.pm,v 1.1.1.1 2001/02/02 06:18:34 lachoy Exp $
 
 # This is a sample handler. It exists only to provide a template for
 # you and some notes on what these configuration variables mean.
@@ -30,7 +30,7 @@ use SPOPS::Secure qw( :level );
 # Use whatever standard you like here -- it's always nice to let CVS
 # deal with it :-)
 
-$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Handler::%%UC_FIRST_NAME%%::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
 
 # This might seem cosmetic but actually the GenericDispatcher will
 # e-mail you if someone tries to call the handler without a method and

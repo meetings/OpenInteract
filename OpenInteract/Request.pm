@@ -1,6 +1,6 @@
 package OpenInteract::Request;
 
-# $Id: Request.pm,v 1.20 2001/02/01 05:27:40 cwinters Exp $
+# $Id: Request.pm,v 1.1.1.1 2001/02/02 06:18:25 lachoy Exp $
 
 use strict;
 use Carp              qw( carp );
@@ -8,7 +8,7 @@ use Data::Dumper      qw( Dumper );
 use Class::Singleton  ();
 
 @OpenInteract::Request::ISA     = qw( Class::Singleton );
-$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
 
 $OpenInteract::Request::DEBUG = 0;
 

@@ -1,6 +1,6 @@
 package OpenInteract::SPOPS;
 
-# $Id: SPOPS.pm,v 1.9 2001/02/01 05:27:40 cwinters Exp $
+# $Id: SPOPS.pm,v 1.2 2001/02/13 12:42:29 lachoy Exp $
 
 use strict;
 use Carp         qw( carp );
@@ -8,7 +8,7 @@ use Data::Dumper qw( Dumper );
 use HTML::Entities  ();
 
 @OpenInteract::SPOPS::ISA     = ();
-$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SPOPS::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -148,8 +148,11 @@ sub notify {
   my $separator = '=' x 25;
   my $msg = ( $p->{notes} ) ? "Notes\n$separator$p->{notes}\n$separator\n\n" : '';
   foreach my $obj ( @{ $p->{object} } ) {
+    my $info = $obj->object_description;
+    my $object_url = join( '', 'http://', $R->{server_name}, $info->{url} );
     $msg .= "Begin $p->{type} object\n$separator\n" .
-            $obj->as_string .
+            $obj->as_string . "\n" .
+            "View this object at: $object_url\n" .
             "\n$separator\nEnd $p->{type} object\n\n\n";
   }
   eval { OpenInteract::Utility->send_email({ 

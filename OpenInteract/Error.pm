@@ -1,6 +1,6 @@
 package OpenInteract::Error;
 
-# $Id: Error.pm,v 1.10 2001/02/01 05:27:40 cwinters Exp $
+# $Id: Error.pm,v 1.1.1.1 2001/02/02 06:18:18 lachoy Exp $
 
 use strict;
 

@@ -1,0 +1,30 @@
+RELEASE NOTES: OpenInteract
+=========================
+
+1.06
+
+  * Package repository format changed. See 'UPGRADE' for upgrading
+    information.
+
+  * Added new keys to server.conf:
+
+     {session_info}->{expiration} = '+3M',
+
+       (allows you to set a default expiration time for the session
+        cookie)
+
+     {system_alias}->{'OpenInteract::PackageRepository'} = 'repository',
+
+       (alias used to reference the repository class)
+
+     {box}->{custom_box_handler} = '',
+
+       (allows you to define a handler to be called on every request
+        to create/inspect/modify boxes)
+
+   * Require new version of SPOPS (0.39); this forces you to set the
+     spops.conf configuration key 'increment_field' to a true value if
+     you want to use AUTO_INCREMENT fields for MySQL.
+
+==========================
+$Id: RELEASE,v 1.1 2001/02/25 21:26:21 lachoy Exp $

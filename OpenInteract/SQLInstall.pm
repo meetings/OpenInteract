@@ -1,6 +1,6 @@
 package OpenInteract::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.15 2001/02/02 04:52:36 cwinters Exp $
+# $Id: SQLInstall.pm,v 1.2 2001/02/20 04:12:32 lachoy Exp $
 
 use strict;
 use SPOPS::SQLInterface;
@@ -8,7 +8,7 @@ use OpenInteract::Package;
 use Data::Dumper           qw( Dumper );
 
 @OpenInteract::SQLInstall::ISA      = qw();
-$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 
@@ -17,15 +17,15 @@ use constant DEBUG => 0;
 # into @INC and read the class name from the package itself.
 
 sub require_package_installer {
-  my ( $class, $pkg ) = @_;
+  my ( $class, $pkg_info ) = @_;
 
  # Ensure that the necessary directories from the package are in @INC
 
-  $pkg->include_package_dir;
-  my $installer_class = $pkg->{sql_installer};
+  OpenInteract::Package->add_to_inc( $pkg_info );
+  my $installer_class = $pkg_info->{sql_installer};
   return undef unless ( $installer_class );
 
-  _w( 1, "Trying to require ($installer_class) from ($class) for ($pkg->{name})" );
+  _w( 1, "Trying to require ($installer_class) from ($class) for ($pkg_info->{name})" );
   eval "require $installer_class";
   die "Cannot include installer ($installer_class) to system. Error: $@\n" if ( $@ );
   return $installer_class;
@@ -102,9 +102,9 @@ sub create_structure {
                msg => 'No files given from which to read structures!' } ];
   }
 
-  my $pkg = $p->{package};
+  my $pkg_info = $p->{package};
   my $driver_name = $p->{config}->{db_info}->{driver_name};
-  my $struct_dir = join( '/', $pkg->{website_dir}, $pkg->{package_dir}, 'struct' );
+  my $struct_dir = join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'struct' );
   my @status = ();
   foreach my $table_file ( @{ $p->{table_file_list} } ) {
     my $this_status = { type => 'structure', name => $table_file, ok => 1 };
@@ -144,8 +144,8 @@ sub install_data {
                msg => 'No files given from which to read data!' } ];
   }
 
-  my $pkg = $p->{package};
-  my $data_dir = $p->{data_dir} || join( '/', $pkg->{website_dir}, $pkg->{package_dir}, 'data' );
+  my $pkg_info = $p->{package};
+  my $data_dir = $p->{data_dir} || join( '/', $pkg_info->{website_dir}, $pkg_info->{package_dir}, 'data' );
   my @status = ();
   my %args = ( db => $p->{db}, config => $p->{config} );
   foreach my $data_file ( @{ $p->{data_file_list} } ) {
@@ -371,7 +371,7 @@ sub sql_modify_increment {
     if ( $driver_name eq 'mysql' ) {
       s/%%INCREMENT%%/INT NOT NULL AUTO_INCREMENT/g;
     }
-    elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' ) {
+    elsif ( $driver_name eq 'Sybase' or $driver_name eq 'ASAny' or $driver_name eq 'FreeTDS' ) {
       s/%%INCREMENT%%/NUMERIC( 10, 0 ) NOT NULL IDENTITY/g;
     }
   }
@@ -468,7 +468,7 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
 
  # Use this class in a separate program
  use OpenInteract::SQLInstall;
- use OpenInteract::Package;
+ use OpenInteract::PackageRepository;
  use OpenInteract::Startup;
  use OpenInteract::DBI;
 
@@ -478,9 +478,11 @@ OpenInteract::SQLInstall -- Dispatcher for installing various SQL data from pack
  my $dbh = eval { OpenInteract::DBI->connect( $C->{db_info} ) };
  die "Cannot open database handle: $@"  if ( $@ );
 
- my $pkg = OpenInteract::Package->fetch_by_name( { name => 'my_package' } );
- OpenInteract::SQLInstall->require_package_installer( $pkg );
- my %args = ( package => $pkg, config => $C, db => $dbh );
+ my $repository = OpenInteract::PackageRepository->fetch(
+                                   undef, { directory => $WEBSITE_DIR } );
+ my $pkg_info = $repository->fetch_package_by_name( { name => 'my_package' } );
+ OpenInteract::SQLInstall->require_package_installer( $pkg_info );
+ my %args = ( package => $pkg_info, config => $C, db => $dbh );
  OpenInteract::SQLInstall->apply( { %args, action => 'create_structure' } );
  OpenInteract::SQLInstall->apply( { %args, action => 'install_data' } );
  OpenInteract::SQLInstall->apply( { %args, action => 'install_security' } );
@@ -814,18 +816,18 @@ Using something like Alzabo (see http://alzabo.sourceforge.net/) to
 provide schema and data translation abilities would be sweet. However,
 Alzabo is a whole nother ball of wax on top of OpenInteract...
 
-B<Better data abstraction>
+B<Dumping data for transfer>
 
 It would be nice if you could do something like:
 
- oi_manage --website_dir=/home/httpd/myOI --package=mypkg dump_sql
+ oi_manage dump_sql --website_dir=/home/httpd/myOI --package=mypkg 
 
 And get in your C<data/dump> directory a series of files that can be
 read in by another OpenInteract website for installation. This is
 the pie in the sky -- developing something like this would be really
 cool.
 
-And we can! But only for SPOPS objects. It is quite simple for us to
+And we can, but only for SPOPS objects. It is quite simple for us to
 read data from a flat file, build objects from the data and save them
 into a random database -- SPOPS was built for this!
 

@@ -1,0 +1,100 @@
+UPGRADING OPENINTERACT
+=========================
+
+This document has a few pointers for upgrading OpenInteract.
+
+===============
+Quick help
+===============
+
+Most of the time, upgrading OpenInteract is as simple as:
+
+ 1) Running the Perl upgrade:
+
+  > cd OpenInteract-1.xx/
+  > perl Makefile.PL
+  > make
+  > make test
+  > make install
+
+This updates all the core OpenInteract:: modules to the versions
+included with the distribution.
+
+ 2) Running the OpenInteract upgrade:
+
+  > oi_manage upgrade --base_dir=/path/to/installation
+
+from the directory where you unpacked the OpenInteract
+distribution. This will upgrade all the core OpenInteract packages in
+the base installation to the versions included with the distribution.
+
+
+===============
+General upgrade notes
+===============
+
+Always read the 'Changes' file in this directory for more details
+about changes between versions. 
+
+---------------
+Server configuration:
+
+As we improve OpenInteract, we occasionally add new configuration
+options to the 'server.perl' file. Since we have not yet developed a
+utility to integrate these changes automatically, check out the
+'Changes' file and see what updates there have been between the
+versions.
+
+
+===============
+Upgrading from 1.05 (and earlier)
+===============
+
+---------------
+SPOPS/MySQL changes:
+
+If the website authors do not upgrade to the new packages and use the
+'AUTO_INCREMENT' feature of MySQL, they need to add the following line
+to the SPOPS configuration (conf/spops.conf in a package directory)
+for each object:
+
+  increment_field => 1,
+
+The packages distributed with OpenInteract all have this change.
+
+
+---------------
+Package Repository:
+
+Version 1.06 and higher use an entirely different package repository
+format, so you'll need to do some extra work. (Don't worry, it's not
+much and you only need to do it once.)
+
+To do the upgrade:
+
+ 1) Download the distribution.
+
+ 2) Do the normal Perl install:
+
+  > cd OpenInteract-1.xx/
+  > perl Makefile.PL
+  > make
+  > make test
+  > make install
+
+ 3) Do the upgrade:
+
+  > oi_manage upgrade --base_dir=/path/to/installation
+
+The upgrade should tell you that it has upgraded the base installation
+package repository to the new version. Now you need to upgrade the
+package repository for all the websites:
+
+  > oi_manage upgrade_website_repository --website_dir=/path/to/website
+
+While this should be a seamless upgrade, you MUST restart the Apache
+process to have the changes take effect.
+
+
+=========================
+$Id: UPGRADE,v 1.1 2001/02/25 20:46:37 lachoy Exp $

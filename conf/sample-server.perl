@@ -18,20 +18,27 @@ $data = {
      # CHANGE THIS (if necessary -- if you're not using MySQL,
      # you can use something like 'Apache::Session::File' for the
      # class entry and then create entries for 'Directory' and
-     # 'LockDirectory')
+     # 'LockDirectory'). You can also set the expiration for the
+     # session cookie -- if you set it to be empty the cookie will be
+     # 'short-lived', meaning it will expire when the user shuts down
+     # the browser. Otherwise, pass something like the following:
+     #  '+3d' (3 days); '+3M' (3 months); '+480s' (480 seconds);
+     #  '+15h' (15 hours); '+1y' (1 year)
 
      'session_info' => {
-       'class' => 'Apache::Session::MySQL',
+       'class'      => 'Apache::Session::MySQL',
+       'expiration' => '+3M',
      },
 
 
      # CHANGE THIS (enter your db parameters -- see
      # 'OpenInteract::DBI' for more information about them). Briefly:
-     #   db_owner: optional: who owns the db?
-     #   username: who do we login as?
-     #   password: what password do we login with?
-     #   dsn: last part of the DBI DSN
-     #   db_name: name of database
+     #   db_owner:    optional: who owns the db? (this should only be set
+     #                if your database requires it!)
+     #   username:    who do we login as?
+     #   password:    what password do we login with?
+     #   dsn:         last part of the DBI DSN
+     #   db_name:     name of database
      #   driver_name: name of driver -- second part of the DBI DSN
 
      'db_info' => { 
@@ -54,11 +61,9 @@ $data = {
      },
 
      # Define the box handler and the handler to take care of the
-     # default system boxes. Also define some default information
-     # in case a box or the theme does not do so (see
-     # OpenInteract::Handler::SystemBoxes for more), and override
-     # some of the default system box settings with 'weight' and
-     # 'title' (see OpenInteract::Handler::SystemBoxes for more).
+     # default system boxes. The 'custom_box_handler' entry is for you
+     # to fill in if you'd like -- you can add other boxes to every
+     # page, add them depending on the request type, etc.
 
      'box' => {
        handler            => '%%WEBSITE_NAME%%::Handler::Box',
@@ -66,6 +71,7 @@ $data = {
        default_separator  => undef,
        default_method     => undef,
        system_box_handler => '%%WEBSITE_NAME%%::Handler::SystemBoxes',
+       custom_box_handler => '',
      },
 
      # Login information. Set whether you want to store encrypted
@@ -127,6 +133,7 @@ $data = {
      'system_alias' => {
        'OpenInteract::Session::MySQL'     => [ qw/ session / ],
        'OpenInteract::Template::Toolkit'  => [ qw/ template / ],
+       'OpenInteract::PackageRepository'  => [ qw/ repository / ],
        'OpenInteract::Package'            => [ qw/ package / ],
        'OpenInteract::Error'              => [ qw/ error / ],
        'OpenInteract::Cookies'            => [ qw/ cookies / ],
@@ -248,6 +255,6 @@ $data = {
 
      # Used for testing purposes only
 
-     'ConfigurationRevision' => '$Revision: 1.19 $',
+     'ConfigurationRevision' => '$Revision: 1.5 $',
 
 };

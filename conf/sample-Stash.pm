@@ -3,7 +3,7 @@ package OpenInteract::SampleStash;
 use strict;
 
 @OpenInteract::SampleStash::ISA     = ();
-$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::SampleStash::VERSION = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
 
 my $DEBUG = 1;
 my %ITEMS = ();

@@ -1,16 +1,20 @@
 package OpenInteract::Startup;
 
-# $Id: Startup.pm,v 1.23 2001/02/01 05:27:40 cwinters Exp $
+# $Id: Startup.pm,v 1.3 2001/02/20 04:12:32 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 use OpenInteract::Error;
 use OpenInteract::Package;
+use OpenInteract::PackageRepository;
 
 @OpenInteract::Startup::ISA     = ();
-$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Startup::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
+
+my $REPOS_CLASS = 'OpenInteract::PackageRepository';
+my $PKG_CLASS   = 'OpenInteract::Package';
 
 sub main_initialize {
   my ( $class, $p ) = @_;
@@ -29,7 +33,7 @@ sub main_initialize {
   # different from the rest in that we actually *use* it to create the
   # other classes/modules (bootstrapping thing)
 
-  OpenInteract::Package->class_initialize( $C );
+  $REPOS_CLASS->class_initialize( $C );
 
   # Read in our fundamental modules -- these should be in our @INC
   # already, since the 'request_class' is in 'OpenInteract/OpenInteract'
@@ -41,28 +45,26 @@ sub main_initialize {
   # the website package database
 
   my $packages = [];
+  my $repository = $REPOS_CLASS->fetch( undef, { directory => $bc->{website_dir} } );
   if ( my $package_list = $p->{package_list} ) {
     foreach my $pkg_name ( @{ $p->{package_list} } ) {
-      my $pkg = OpenInteract::Package->fetch_by_name({ 
-                     name => $pkg_name, directory => $bc->{website_dir} });
-      push @{ $packages }, $pkg  if ( $pkg );
+      my $pkg_info = $repository->fetch_pacakge_by_name({ name => $pkg_name });
+      push @{ $packages }, $pkg_info  if ( $pkg_info );
     }
   }
   else {
-    $packages = eval { OpenInteract::Package->fetch_group({ 
-                            directory => $bc->{website_dir} }) };
-    die "Cannot retrieve packages from directory ($p->{website_dir}): $@"   if ( $@ );
+    $packages = $repository->fetch_all_packages();
   }
 
- # We keep track of the package names currently installed and use them
- # elsewhere in the system
+  # We keep track of the package names currently installed and use them
+  # elsewhere in the system
 
   $C->{package_list} = [ map { $_->{name} } @{ $packages } ];
   my %require_class = ();
-  foreach my $pkg ( @{ $packages } ) {
-    my $pkg_require_list = $class->process_package( $pkg, $C );
+  foreach my $pkg_info ( @{ $packages } ) {
+    my $pkg_require_list = $class->process_package( $pkg_info, $C );
     foreach my $pkg_require_class ( @{ $pkg_require_list } ) {
-      $require_class{ $pkg_require_class } = $pkg->{name};
+      $require_class{ $pkg_require_class } = $pkg_info->{name};
     }
   }
 
@@ -111,7 +113,7 @@ sub setup_static_environment {
   my ( $class, $website_dir ) = @_;
   die "Directory ($website_dir) is not a valid directory!\n" unless ( -d $website_dir );
 
-  my $bc = $class->read_base_config({ base_dir => $website_dir });
+  my $bc = $class->read_base_config({ dir => $website_dir });
 
   unshift @INC, $website_dir;
   my ( $init, $C ) = $class->main_initialize({ 
@@ -194,12 +196,12 @@ sub read_package_list {
 sub read_base_config {
   my ( $class, $p ) = @_;
   unless ( $p->{filename} ) {
-    if ( $p->{base_dir} ) {
-      $p->{filename} = join( '/', $p->{base_dir}, 'conf', 'base.conf' );
+    if ( $p->{dir} ) {
+      $p->{filename} = $class->create_base_config_filename( $p->{dir} );
     }
   }
   return undef   unless ( -f $p->{filename} );
-  open( CONF, $p->{filename} ) || die "Cannot open basic config ($p->{filename}) -- $!";
+  open( CONF, $p->{filename} ) || die "$!\n";
   my $vars = {};
   while ( <CONF> ) {
     chomp;
@@ -214,6 +216,10 @@ sub read_base_config {
   return $vars;
 }
 
+sub create_base_config_filename {
+ my ( $class, $dir ) = @_;
+ return join( '/', $dir, 'conf', 'base.conf' );
+}
 
 # Params:
 #  filename - file with modules to read, one per line (skip blanks, commented lines)
@@ -257,16 +263,17 @@ sub require_module {
 #  package_dir = arrayref of base package directories (optional, read from config if not passed)
 
 sub process_package {
-  my ( $class, $pkg, $CONF ) = @_;
-  return undef unless ( $pkg );
+  my ( $class, $pkg_info, $CONF ) = @_;
+  return undef unless ( $pkg_info );
   return undef unless ( $CONF );
 
-  my $pkg_name = join( '-', $pkg->{name}, $pkg->{version} );
+  my $pkg_name = join( '-', $pkg_info->{name}, $pkg_info->{version} );
   _w( 1, "Trying to process package ($pkg_name)" );
 
-  # Note that app dir goes first, then base dir (app can override base)
+  # Note that app dir should be set earlier in the @INC list then the
+  # base dir, since the app can override base
 
-  my @package_dir_list = $pkg->include_package_dir;
+  my @package_dir_list = $PKG_CLASS->add_to_inc( $pkg_info );
   _w( 1, "Included @package_dir_list for $pkg_name" );
 
   # If we cannot find even one package directory, bail
@@ -298,7 +305,7 @@ sub process_package {
     my @action_tag_list = $class->read_action_definition({ 
                                        filename => "$conf_pkg_dir/action.perl",
                                        config => $CONF,
-                                       package => $pkg });
+                                       package => $pkg_info });
     foreach my $action_tag ( @action_tag_list ) {
       $action{ $action_tag }++  if ( $action_tag );
     }
@@ -310,16 +317,16 @@ sub process_package {
     # but it's confusing to people first reading the code)
     
     my @spops_tag_list = $class->read_spops_definition({
-                                     filename => "$conf_pkg_dir/spops.perl",
-                                     config => $CONF,
-                                     package => $pkg });
+                                      filename => "$conf_pkg_dir/spops.perl",
+                                      config => $CONF,
+                                      package => $pkg_info });
     foreach my $spops_tag ( @spops_tag_list ) {
       $spops{ $spops_tag }++  if ( $spops_tag );
     }
   }
 
-  # Now, for this package, do all the class 'require' statements
-  # necessary to bring everyone on board
+  # Now find all the classes (from both the action list and the spops
+  # list) required for this package and return them to the caller
 
   my ( @class_list );
   foreach my $action_key ( keys %action ) {
@@ -332,8 +339,6 @@ sub process_package {
       push @class_list, @{ $action_info->{error} };
     }   
   }
-
-  # Same as above, just with the SPOPS modules
   
   foreach my $spops_key ( keys %spops ) {
     next unless ( $spops_key );
@@ -347,25 +352,28 @@ sub process_package {
 
 
 
-# Read in the action config info and require all the classes used by
-# the actions (including the handler and the error handlers); note
-# that we don't simply set the action key to the data structure
-# returned by 'read_perl_file' since that file might only be one or
-# two definitions which override the defaults
+# Read in the action config info and set the information in the CONFIG
+# object. note that we overwrite whatever information is in the CONFIG
+# object -- this is a feature, not a bug, since it allows the base
+# installation to define lots of information and the website to only
+# override what it needs.
 
 sub read_action_definition {
   my ( $class, $p ) = @_;
   _w( 1, "Reading action definitions from ($p->{filename})" );
+
+  # $CONF is easier to read and more consistent
+  my $CONF = $p->{config}; 
   my $action_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
-  return undef   unless ( $action_info );
+  return undef  unless ( $action_info );
   my @class_list = ();
   foreach my $action_key ( keys %{ $action_info } ) {
     foreach my $action_conf ( keys %{ $action_info->{ $action_key } } ) {
-      $p->{config}->{action}->{ $action_key }->{ $action_conf } = $action_info->{ $action_key }->{ $action_conf };
+      $CONF->{action}->{ $action_key }->{ $action_conf } = $action_info->{ $action_key }->{ $action_conf };
     }
     if ( ref $p->{package} ) {
-      $p->{config}->{action}->{ $action_key }->{package_name}    = $p->{package}->{name};
-      $p->{config}->{action}->{ $action_key }->{package_version} = $p->{package}->{version};
+      $CONF->{action}->{ $action_key }->{package_name}    = $p->{package}->{name};
+      $CONF->{action}->{ $action_key }->{package_version} = $p->{package}->{version};
     }
   }
   return keys %{ $action_info };
@@ -378,25 +386,28 @@ sub read_action_definition {
 sub read_spops_definition {
   my ( $class, $p ) = @_;
   _w( 1, "Reading SPOPS definitions from ($p->{filename})" );
-  my $spops_info = eval { $class->read_perl_file({ 
-                                      filename => $p->{filename} }) };
+
+  # $CONF is easier to read and more consistent
+  my $CONF = $p->{config}; 
+  my $spops_info = eval { $class->read_perl_file({ filename => $p->{filename} }) };
   return undef unless ( $spops_info );
   my @class_list = ();
   foreach my $spops_key ( keys %{ $spops_info } ) {
     foreach my $spops_conf ( keys %{ $spops_info->{ $spops_key } } ) {
-      $p->{config}->{SPOPS}->{ $spops_key }->{ $spops_conf } = $spops_info->{ $spops_key }->{ $spops_conf };
+      $CONF->{SPOPS}->{ $spops_key }->{ $spops_conf } = $spops_info->{ $spops_key }->{ $spops_conf };
     }
     if ( ref $p->{package} ) {
-      $p->{config}->{SPOPS}->{ $spops_key }->{package_name}    = $p->{package}->{name};
-      $p->{config}->{SPOPS}->{ $spops_key }->{package_version} = $p->{package}->{version};
+      $CONF->{SPOPS}->{ $spops_key }->{package_name}    = $p->{package}->{name};
+      $CONF->{SPOPS}->{ $spops_key }->{package_version} = $p->{package}->{version};
     }
   }
   return keys %{ $spops_info };
 }
 
 
-# Read in a perl structure (probably generated by Data::Dumper)
-# from a file and return the actual structure.
+# Read in a perl structure (probably generated by Data::Dumper) from a
+# file and return the actual structure. We should probably use
+# SPOPS::HashFile for this for consistency...
 
 sub read_perl_file {
   my ( $class, $p ) = @_;
@@ -414,6 +425,7 @@ sub read_perl_file {
   _w( 0, "Cannot read data structure! from $p->{filename}\nError: $@" ) if ( $@ );
   return $data;
 }
+
 
 # Everything has been read in, now just finalize aliases and so on
 
@@ -469,7 +481,6 @@ sub finalize_configuration {
 }
 
 
-
 # Plow through a list of classes and call the class_initialize
 # method on each; ok to call OpenInteract::Startup->initialize_spops( ... )
 # from the mod_perl child init handler
@@ -511,12 +522,16 @@ OpenInteract::Startup -- Bootstrapper that reads in modules, manipulates @INC, e
 
 =head1 SYNOPSIS
 
+
+ # Startup an OpenInteract environment outside Apache and mod_perl
+
+ use strict;
  use OpenInteract::Startup;
 
- # This is typically the only option you need to specify
  my $R =  OpenInteract::Startup->setup_static_environment( 
                                       '/home/httpd/MySite' );
 
+ # For usage inside Apache/mod_perl, see OpenInteract::ApacheStartup
 
 =head1 DESCRIPTION
 
@@ -531,7 +546,7 @@ initialization in your script just to create the framework.
 This script should also minimize the modules you have to include
 yourself, making it easier to add backward-compatible
 functionality. Most of the time, you only need to have a 'use'
-statement for this module, and it takes care of everything else.
+statement for this module which takes care of everything else.
 
 =head1 METHODS
 
@@ -661,12 +676,11 @@ Example:
  my $R = OpenInteract::Startup->setup_static_environment( '/home/httpd/my' );
 
  my $news_list = eval { $R->news->fetch_group({ 
-                               skip_security => 1,
                                where => 'title like ?',
-                               value => [ '%iraq%' ] 
-                        }) };
+                               value => [ '%iraq%' ],
+                               skip_security => 1 }) };
  foreach my $news ( @{ $news_list } ) {
-   print "Date: $news->{posted_on}\n",
+   print "Date:  $news->{posted_on}\n",
          "Title: $news->{title}\n"
          "Story: $news->{news_item}\n";
  }
@@ -703,6 +717,10 @@ Parameters:
  filename
    A scalar specifying where the file is located; it must have a
    fully-qualified path.
+
+ dir
+   A scalar specifying the website directory which has the file
+   'conf/base.conf' under it.
 
 B<require_module( \%params )>
 
@@ -766,8 +784,9 @@ Parameters:
  config (obj)
    OpenInteract::Config object where we set the action information.
 
- package (obj)
-   OpenInteract::Package object so we can set name/version info
+ package (\%)
+   Hashref with information about a package so we can set name/version
+   info.
 
 B<read_spops_definition( \%params )>
 
@@ -784,7 +803,8 @@ Parameters:
    OpenInteract::Config object where we set the module information.
 
  package (obj)
-   OpenInteract::Package object so we can set name/version info
+   Hashref with information about a package so we can set name/version
+   info.
 
 B<read_perl_file( \%params )>
 
@@ -812,6 +832,8 @@ Parameters:
 
  filename ($)
    File to read data structure from.
+
+Note: we should modify this to use L<SPOPS::HashFile>...
 
 B<finalize_configuration( \%params )>
 

@@ -1,13 +1,13 @@
 package OpenInteract::DBI;
 
-# $Id: DBI.pm,v 1.12 2001/02/01 05:27:40 cwinters Exp $
+# $Id: DBI.pm,v 1.1.1.1 2001/02/02 06:18:18 lachoy Exp $
 
 use strict;
 use Data::Dumper qw( Dumper );
 use DBI          ();
 
 @OpenInteract::DBI::ISA      = qw();
-$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 

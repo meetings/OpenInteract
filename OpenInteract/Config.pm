@@ -1,6 +1,6 @@
 package OpenInteract::Config;
 
-# $Id: Config.pm,v 1.11 2001/02/01 05:27:40 cwinters Exp $
+# $Id: Config.pm,v 1.1.1.1 2001/02/02 06:18:16 lachoy Exp $
 
 use strict;
 use vars qw( $AUTOLOAD );
@@ -8,7 +8,7 @@ use vars qw( $AUTOLOAD );
 $AUTOLOAD = '';
 
 @OpenInteract::Config::ISA      = ();
-$OpenInteract::Config::VERSION  = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract::Config::VERSION  = sprintf("%d.%02d", q$Revision: 1.1.1.1 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEBUG => 0;
 

@@ -1,13 +1,8 @@
 INSTALLING OPENINTERACT
+=========================
 
-Pre-requisites:
-
- - Ensure you have SPOPS installed
-
- - Ensure you have GDBM_File installed. (What? You don't? There's a
- Win32 PPM for it; if you don't have it on unix, then there's no
- hope. Actually, there is hope: bug Chris (chris@cwinters.com) to use
- other DBM or backend implementations.)
+(NOTE: If you're upgrading from version 1.05 or earlier, please read
+the file 'UPGRADE' in this directory.)
 
 
 (1) Run the normal perl install
@@ -59,8 +54,4 @@ building/configuring Apache.
 
 
 =========================
-
-Revision info: 
-  $Revision: 1.9 $
-  $Date: 2001/01/01 16:21:06 $
-  $Author: cwinters $
+$Id: INSTALL,v 1.2 2001/02/25 20:47:02 lachoy Exp $
