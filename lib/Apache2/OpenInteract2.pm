@@ -3,8 +3,8 @@ package Apache2::OpenInteract2;
 # $Id: OpenInteract2.pm,v 1.5 2005/03/18 04:09:48 lachoy Exp $
 
 use strict;
-use Apache::RequestRec ();
-use Apache::URI ();
+use Apache2::RequestRec ();
+use Apache2::URI ();
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Auth;
 use OpenInteract2::Constants qw( :log );
