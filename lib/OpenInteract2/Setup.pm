@@ -174,7 +174,7 @@ $DEFAULT_DEPENDENCY = OpenInteract2::Setup::ReadServerConfig->get_name;
 
 {
     require Algorithm::Dependency;
-    if ( Algorithm::Dependency->VERSION <= 1.03 ) {
+    if ( Algorithm::Dependency->VERSION <= 1.110 ) {
         eval <<'WITHOUT';
 
 sub Algorithm::Dependency::without {
