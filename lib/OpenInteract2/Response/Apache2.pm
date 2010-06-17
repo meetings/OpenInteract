@@ -73,7 +73,7 @@ sub _send_header {
         $self->content_type( 'text/html' );
     }
     unless ( $self->status ) {
-        $self->status( OK );
+        $self->status( Apache2::Const::OK );
     }
 
     my $apache = $self->apache;
