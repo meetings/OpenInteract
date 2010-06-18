@@ -382,9 +382,9 @@ sub find_factory_subclasses {
 
 sub _find_descend {
     my ( $lib_dir ) = @_;
-    opendir( FACTORYDIR, $lib_dir )
+    opendir( my $FACTORYDIR, $lib_dir )
                     || die "Cannot open directory '$lib_dir': $!";
-    my @entries = grep ! /^\./, readdir( FACTORYDIR );
+    my @entries = grep ! /^\./, readdir( $FACTORYDIR );
     foreach my $entry ( @entries ) {
         my $full_entry_dir = catdir( $lib_dir, $entry );
         if ( -d $full_entry_dir ) {
