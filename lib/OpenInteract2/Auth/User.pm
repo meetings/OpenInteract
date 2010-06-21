@@ -1,15 +1,16 @@
 package OpenInteract2::Auth::User;
 
-# $Id: User.pm,v 1.22 2005/03/17 14:57:59 sjn Exp $
+# $Id: User.pm,v 1.23 2005/10/20 01:20:46 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Auth::User::VERSION  = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
+my $USER_ID_KEY = 'user_id';
 
 sub get_user {
     my ( $class, $auth ) = @_;
@@ -79,7 +80,7 @@ sub get_user {
             $log->info( "Creating the not-logged-in user." );
         my $session = CTX->request->session;
         if ( $session ) {
-            delete $session->{user_id};
+            delete $session->{ $USER_ID_KEY };
         }
         $user = $class->_create_nologin_user;
         $is_logged_in = 'no';
@@ -119,23 +120,31 @@ sub _get_cached_user {
             $user = undef;
         }
     }
+    else {
+        $user_id = $session->{ $USER_ID_KEY };
+    }
     return ( $user, $user_id );
 }
 
 
 sub _set_cached_user {
     my ( $class, $user ) = @_;
-    my $user_refresh = CTX->lookup_session_config->{cache_user};
-    return unless ( $user_refresh > 0 );
-
     $log ||= get_logger( LOG_AUTH );
-
     my $session = CTX->request->session;
-    $session->{_oi_cache}{user} = $user;
-    $session->{_oi_cache}{user_refresh_on} = time + ( $user_refresh * 60 );
-    $log->is_info &&
-        $log->info( "Set user to session cache, expires in ",
-                     "'$user_refresh' minutes" );
+    my $user_refresh = CTX->lookup_session_config->{cache_user};
+    if ( $user_refresh > 0 ) {
+        $session->{_oi_cache}{user} = $user;
+        $session->{_oi_cache}{user_refresh_on} = time + ( $user_refresh * 60 );
+        $log->is_info &&
+            $log->info( "Set user to session cache, expires in ",
+                        "'$user_refresh' minutes" );
+    }
+    else {
+        my $user_id = $user->id;
+        $session->{ $USER_ID_KEY } = $user_id;
+        $log->is_info &&
+            $log->info( "Assigned user ID $user_id to session" );
+    }
 }
 
 # Just grab the user_id from somewhere
@@ -143,7 +152,7 @@ sub _set_cached_user {
 sub _get_user_id {
     my ( $class ) = @_;
     my $session = CTX->request->session;
-    return ( $session ) ? $session->{user_id} : undef;
+    return ( $session ) ? $session->{ $USER_ID_KEY } : undef;
 }
 
 
@@ -163,7 +172,7 @@ sub _fetch_user_failed {
     my ( $class, $user_id, $error ) = @_;
     $log ||= get_logger( LOG_AUTH );
     $log->error( "Failed to fetch user '$user_id': $error" );
-    CTX->request->session->{user_id} = undef;
+    CTX->request->session->{ $USER_ID_KEY } = undef;
     $log->error( "Since user fetch failed, setting 'user_id' in ",
                  "session to undef to prevent this from recurring" );
 }
@@ -199,7 +208,7 @@ sub _login_user_from_input {
         CTX->lookup_object( 'user' )
            ->fetch_by_login_name( $login_name,
                                   { skip_security => 1 } )
-       };
+    };
     if ( $@ ) {
       $log->error( "Error fetching user by login name: $@" );
     }
@@ -214,7 +223,6 @@ sub _login_user_from_input {
     # Check the password
 
     my $password = $request->param( $password_field );
-
     unless ( $user->check_password( $password ) ) {
         $log->warn( "Password check for [$login_name] failed" );
         $request->add_action_message(

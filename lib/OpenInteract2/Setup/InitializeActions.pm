@@ -1,6 +1,6 @@
 package OpenInteract2::Setup::InitializeActions;
 
-# $Id: InitializeActions.pm,v 1.2 2005/03/18 04:09:51 lachoy Exp $
+# $Id: InitializeActions.pm,v 1.3 2005/03/29 16:58:46 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Setup );
@@ -8,7 +8,7 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Setup::InitializeActions::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Setup::InitializeActions::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -31,7 +31,7 @@ sub execute {
         return;
     }
     $self->_require_action_classes( $action_table );
-    $self->_initialize_action_classes;
+    $self->_initialize_action_classes( $action_table );
 }
 
 
@@ -44,23 +44,23 @@ sub _require_action_classes {
         $log->info( "Action '$name' is class '$class'" );
         $uniq_classes{ $class }++;
     }
+    my @classes = keys %uniq_classes;
     my $req = OpenInteract2::Setup->new(
         'require classes',
-        classes      => [ keys %uniq_classes ],
+        classes      => \@classes,
         classes_type => 'Action classes',
     )->run();
-    $self->param( classes => $req->param( 'required_classes' ) );
+    $self->param( classes => \@classes );
 }
 
 sub _initialize_action_classes {
-    my ( $self ) = @_;
-    my $action_classes = $self->param( 'classes' );
-    return unless ( ref $action_classes eq 'ARRAY' );
-
+    my ( $self, $action_table ) = @_;
     my @success = ();
-    foreach my $action_class ( @{ $action_classes } ) {
-        $log->debug( "Initializing action class '$action_class'" );
-        eval { $action_class->init_at_startup() };
+    while ( my ( $name, $action_info ) = each %{ $action_table } ) {
+        my $action_class = $action_info->{class};
+        next unless ( $action_class );
+        $log->debug( "Initializing action '$name' class '$action_class'" );
+        eval { $action_class->init_at_startup( $name ) };
         if ( $@ ) {
             $log->error( "Caught error initializing action class ",
                          "'$action_class': $@" );

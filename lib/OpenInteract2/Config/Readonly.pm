@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Readonly;
 
-# $Id: Readonly.pm,v 1.12 2005/03/17 14:58:00 sjn Exp $
+# $Id: Readonly.pm,v 1.13 2005/09/24 19:20:11 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor );
@@ -12,7 +12,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Text::Wrap               qw( wrap );
 
-$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Readonly::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 __PACKAGE__->mk_accessors( 'directory' );
 
@@ -36,6 +36,10 @@ sub new {
     return $self;
 }
 
+sub is_readonly {
+    my ( $self, $filename ) = @_;
+    return ! $self->is_writeable( $filename );
+}
 
 sub is_writeable {
     my ( $self, $filename ) = @_;
@@ -56,13 +60,13 @@ sub _fill_readonly_files {
     my $overwrite_check_file = $self->_create_readonly_filename();
 
     # This means everything is writeable...
-    return [] unless ( -f $overwrite_check_file );
+    return {} unless ( -f $overwrite_check_file );
 
-    my ( @readonly );
+    my %readonly = ();
     eval { open( NOWRITE, '<', $overwrite_check_file ) || die $! };
     if ( $@ ) {
         $log->error( "Cannot read readonly file '$overwrite_check_file': $@" );
-        return [];
+        return {};
     }
     while ( <NOWRITE> ) {
         chomp;
@@ -70,10 +74,10 @@ sub _fill_readonly_files {
         next if ( /^\s*\#/ );
         s/^\s+//;
         s/\s+$//;
-        push @readonly, $_;
+        $readonly{ $_ } = 1;
     }
     close( NOWRITE );
-    return { map { $_ => 1 } @readonly };
+    return \%readonly;
 }
 
 sub get_all_writeable_files {
@@ -175,7 +179,7 @@ OpenInteract2::Config::Readonly - Simple read/write for readonly files
  
  my $original_path = '/path/to/distribution/foo.html';
  my $can_write = OpenInteract2::Config::Readonly
-    ->new( $dir )
+    ->new( dirname( $original_path ) )
     ->is_writeable( $original_path );
  if ( $can_write ) {
      cp( $original_path,
@@ -220,6 +224,11 @@ B<is_writeable( $file )>
 Returns: true if C<$file> is writeable in the configured directory,
 false if not.
 
+B<is_readonly( $file )>
+
+Returns: true if C<$file> is not writeable in the configured
+directory, false if it is.
+
 B<get_all_writeable_files()>
 
 Returns: arrayref of all writeable files in the configured directory.
@@ -231,83 +240,6 @@ to the configured directory. All filenames in C<\@files> will be
 written to the file, as with the C<$comment> if given.
 
 Returns: full path to file written.
-
-B<is_writeable_file( \@readonly_filenames | $directory, $filename )>
-
-Returns true if file C<$filename> is writeable in C<$directory> or if
-it is not found among C<\@readonly_filenames>. We do a C<basename()>
-against C<$filename> before doing the check.
-
-Examples:
-
- # These all return true
- OpenInteract2::Config::Readonly->is_writeable_file(
-                    [ 'index.html' ], 'foo.html' );
- OpenInteract2::Config::Readonly->is_writeable_file(
-                    [ 'index.html' ], 'INDEX.HTML' );
- OpenInteract2::Config::Readonly->is_writeable_file(
-                    [ 'index.html' ], '/path/to/index.htm' );
-
- # These all return false
- OpenInteract2::Config::Readonly->is_writeable_file(
-                    [ 'index.html' ], 'index.html' );
- OpenInteract2::Config::Readonly->is_writeable_file(
-                    [ 'index.html' ], '/path/to/my/index.html' );
-
-
-B<get_writeable_files( \@readonly_filenames | $directory, \@filenames )>
-
-Returns an arrayref of all writeable files from C<\@filenames> as
-compared against the config in C<$directory> or the readonly filenames
-in C<\@readonly_filenames>. The filenames returned are whatever was
-stored in C<\@filenames> rather than the basename.
-
-Examples:
-
- my $files = OpenInteract2::Config::Readonly->get_writeable_files(
-                    [ 'index.html' ], [ '/path/to/foo.html' ] );
- # $files = [ '/path/to/foo.html' ]
- 
- my $files = OpenInteract2::Config::Readonly->get_writeable_files(
-                    [ 'index.html' ], [ 'INDEX.HTML', '/path/to/README.txt' ] );
- # $files = [ 'INDEX.HTML', '/path/to/README.txt' ]
- 
- my $files = OpenInteract2::Config::Readonly->get_writeable_files(
-                    [ 'index.html' ], [ '/path/to/index.htm', '/path/to/index.html' ] );
- # $files = [ '/path/to/index.htm' ]
-
-B<read_config( $dir )>
-
-Reads the file in C<$dir> for files not to overwrite. This method
-should never C<die> or throw an exception -- if there is an error
-reading the file or if the file does not exist, it simply returns an
-empty arrayref.
-
-Returns: arrayref of filenames relative to C<$dir>.
-
-B<write_config( $dir, \@files_to_write | \%write_info )>
-
-Writes filenames to a file in C<$dir>. The C<\%write_info> parameters
-can be either an arrayref of filenames to write or a hashref with the
-following keys:
-
-=over 4
-
-=item *
-
-B<file>: Arrayref of filenames to write
-
-=item *
-
-B<comment>: Message to write as a comment.
-
-=back
-
-No path information is written to the file, only the base filename.
-
-Returns: full path to file written. If the file cannot be written, it
-will throw an exception. If there are no files passed in to write, it
-returns nothing.
 
 =head1 BUGS
 

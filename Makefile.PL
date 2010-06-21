@@ -33,6 +33,7 @@ my %opts = (
       'File::MMagic'               => 0,
       'Getopt::Long'               => 2.32,
       'HTML::Entities'             => 1.13,
+      'HTML::TagCloud'             => 0,
       'Lingua::Stem'               => 0.50,
       'Locale::Maketext'           => 1.06,
       'Log::Dispatch'              => 2.00,

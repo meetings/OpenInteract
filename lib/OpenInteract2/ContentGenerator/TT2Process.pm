@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::TT2Process;
 
-# $Id: TT2Process.pm,v 1.21 2005/03/18 04:09:50 lachoy Exp $
+# $Id: TT2Process.pm,v 1.23 2007/03/09 03:52:41 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::ContentGenerator );
@@ -16,7 +16,7 @@ use OpenInteract2::TT2::Plugin;
 use OpenInteract2::TT2::Provider;
 use Template;
 
-$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TT2Process::VERSION  = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -71,11 +71,16 @@ sub generate {
     # Create a 'MSG' method and add the Locale::Maketext object
     # available:
 
-    my $lh = CTX->request->language_handle;
-    $template_vars->{MSG} = sub {
-        return ( $lh ) ? $lh->maketext( @_ ) : "$_[0]: no language handle";
-    };
-    $template_vars->{LH}  = $lh;
+    if ( CTX->request ) {
+        my $lh = CTX->request->language_handle;
+        $template_vars->{MSG} = sub {
+            return ( $lh ) ? $lh->maketext( @_ ) : "$_[0]: no language handle";
+        };
+        $template_vars->{LH}  = $lh;
+    }
+    else {
+        $template_vars->{MSG} = sub { return "$_[0]: no language handle" };
+    }
 
     $self->_customize_template_variables( $template_name, $template_vars );
 
@@ -410,7 +415,7 @@ something. To set the variable:
  use strict;
  
  sub custom_template_initialize {
-     my ( $class, $tt_config, $init_params ) = @_;
+     my ( $class, $template_config, $init_params ) = @_;
      $template_config->{SUNSET} = '7:13 AM';
  }
 

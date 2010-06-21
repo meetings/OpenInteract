@@ -1,6 +1,6 @@
 package OpenInteract2::Setup::CreateTemporaryLibraryDirectory;
 
-# $Id: CreateTemporaryLibraryDirectory.pm,v 1.3 2005/03/18 04:09:51 lachoy Exp $
+# $Id: CreateTemporaryLibraryDirectory.pm,v 1.5 2005/07/30 22:43:43 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Setup );
@@ -12,7 +12,7 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Setup::CreateTemporaryLibraryDirectory::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Setup::CreateTemporaryLibraryDirectory::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -34,7 +34,11 @@ sub execute {
 
     $self->param( created => [] ); # default: don't create anything
 
-    my $do_create = $self->param( 'create_templib' ) || 0;
+    # should probably assign this default when we read in the config?
+    $ctx->server_config->{devel_mode} ||= 'no';
+
+    my $in_devel_mode = $ctx->server_config->{devel_mode} eq 'yes';
+    my $do_create = $self->param( 'create_templib' ) || $in_devel_mode || 0;
     if ( ! $do_create && -d $full_temp_lib_dir ) {
         my $refresh_file = catfile( $full_temp_lib_dir,
                                     $ctx->lookup_temp_lib_refresh_filename );
@@ -153,6 +157,11 @@ OpenInteract2::Setup::CreateTemporaryLibraryDirectory - Copy package modules to 
  my $setup = OpenInteract2::Setup->new( 'create templib' );
  $setup->param( create_templib => 1 );
  $setup->run();
+ 
+ # You can also force the library to be recreated in the server.ini
+ [Global]
+ ...
+ devel_mode = yes
  
  my $files_copied = $setup->param( 'copied' );
  print "Copied the following files:\n";

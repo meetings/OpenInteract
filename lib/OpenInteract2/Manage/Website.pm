@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website;
 
-# $Id: Website.pm,v 1.25 2005/03/17 14:58:02 sjn Exp $
+# $Id: Website.pm,v 1.26 2005/03/24 05:32:35 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage );
@@ -8,7 +8,7 @@ use File::Spec::Functions    qw( catdir catfile );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Package   qw( DISTRIBUTION_EXTENSION );
 
-$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 
 sub setup_task {
     my ( $self ) = @_;
@@ -92,13 +92,20 @@ sub _install_package_file {
 sub _install_packages_from_bricks {
     my ( $self, $website_dir, $package_names ) = @_;
     foreach my $pkg_name ( @{ $package_names } ) {
-        my $brick = OpenInteract2::Brick->new( $pkg_name );
-        foreach my $resource_name ( $brick->list_resources ) {
-            my $pkg_info = $brick->load_resource( $resource_name );
-            my $pkg_file = OpenInteract2::Util->decode_base64_and_store(
-                \$pkg_info->{content}
-            );
-            $self->_install_package_file( undef, $pkg_file, $website_dir );
+        my $install_task = OpenInteract2::Manage->new(
+            'install_package', {
+                brick_name   => $pkg_name,
+                website_dir  => $website_dir,
+            });
+
+        $self->copy_observers( $install_task );
+        eval { $install_task->execute };
+        if ( $@ ) {
+            $self->_fail( 'install package',
+                          "Failed to install $pkg_name: $@" );
+        }
+        else {
+            $self->_add_status( $install_task->get_status );
         }
     }
 }

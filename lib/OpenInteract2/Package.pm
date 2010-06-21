@@ -1,6 +1,6 @@
 package OpenInteract2::Package;
 
-# $Id: Package.pm,v 1.56 2005/03/17 14:57:58 sjn Exp $
+# $Id: Package.pm,v 1.64 2006/01/17 22:57:32 infe Exp $
 
 use strict;
 use base qw( Exporter Class::Accessor::Fast );
@@ -24,7 +24,7 @@ use OpenInteract2::I18N::Initializer;
 use OpenInteract2::Repository;
 use OpenInteract2::Util;
 
-$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.56 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Package::VERSION   = sprintf("%d.%02d", q$Revision: 1.64 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 @OpenInteract2::Package::EXPORT_OK = qw( DISTRIBUTION_EXTENSION );
@@ -366,7 +366,8 @@ sub install {
     });
     $installed_package->installed_date( scalar( localtime ) );
     $installed_package->_install_html_and_widget_files_to_website;
-    $installed_package->copy_configuration_to_website();
+    my @conf_paths = $installed_package->copy_configuration_to_website();
+
     $log->is_info &&
         $log->info( "Copied package files to website ok" );
 
@@ -376,8 +377,17 @@ sub install {
 
     undef $tmp_package;
     chdir( $pwd );
+
+    # OIN-172: remove all files from pkg/foo-x.xx/conf and put
+    # README there (but only after everything else works ok)
+    $installed_package->_remove_package_conf_files( @conf_paths );
+
     return $installed_package;
 }
+
+# copies $WEBSITE_DIR/pkg/foo-x.xx/conf/* -> $WEBSITE_DIR/conf/foo/*
+# --> if dest file already exists and MD5 is different, we copy it
+#     to $WEBSITE_DIR/conf/foo/updates/*
 
 sub copy_configuration_to_website {
     my ( $self ) = @_;
@@ -392,6 +402,7 @@ sub copy_configuration_to_website {
     my @conf_files = grep /^conf/, @{ $self->get_files };
     my @to_checksum = ();
     my %checksums = $self->_read_conf_checksums( $dest_conf_dir );
+    my @full_src_paths = ();
 FILE:
     foreach my $src_base ( @conf_files ) {
         my $src_path  = catfile( $package_dir, $src_base );
@@ -411,8 +422,52 @@ FILE:
                 || oi_error "Cannot copy $src_path -> $dest_path: $!";
             push @to_checksum, $filename;
         }
+        push @full_src_paths, $src_path;
     }
     $self->_write_conf_checksums( $dest_conf_dir, @to_checksum );
+    return @full_src_paths;
+}
+
+sub _remove_package_conf_files {
+    my ( $self, @conf_paths ) = @_;
+    my $pkg_name        = $self->name;
+    my $website_dir     = $self->repository->website_dir;
+    my $package_dir     = rel2abs( $self->directory );
+    my $real_conf_dir   = catdir( $website_dir, 'conf', $pkg_name );
+    my $src_conf_readme = catfile( $package_dir, 'conf', 'README' );
+
+    # First, remove all conf files
+    foreach my $conf_file ( @conf_paths ) {
+        unlink( $conf_file );
+        $log->is_debug &&
+            $log->debug( "Cleaned package conf: $conf_file" );
+    }
+
+    # Now add a README
+    my $date = scalar( localtime );
+    eval {
+        open( README, '>', $src_conf_readme )
+            || die "write failed - $!\n";
+        print README <<WRITEME;
+README - Config for $pkg_name Package
+(generated when package installed: $date)
+
+Configuration files for this package (such as SPOPS,
+action, etc.) are in the directory:
+
+ $real_conf_dir
+
+DO NOT put any files in this directory for configuration,
+they will be silently ignored.
+WRITEME
+        close( README );
+    };
+    if ( $@ ) {
+        $log->error( "Failed to write config README: $@" );
+    }
+    $log->is_debug &&
+        $log->debug( "Wrote README to $src_conf_readme ok" );
+    return $src_conf_readme;
 }
 
 ########################################
@@ -447,6 +502,11 @@ sub create_skeleton {
         oi_error "Failed to create package directory ",
                  "'$full_skeleton_dir': $@";
     }
+
+    $params->{brick_vars} ||= {};
+    $params->{brick_vars}{invocation}  = $params->{invocation};
+    $params->{brick_vars}{date}        = scalar( localtime );
+    $params->{brick_vars}{oi2_version} = OpenInteract2::Context->version;
 
     eval {
         $class->_skel_create_subdirectories( $full_skeleton_dir );
@@ -558,7 +618,7 @@ sub check {
         push @status, $self->_check_pm_files( \@pm_files );
     }
 
-    my @data_files = grep /^data\/.*\.dat$/, @{ $pkg_files };
+    my @data_files = grep /^data\//, @{ $pkg_files };
     push @status, $self->_check_data_files( \@data_files );
 
     my @template_files = grep /^(template\/.*\.tmpl|widget)/, @{ $pkg_files };
@@ -596,6 +656,21 @@ sub remove {
     }
     return { action  => 'Remove Package',
              message => $status };
+}
+
+# removes all package files:
+#   - $WEBSITE_DIR/conf/package
+#   - $WEBSITE_DIR/template/package
+#   - $WEBSITE_DIR/pkg/package-x.yy
+
+sub remove_files {
+    my ( $self, $website_dir ) = @_;
+    my $package_config   = catdir( $website_dir, 'conf', $self->name );
+    my $package_template = catdir( $website_dir, 'template', $self->name );
+    my $package_dir      = rel2abs( $self->directory );
+    for ( $package_config, $package_template, $package_dir ) {
+        $self->_remove_directory_tree( $_ );
+    }
 }
 
 
@@ -785,7 +860,7 @@ BASE_FILE:
             my $dest_file = basename( $dest_path );
             my $dest_dir  = dirname( $dest_path );
             my $ro = OpenInteract2::Config::Readonly->new( $dest_dir );
-            unless ( $ro->is_writeable( $dest_file ) ) {
+            if ( $ro->is_readonly( $dest_file ) ) {
                 $log->is_info
                     && $log->info( "Skipping '$dest_path' because it's marked as readonly" );
                 next BASE_FILE;
@@ -907,10 +982,13 @@ sub _skel_copy_resources {
     $brick_vars ||= {};
     my $brick = OpenInteract2::Brick->new( $brick_name );
     my $class_name = $class->name_as_class( $name );
+    my @date_info = localtime;
+    my $year = $date_info[5] + 1900;
     return $brick->copy_all_resources_to( $dest_dir, {
         %{ $brick_vars },
         package_name => $name,
         class_name   => $class_name,
+        year         => $year,
     });
 }
 
@@ -1146,16 +1224,37 @@ sub _check_data_files {
     my @status = ();
     foreach my $data_file ( sort @{ $files } ) {
         my $s = { action => 'Check data file', filename => $data_file };
-        eval { OpenInteract2::Util->read_file_perl( $data_file ) };
-        if ( $@ ) {
-            $s->{is_ok}   = 'no';
-            $s->{message} = "Not a valid Perl structure: $@"
+        my ( $ok, $msg );
+        if ( $data_file =~ /\.dat$/ ) {
+            eval { OpenInteract2::Util->read_file_perl( $data_file ) };
+            if ( $@ ) {
+                $ok = 'no';
+                $msg = "Not a valid Perl structure: $@";
+            }
+            else {
+                $ok  = 'yes';
+                $msg = "File is a valid Perl data structure";
+            }
         }
-        else {
-            $s->{is_ok}   = 'yes';
-            $s->{message} = "File is a valid Perl data structure";
+        elsif ( $data_file =~ /\.csv$/ ) {
+            require OpenInteract2::SQLInstall;
+            my $struct = eval {
+                OpenInteract2::SQLInstall->translate_csv_data_file( $data_file )
+            };
+            if ( $@ ) {
+                $ok = 'no';
+                $msg = "Not a valid CSV data file: $@";
+            }
+            else {
+                $ok  = 'yes';
+                $msg = "File is a valid CSV data file";
+            }
+
         }
-        push @status, $s;
+        if ( $ok and $msg ) {
+            $s->{is_ok} = $ok; $s->{message} = $msg;
+            push @status, $s;
+        }
     }
     return @status;
 }
@@ -1667,6 +1766,26 @@ C<$repository> into the method. It may also fail for reasons given in
 L<OpenInteract2::Repository|OpenInteract2::Repository>.
 
 Returns: array of status hashrefs, with a single member.
+
+B<remove_files( $website_dir )>
+
+Removes all package files from C<$website_dir>. This includes:
+
+=over 4
+
+=item *
+
+The package itself
+
+=item *
+
+The package's configuration files (C<$WEBSITE_DIR/conf/$PACKAGE>)
+
+=item *
+
+The package's template files (C<$WEBSITE_DIR/template/$PACKAGE>)
+
+=back
 
 B<get_spops_files()>
 

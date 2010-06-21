@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Package::CreateCPAN;
 
-# $Id: CreateCPAN.pm,v 1.3 2005/03/09 20:26:23 lachoy Exp $
+# $Id: CreateCPAN.pm,v 1.4 2005/10/22 21:56:03 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
@@ -16,7 +16,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::Package::CreateCPAN::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::CreateCPAN::VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 my @BINARIES = qw( gz zip gif png jpg ico pdf doc );
 my $DIST_DIR = "tmp-build-cpan";
@@ -115,6 +115,9 @@ sub run_task {
         package_version  => $package->version,
         package_files    => \@brick_files,
         package_pod      => '',
+        invocation       => $self->invocation,
+        date             => scalar( localtime ),
+        oi2_version      => OpenInteract2::Context->version,
     );
 
     my $brick = OpenInteract2::Brick->new( 'package_cpan' );

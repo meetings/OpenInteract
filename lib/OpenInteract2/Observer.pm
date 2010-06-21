@@ -1,6 +1,6 @@
 package OpenInteract2::Observer;
 
-# $Id: Observer.pm,v 1.4 2005/03/18 04:09:48 lachoy Exp $
+# $Id: Observer.pm,v 1.7 2006/01/18 20:08:52 infe Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -9,7 +9,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Config::IniFile;
 use Scalar::Util             qw( blessed );
 
-$OpenInteract2::Observer::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Observer::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -32,6 +32,8 @@ sub register_observer {
             $observer_type = 'class';
         }
     }
+
+    # barely documented: Allow registration of objects...
     elsif ( my $observer_obj = $observer_info->{object} ) {
         my $error = $class->_require_module( $observer_obj );
         unless ( $error ) {
@@ -47,6 +49,8 @@ sub register_observer {
             }
         }
     }
+
+    # barely documented: Allow registration of coderefs...
     elsif ( my $observer_sub = $observer_info->{sub} ) {
         $observer_sub =~ /^(.*)::(.*)$/;
         my ( $name_class, $name_sub ) = ( $1, $2 );
@@ -112,24 +116,14 @@ sub initialize {
     $li->is_info && $li->info( "Read in '$observer_file' ok" );
 
     my $observer_registry = $class->_register_initial_observers(
-        $observer_ini->{observer}, CTX->packages );
+        $observer_ini->{observer}, CTX->packages, $li );
     $li->is_info && $li->info( "Registered internal observers ok" );
 
     CTX->set_observer_registry( $observer_registry );
 
-    my $mappings = $observer_ini->{map};
-    if ( ref $mappings eq 'HASH' ) {
-        while ( my ( $observer_name, $action_info ) = each %{ $mappings } ) {
-            my @actions = ( ref $action_info )
-                            ? @{ $action_info } : ( $action_info );
-            foreach my $action_name ( @actions ) {
-                $li->is_info &&
-                    $li->info( "Trying to add observer '$observer_name' to ",
-                               "action '$action_name'" );
-                $class->add_observer_to_action( $observer_name, $action_name );
-            }
-        }
-    }
+    $class->_register_initial_mappings(
+        $observer_ini->{map}, CTX->packages, $li );
+
     return;
 }
 
@@ -140,8 +134,8 @@ sub create_observer_filename {
 }
 
 sub _register_initial_observers {
-    my ( $class, $ini_observers, $packages ) = @_;
-    my $li = get_logger( LOG_INIT );
+    my ( $class, $ini_observers, $packages, $li ) = @_;
+    $li ||= get_logger( LOG_INIT );
 
     my %observer_map = ();
 
@@ -187,6 +181,32 @@ sub _register_initial_observers {
     return \%observer_registry;
 }
 
+sub _register_initial_mappings {
+    my ( $class, $ini_mappings, $packages, $li ) = @_;
+    $li ||= get_logger( LOG_INIT );
+
+    # Cycle through packages' mappings and then ini_mappings.
+
+    my @all_mappings = ();
+    push @all_mappings, $_->config->observer_map for @$packages;
+    push @all_mappings, $ini_mappings;
+    
+    foreach my $mappings ( @all_mappings ) {
+        next unless ( ref $mappings eq 'HASH' );
+        
+        while ( my ( $observer_name, $action_info ) = each %{ $mappings } ) {
+            my @actions = ( ref $action_info )
+                            ? @{ $action_info } : ( $action_info );
+            foreach my $action_name ( @actions ) {
+                $li->is_info &&
+                    $li->info( "Trying to add observer '$observer_name' to ",
+                               "action '$action_name'" );
+                $class->add_observer_to_action( $observer_name, $action_name );
+            }
+        }
+    }
+}
+
 sub _require_module {
     my ( $class, $to_require ) = @_;
     $log ||= get_logger( LOG_OI );
@@ -226,14 +246,22 @@ OpenInteract2::Observer - Initialize and manage observers to OpenInteract compon
  [map]
  allcaps = news
  
- # You can also declare the observer in your package's package.conf
- # file; it's mapped the same no matter where it's declared
- # File: pkg/mypackage-2.00/package.conf
+ # You can also declare a class observer in your package's package.ini
+ # file; it's mapped the same no matter where it's declared.
+ # File: pkg/mypackage-2.00/package.ini
  
- name           mypackage
- version        2.00
- author         Kilroy (kilroy@washere.com)
- observer       allcaps   OpenInteract2::Filter::AllCaps
+ [package]
+ name    = mypackage
+ version = 2.00
+ author  = Kilroy (kilroy@washere.com)
+ 
+ [package observer]
+ allcaps = OpenInteract2::Filter::AllCaps
+
+ # You can also map observers to actions in package.ini.
+
+ [package observer_map]
+ allcaps = news
  
  # Create the filter -- see OpenInteract2::Filter::AllCaps shipped
  # with the distribution:
@@ -263,8 +291,8 @@ passed around to all the observers watching that action. The observer
 can react to the data if it wants or it can pass.
 
 Most observers react to one or two types of events. For instance, if
-you're using the C<delicious_tags> package there's an observer that
-looks like this:
+you're using the C<object_tags> package there's an observer that looks
+like this:
 
  sub update {
      my ( $class, $action, $type ) = @_;
@@ -389,28 +417,15 @@ observer declaration from a package.
 
 Most of the time you'll register an observer name with a class. The
 following registers two observers to classes under the names 'wiki'
-and 'delicious_tag':
+and 'object_tag':
 
  [observer]
  wiki          = OpenInteract2::Observer::Wikify
- delicious_tag = OpenInteract2::Observer::AddDeliciousTags
+ object_tag    = OpenInteract2::Observer::AddObjectTags
 
-This standard usage is actually a shortcut for:
-
- [observer wiki]
- class = OpenInteract2::Observer::Wikify
- 
- [observer delicious_tag]
- class = OpenInteract2::Observer::AddDeliciousTags
-
-Or more generically:
-
- [observer observer-name]
- observation-type = value
-
-In addition to assigning class observers register a particular
-subroutine or object instance. The three observation types are
-'class', 'object' and 'sub' (see
+In addition to assigning class observers you can also register a
+particular subroutine or object instance. The three observation types
+are 'class', 'object' and 'sub' (see
 L<Class::Observable|Class::Observable> for what these mean and how
 they are setup), so you could have:
 
@@ -420,21 +435,34 @@ they are setup), so you could have:
  [observer myroutine]
  sub    = OpenInteract2::FooFilter::other_sub
 
-Using the object is fairly rare and you should probably use the class observer for
-its simplicity.
+Using the object is fairly rare and you should probably use the class
+observer for its simplicity.
 
 =head2 Configuration: Mapping the Observer to an Action
 
-Mapping an observer to an action is exclusively done in
+Mapping an observer to an action is done in
 C<$WEBSITE_DIR/conf/observer.ini>. Under the 'map' section you assign
 an observer to one or more actions. Here as assign the observer 'wiki'
-to 'news' and 'page' and 'delicious_tag' to 'news':
+to 'news' and 'page' and 'object_tag' to 'news':
 
  [map]
  wiki = news
  wiki = page
- delicious_tag = news
+ object_tag = news
 
+You could also use the standard INI-shortcuts for lists:
+
+ [map]
+ @,wiki = news,page
+ object_tag = news
+
+Mappings can also be defined in package.ini in the 'observer_map'
+section:
+
+ [observer_map]
+ @,wiki = news,page
+ object_tag = news
+ 
 Note that the mapping is ignorant of:
 
 =over 4
@@ -454,6 +482,8 @@ was declared.
 =head1 SEE ALSO
 
 L<Class::Observable>
+
+L<OpenInteract2::Setup::InitializeObservers>
 
 =head1 COPYRIGHT
 

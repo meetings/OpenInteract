@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: context.t,v 1.46 2005/03/04 20:34:06 lachoy Exp $
+# $Id: context.t,v 1.47 2005/09/21 12:33:54 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -16,7 +16,7 @@ if ( $@ ) {
     exit;
 }
 
-plan tests => 152;
+plan tests => 153;
 
 require_ok( 'OpenInteract2::Context' );
 
@@ -65,7 +65,7 @@ is( ref $repository, 'OpenInteract2::Repository',
 is( $repository->website_dir, $website_dir,
     'Website directory set in repository' );
 my $packages = $repository->fetch_all_packages;
-is( scalar @{ $packages }, 16,
+is( scalar @{ $packages }, get_num_packages(),
     'Number of packages fetched by repository' );
 
 foreach my $pkg_name ( get_packages() ) {
@@ -79,7 +79,7 @@ foreach my $pkg_name ( get_packages() ) {
 my $action_table = $ctx->action_table;
 is( ref $action_table, 'HASH',
     'Action table is correct data structure' );
-is( scalar keys %{ $action_table }, 45,
+is( scalar keys %{ $action_table }, 50,
     'Correct number of actions in table' );
 
 my $news_info = $ctx->lookup_action_info( 'news' );
@@ -155,7 +155,7 @@ is( $action_nf->name, 'page',
 my $spops_config = $ctx->spops_config;
 is( ref $spops_config, 'HASH',
     'SPOPS config is correct data structure' );
-is( scalar keys %{ $spops_config }, 19,
+is( scalar keys %{ $spops_config }, 20,
     'Correct number of SPOPS configs in structure' );
 
 is( $ctx->lookup_object( 'group' ), 'OpenInteract2::Group',

@@ -1,6 +1,6 @@
 package OpenInteract2::Response::Apache2;
 
-# $Id: Apache2.pm,v 1.7 2005/03/17 14:58:05 sjn Exp $
+# $Id: Apache2.pm,v 1.8 2006/02/01 20:18:34 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -11,7 +11,7 @@ use OpenInteract2::Constants   qw( :log );
 use OpenInteract2::Context     qw( CTX );
 use OpenInteract2::Exception   qw( oi_error );
 
-$OpenInteract2::Response::Apache2::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Apache2::VERSION  = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -91,14 +91,12 @@ sub redirect {
     my ( $self, $url ) = @_;
     $log ||= get_logger( LOG_RESPONSE );
 
-    $self->save_session;
-
     $url ||= $self->return_url;
     $log->is_info &&
         $log->info( "Assigning redirect status and redirect ",
                     "'Location' header to '$url'" );
     $self->status( RC_FOUND );
-    $self->header_out( Location => $url );
+    $self->header( Location => $url );
     return;
 }
 

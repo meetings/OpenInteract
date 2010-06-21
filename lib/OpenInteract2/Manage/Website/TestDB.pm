@@ -1,13 +1,13 @@
 package OpenInteract2::Manage::Website::TestDB;
 
-# $Id: TestDB.pm,v 1.13 2005/03/17 14:58:04 sjn Exp $
+# $Id: TestDB.pm,v 1.14 2005/03/20 16:03:35 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 
-$OpenInteract2::Manage::Website::TestDB::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::TestDB::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'test_db';
@@ -28,8 +28,8 @@ sub run_task {
 
     # Perform initial sanity checks
 
-    unless ( ref $datasource_config ne 'HASH' and
-             scalar keys %{ $datasource_config } ) {
+    if ( ref( $datasource_config ) ne 'HASH' ||
+             !scalar keys %{ $datasource_config } ) {
         $self->_ok( $action,
                     'No DBI datasources; no connection attempted.' );
     }

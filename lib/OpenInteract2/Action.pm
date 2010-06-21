@@ -1,6 +1,6 @@
 package OpenInteract2::Action;
 
-# $Id: Action.pm,v 1.73 2005/03/17 14:57:56 sjn Exp $
+# $Id: Action.pm,v 1.77 2006/09/25 13:39:48 a_v Exp $
 
 use strict;
 use base qw(
@@ -17,7 +17,7 @@ use OpenInteract2::Util;
 use Scalar::Util             qw( blessed );
 use SPOPS::Secure            qw( :level );
 
-$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.73 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Action::VERSION  = sprintf("%d.%02d", q$Revision: 1.77 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -55,6 +55,8 @@ my %PROPS = (
     template_source   => 'Template(s) to use to generate task content; can be specified per-task',
     cache_param       => 'Parameters to use when caching contnent',
     url_additional    => 'Parameter names to which additional URL parameters get assigned; may be segmented by task',
+    url_pattern       => 'Regular expression used to determine if an incoming URL is bound to action',
+    url_pattern_group => 'Regular expression used to get the task + params from the URL after it matches "url_pattern" (optional)',
 );
 
 __PACKAGE__->mk_accessors( keys %PROPS );
@@ -273,20 +275,7 @@ sub execute {
     # Assign any additional URL parameters -- do this before the cache
     # check to ensure that's consistent (it discriminates based on
     # param values)
-
-    my @url_params = $self->_get_url_additional_names;
-    if ( scalar @url_params ) {
-        my $request = CTX->request;
-        if ( $request ) {
-            my @url_values = $request->param_url_additional;
-            my $param_count = 0;
-            foreach my $value ( @url_values ) {
-                next unless ( $url_params[ $param_count ] );
-                $self->param( $url_params[ $param_count ], $value );
-                $param_count++;
-            }
-        }
-    }
+    $self->url_additional_param_from_request();
 
     my $cached_content = $self->_check_cache;
     if ( $cached_content ) {
@@ -302,8 +291,7 @@ sub execute {
 
     my $content = eval { $self->$method_ref };
     if ( $@ ) {
-        $log->warn( "Caught error from task $item_desc: $@" );
-        $content = $@;
+        $content = $self->_task_error_content( $@, $item_desc );
     }
     else {
         $log->is_debug &&
@@ -325,6 +313,15 @@ sub execute {
         }
     }
     return $content;
+}
+
+sub _task_error_content {
+    my ($self, $error, $item_desc) = @_;
+    $log ||= get_logger( LOG_ACTION );
+
+    $log->warn( "Caught error from task $item_desc: $error" );
+
+    return $error;
 }
 
 
@@ -469,6 +466,34 @@ sub _find_task_method {
 ########################################
 # SECURITY
 
+sub task_security_allowed {
+    my ( $self, $task_to_check ) = @_;
+    unless ( $task_to_check ) {
+        oi_error "Must provide a task name to check for method ",
+                 "'task_security_allowed()'.";
+    }
+    my ( $user_level, $req_level );
+    eval {
+        $user_level = $self->_find_security_level( $task_to_check );
+        $req_level =
+            $self->_find_required_security_for_task( $task_to_check );
+    };
+    if ( $@ ) {
+        my $msg = "Caught exception when checking security of " .
+                  "task '$task_to_check': $@";
+        $log ||= get_logger( LOG_ACTION );
+        $log->warn( $msg );
+        return 0;
+    }
+    else {
+        return ( $user_level >= $req_level );
+    }
+}
+
+
+# side effects! -- assigns 'security_level' and 'security_required'
+# properties, and only works on 
+
 sub _check_security {
     my ( $self ) = @_;
     $log ||= get_logger( LOG_ACTION );
@@ -479,38 +504,8 @@ sub _check_security {
 
     return $self->security_level unless ( $self->is_secure );
 
-    my $action_security = $self->security;
-    unless ( $action_security ) {
-        $log->error( "Secure action, no security configuration" );
-        oi_error "Configuration error: action is secured but no ",
-                 "security requirements configured";
-    }
-    my ( $required_level );
-
-    # NOTE: values in $action_security have already been translated to
-    # security levels by OI2::Config::Initializer::_action_security_level()
-    # at server startup.
-
-    # specify security per task...
     my $task = $self->task;
-    if ( ref $action_security eq 'HASH' ) {
-        $required_level = $action_security->{ $task } ||
-                          $action_security->{DEFAULT} ||
-                          $action_security->{default};
-    }
-
-    # specify security for entire action...
-    else {
-        $required_level = $action_security;
-    }
-
-    unless ( defined $required_level ) {
-        $log->is_info &&
-            $log->info( "Assigned security level WRITE to task ",
-                        "'$task' since no security requirement found" );
-        $required_level = SEC_LEVEL_WRITE;
-    }
-
+    my $required_level = $self->_find_required_security_for_task( $task );
     $self->security_required( $required_level );
 
     my $action_level = $self->security_level;
@@ -526,7 +521,7 @@ sub _check_security {
     return $self->security_level;
 }
 
-# Find the level for this user/group and this action
+# no side effects! -- find the action security level for this user/group
 
 sub _find_security_level {
     my ( $self ) = @_;
@@ -534,8 +529,8 @@ sub _find_security_level {
 
     unless ( $self->is_secure ) {
         $log->is_debug &&
-            $log->debug( sprintf( "Action '%s' not secured assigning " .
-                                  "default level.", $self->name ) );
+            $log->debug( sprintf( "Action '%s' not secured, assigning " .
+                                  "default level", $self->name ) );
         return DEFAULT_ACTION_SECURITY;
     }
 
@@ -555,6 +550,48 @@ sub _find_security_level {
 }
 
 
+# no side effects! -- find the level necessary to exec the given task
+
+sub _find_required_security_for_task {
+    my ( $self, $task_to_check ) = @_;
+
+    # NOTE: values in $action_security have already been translated to
+    # security levels by OI2::Config::Initializer::_action_security_level()
+    # at server startup.
+    my $action_security = $self->security;
+    unless ( $action_security ) {
+        $log->error( "Action ", $self->name, ": Configured as secure ",
+                     "but no security configuration" );
+
+        # TODO: just return WRITE instead of throwing error?
+        oi_error "Configuration error: action is secured but no ",
+                 "security requirements configured";
+    }
+
+    my $task = $task_to_check || $self->task;
+
+    my ( $required_level );
+
+    # specify security per task...
+    if ( ref $action_security eq 'HASH' ) {
+        $required_level = $action_security->{ $task } ||
+                          $action_security->{DEFAULT} ||
+                          $action_security->{default};
+    }
+
+    # specify security for entire action...
+    else {
+        $required_level = $action_security;
+    }
+
+    unless ( defined $required_level ) {
+        $log->is_info &&
+            $log->info( "Assigned security level WRITE to task ",
+                        "'$task' since no security requirement found" );
+        $required_level = SEC_LEVEL_WRITE;
+    }
+    return $required_level;
+}
 
 ########################################
 # GENERATE CONTENT
@@ -714,6 +751,10 @@ sub _is_using_cache {
     unless ( ref $expire eq 'HASH' ) {
         return;
     }
+
+    # do not cache admin requests
+    return undef if ( CTX->request->auth_is_admin );
+
     my $expire_time = $expire->{ $self->task } || $expire->{ CACHE_ALL_KEY() } || '';
     $log->is_debug &&
         $log->debug( "Action/task ", $self->name, "/", $self->task, " ",
@@ -934,6 +975,48 @@ sub param_from_request {
     for ( @params ) {
         $self->param( $_, scalar $req->param( $_ ) );
     }
+}
+
+
+sub url_additional_param {
+    my ( $self ) = @_;
+    my @url_params = $self->_get_url_additional_names;
+    return unless ( scalar @url_params );
+    unless ( $self->{_url_additional_assigned} ) {
+        $self->url_additional_param_from_request;
+    }
+    my @values = ();
+    foreach my $param_name ( @url_params ) {
+        push @values, $self->param( $param_name );
+    }
+    return @values;
+}
+
+sub url_additional_unassigned {
+    my ( $self ) = @_;
+    my @url_params = $self->_get_url_additional_names;
+    my $request = CTX->request;
+    return unless ( $request );
+
+}
+
+sub url_additional_param_from_request {
+    my ( $self ) = @_;
+    return if ( $self->{_url_additional_assigned} );
+    my @url_params = $self->_get_url_additional_names;
+    return unless ( scalar @url_params );
+    my $request = CTX->request;
+    return unless ( $request );
+
+    my @url_values = $request->param_url_additional;
+    my $param_count = 0;
+    foreach my $value ( @url_values ) {
+        next unless ( $url_params[ $param_count ] );
+        $self->param( $url_params[ $param_count ], $value );
+        $param_count++;
+    }
+    $self->{_url_additional_assigned}++;
+    return @url_values;
 }
 
 
@@ -1235,13 +1318,17 @@ L<GENERATING CONTENT FOR ACTION> below.)
 =head2 Action Class Initialization
 
 When OpenInteract starts up it will call C<init_at_startup()> on every
-configured action class. (The class
-L<OpenInteract2::Setup::InitializeActions> actually does this.) This
-is useful for reading static (or rarely changing) information once and
-caching the results. Since the L<OpenInteract2::Context> object is
-guaranteed to have been created when this is called you can grab a
-database handle and slurp all the lookup entries from a table into a
-lexical data structure.
+configured action class, passing in the name used to configure this
+action as the only argument. (The class
+L<OpenInteract2::Setup::InitializeActions> is the one that actually
+does this.) If you've got multiple actions mapped to the same class
+your initialization method will get called multiple times.
+
+This is useful for reading static (or rarely changing) information
+once and caching the results. Since the L<OpenInteract2::Context>
+object is guaranteed to have been created when this is called you can
+grab a database handle and slurp all the lookup entries from a table
+into a lexical data structure.
 
 Here is an example:
 
@@ -1256,7 +1343,7 @@ Here is an example:
  ...
  
  sub init_at_startup {
-     my ( $class ) = @_;
+     my ( $class, $action_name ) = @_;
      $log ||= get_logger( LOG_APP );
      my $publisher_list = eval {
          CTX->lookup_object( 'publisher' )->fetch_group()
@@ -2004,6 +2091,28 @@ Examples:
      # $year = 2005; $month = 7; $day is undef
  }
 
+B<url_pattern> ($)
+
+If you don't want to map an incoming URL to your action with a name
+(using L<OpenInteract2::ActionResulver::NameAndTask>) you can do it
+with a regular expression. Define the expression in this property and
+it will get picked up by L<OpenInteract2::ActionResolver::MatchRegex>.
+
+Since we don't know exactly what/how you'll be matching the URL or
+what the task and additional URL parameters will be, we assume in the
+common case that you're going to return it as the first captured
+group from the regular expression.
+
+In the uncommon case you'll define C<url_pattern_group> with your
+capturing grou; see below.
+
+B<url_pattern_group> ($)
+
+If your C<url_pattern> matches you can define this as a regular
+expression; the first capturing group will be used to determine the
+task and additional URL parameters. See
+L<OpenInteract2::ActionResolver::MatchRegex> for examples.
+
 B<message_name> ($)
 
 Name used to find messages from the
@@ -2182,8 +2291,10 @@ Example:
      }
  }
 
-(Note: you will never need to do this since the
-C<_find_security_level()> method does this (and more) for you.)
+NOTE: you will never need to do this since the
+C<_find_security_level()> method does this (and more) for you; you can
+also use the public C<task_security_allowed( $some_task )> to whether
+the current user/group can execute C<$some_task> in this action.
 
 B<security_level> ($)
 
@@ -2461,6 +2572,27 @@ Example:
  foreach my $url ( @{ $urls } ) {
      print " *  $url\n";
  }
+
+C<task_security_allowed( $task_to_check )>
+
+Returns true or false depending on whether the current user/group is
+allowed to execute the task C<$task_to_check> on this action.  This is
+very useful to be able to display conditional links based on a user's
+capabilities. For instance, if I wanted to display an 'Edit me' link
+depending on whether a user had the ability to execute the 'edit' task
+within my action, I could do:
+
+ [% IF ACTION.task_security_allowed( 'edit' ) %]
+   <a href="...">Edit me</a>
+ [% END %]
+
+Will throw an exception if not given C<$task_to_check>.
+
+If you need the security level of the current user/group for this
+action, just look in the property C<security_level>.
+
+Returns: true if current user/group can execute C<$task_to_check>,
+false if not
 
 =head2 Object Execution Methods
 

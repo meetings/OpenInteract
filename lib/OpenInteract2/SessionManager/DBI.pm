@@ -1,6 +1,6 @@
 package OpenInteract2::SessionManager::DBI;
 
-# $Id: DBI.pm,v 1.5 2005/03/18 04:09:51 lachoy Exp $
+# $Id: DBI.pm,v 1.6 2006/09/30 01:39:43 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::SessionManager );
@@ -9,12 +9,13 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::SessionManager::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SessionManager::DBI::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 sub _create_session {
     my ( $class, $session_config, $session_id ) = @_;
+    $session_id = '' unless ( defined $session_id );
     $log ||= get_logger( LOG_SESSION );
 
     my $impl_class      = $session_config->{impl_class};

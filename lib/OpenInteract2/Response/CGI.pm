@@ -1,6 +1,6 @@
 package OpenInteract2::Response::CGI;
 
-# $Id: CGI.pm,v 1.20 2005/03/17 14:58:05 sjn Exp $
+# $Id: CGI.pm,v 1.22 2006/02/01 20:18:34 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -12,7 +12,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::CGI::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::CGI::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -31,9 +31,10 @@ sub out {
             print ${ $_ };
         }
         elsif ( UNIVERSAL::isa( $_, 'OpenInteract2::Exception' ) ) {
+            my $location = $_->file . " line " . $_->line;
             print "<h1>Exception!</h1>\n",
                   "<p>Error: ", $_->message, "<br>",
-                  $_->creation_location, "</p>\n";
+                  "$location</p>\n";
         }
         else {
             $Data::Dumper::Indent = 1;
@@ -62,10 +63,8 @@ sub send {
         return;
     }
 
-    unless ( $self->is_redirect ) {
-        $self->out( $self->generate_cgi_header_fields, "\r\n\r\n" );
-        $self->out( $self->content );
-    }
+    $self->out( $self->generate_cgi_header_fields, "\r\n\r\n" );
+    $self->out( $self->content );
 }
 
 
@@ -94,18 +93,12 @@ sub redirect {
     my ( $self, $url ) = @_;
     $log ||= get_logger( LOG_RESPONSE );
 
-    $self->save_session;
-
     $url ||= $self->return_url;
     $log->is_info &&
         $log->info( "Assigning redirect status and redirect ",
                     "'Location' header to '$url'" );
     $self->status( RC_FOUND );
-    my @header = ();
-    push @header, "Status: 302 Moved";
-    push @header, "Location: $url";
-    push @header, $self->_generate_cookie_lines;
-    $self->out( join( "\r\n", @header ), "\r\n\r\n" );
+    $self->header( Location => $url );
 }
 
 

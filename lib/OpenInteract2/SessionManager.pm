@@ -1,6 +1,6 @@
 package OpenInteract2::SessionManager;
 
-# $Id: SessionManager.pm,v 1.9 2005/03/18 04:09:48 lachoy Exp $
+# $Id: SessionManager.pm,v 1.11 2006/09/30 02:03:46 a_v Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use OpenInteract2::Constants qw( :log SESSION_COOKIE );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SessionManager::VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -30,6 +30,8 @@ sub create {
     if ( $@ ) {
         $log->warn( "Error fetching session with ID '$session_id': $@\n",
                     "Continuing..." );
+        # This cookie expire is overridden if the returned "session hash"
+        # gets values and a new session cookie is created from it.
         OpenInteract2::Cookie->expire( SESSION_COOKIE );
         return {};
     }
@@ -44,12 +46,7 @@ sub create {
         unless ( $class->is_session_valid( $session ) ) {
             $log->is_info &&
                 $log->info( "Session is expired; clearing out." );
-            eval { tied( %{ $session } )->delete() };
-            if ( $@ ) {
-                $log->warn( "Caught error trying to remove expired session: $@\n",
-                            "Continuing without problem since this just means",
-                            "you'll have a stale session in your datastore" );
-            }
+            $class->delete_session( $session );
             return {};
         }
     }
@@ -57,6 +54,28 @@ sub create {
         $session->{is_new}++;
     }
     return $session;
+}
+
+
+sub delete_session {
+    my ( $class, $session ) = @_;
+
+    return 0 if ! ref $session;
+    if ( tied( %{ $session } ) ) {
+        eval { tied( %{ $session } )->delete() };
+        if ( $@ ) {
+            $log->warn(
+                "Caught error trying to remove session: $@\n",
+                "Continuing without problem since this just means",
+                "you'll have a stale session in your datastore"
+            );
+        }
+        untie %{ $session };
+    }
+
+    delete $session->{ $_ } for keys %{ $session };
+    
+    return 1;
 }
 
 
@@ -124,7 +143,7 @@ sub _store_tied_session {
     else {
         $log->is_debug &&
             $log->debug( "Tied session, no useful info; removing..." );
-        tied( %{ $session } )->delete();
+        $class->delete_session( $session );
     }
 }
 
@@ -137,12 +156,14 @@ sub _store_hashref_session {
     }
     $log->is_info &&
         $log->info( "Create new session with data from hashref using ",
-                    "keys: ", keys %{ $session } );
-    my $new_session = $class->_create_session;
+                    "keys: ", join (', ', keys %{ $session } ) );
+    my $new_session = $class->create;
     if ( $new_session ) {
         foreach my $key ( keys %{ $session } ) {
+            next if $key eq '_session_id';
             $new_session->{ $key } = $session->{ $key };
         }
+        delete $new_session->{is_new};
         $class->_save_session( $new_session, 1 );
     }
     else {
@@ -248,7 +269,15 @@ OpenInteract2::SessionManager - Implement session management for OpenInteract
  
  # Saving a session is done in OpenInteract2::Response
  
- OpenInteract2::SessionManager->save( CTX->request->session );
+ my $session_class = CTX->lookup_session_config->{class};
+ $session_class->save( CTX->request->session );
+
+ # When logging out, in addition to clearing the session cookie,
+ # you might want to remove the session from the datastore:
+
+ OpenInteract2::SessionManager->delete_session(
+   CTX->request->session
+ );
 
 =head1 DESCRIPTION
 
@@ -256,8 +285,11 @@ Sessions are a fundamental part of OpenInteract, and therefore session
 handling is fairly transparent. We rely on
 L<Apache::Session|Apache::Session> to do the heavy-lifting for us.
 
-This handler has two public methods: C<create()> and C<save()>. Guess
-in which order they are meant to be called?
+This handler has two main public methods: C<create()> and C<save()>.
+Create is used to create session objects (both old ones using stored
+data and new ones with no data).
+Save is used to make sure that the given data is stored in a session
+object and the object id is set in a session cookie.
 
 This class also requires you to implement a subclass that overrides
 the C<_create_session> method with one that returns a valid
@@ -290,10 +322,14 @@ cookie.
 Returns: tied hashref if session implementation ran correctly, normal
 hashref if not.
 
-B<save()>
+B<save( $session object | $hashref of values )>
 
-Persist (create or update) the session for later. If the 'is_new' key
-was set in the session by the C<create()> method we also use
+Persist (create or update) the session data for later. If a hashref is
+given, a new session object is created with the given data and a
+random session id.
+
+If the 'is_new' key was set in the session by the C<create()> method
+or a new object was created from a hashref we also use
 L<OpenInteract2::Cookie|OpenInteract2::Cookie> to create a new cookie
 and put it in the response. The expiration for the generated cookie is
 pulled from the session itself (using the key 'expiration') or the
@@ -303,6 +339,11 @@ If either is set the method will remove the 'is_new' and 'expiration'
 keys from the session.
 
 This method will not serialize the session if it is empty.
+
+B<delete_session( $session object | $hashref of values )>
+
+Deletes the data tied to the session object, unties the object
+and removes all keys from the remaining hashref.
 
 =head1 CONFIGURATION
 

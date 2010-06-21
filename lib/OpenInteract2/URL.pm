@@ -1,6 +1,6 @@
 package OpenInteract2::URL;
 
-# $Id: URL.pm,v 1.31 2005/03/18 04:09:48 lachoy Exp $
+# $Id: URL.pm,v 1.33 2006/09/05 20:16:31 a_v Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -9,7 +9,7 @@ use OpenInteract2::Context   qw( CTX DEPLOY_URL DEPLOY_IMAGE_URL DEPLOY_STATIC_U
 use OpenInteract2::Log       qw( uchk );
 use URI;
 
-$OpenInteract2::URL::VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::URL::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
 use constant QUERY_ARG_SEPARATOR => '&amp;';
 
@@ -94,7 +94,7 @@ sub create {
         $log->is_debug &&
             $log->debug( "Creating static URL from '$url_base' ",
                          "and params '$param_info'" );
-        return $class->create_image( $url_base, $params, $do_not_escape );
+        return $class->create_static( $url_base, $params, $do_not_escape );
     }
     $log->is_debug &&
         $log->debug( "Creating deployment URL from '$url_base' ",
@@ -199,7 +199,8 @@ sub create_from_action {
 sub _url_escape {
     my ( $to_encode ) = shift;
     return undef unless defined( $to_encode );
-    $to_encode =~ s/([^a-zA-Z0-9_~\.\-\*\'\(\)\/\s])/uc sprintf("%%%02x",ord($1))/eg;
+    # Why is this not done using URI::Escape ?
+    $to_encode =~ s/([^a-zA-Z0-9_~\.\-\*\!\'\(\)\/\s])/uc sprintf("%%%02x",ord($1))/eg;
     $to_encode =~ s/\s/%20/g;
     return $to_encode;
 }

@@ -1,6 +1,6 @@
 package OpenInteract2::Request::CGI;
 
-# $Id: CGI.pm,v 1.23 2005/03/18 04:09:51 lachoy Exp $
+# $Id: CGI.pm,v 1.26 2006/08/18 00:25:28 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -11,12 +11,12 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Upload;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::CGI::VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 my @FIELDS = qw( cgi );
-OpenInteract2::Request::CGI->mk_accessors( @FIELDS );
+__PACKAGE__->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self, $params ) = @_;
@@ -32,12 +32,17 @@ sub init {
     my $cgi = $self->cgi;
     my $req_type = $cgi->request_method || 'GET';
 
-    # Assign URL info from CGI...
+    # Assign URL info from CGI unless told otherwise
 
-    my $base_url = $cgi->script_name || '';
-
-    $log->is_info && $log->info( "Deployed as $req_type to $base_url" );
-    CTX->assign_deploy_url( $base_url );
+    my $base_url = '';
+    if ( defined $params->{deploy_url} ) {
+        CTX->assign_deploy_url( $params->{deploy_url} );
+    }
+    else {
+        $base_url = $cgi->script_name || '';
+        $log->is_info && $log->info( "Deployed as $req_type to $base_url" );
+        CTX->assign_deploy_url( $base_url );
+    }
 
     my $full_url = join( '', $base_url, $cgi->path_info );
     my $query_args = $cgi->query_string;
@@ -55,7 +60,9 @@ sub init {
     $self->language_header( $cgi->http( 'Accept-Language' ) );
 
     $self->server_name( $cgi->server_name );
+    $self->server_port( $cgi->server_port );
     $self->remote_host( $cgi->remote_host );
+    $self->forwarded_for( $ENV{'X-Forwarded-For'} );
 
     # Then the rest of the parameters/uploads (works with other
     # environments too...)
@@ -116,6 +123,11 @@ sub _assign_params_from_cgi {
     }
     $log->is_info &&
         $log->info( "Set $num_param params, $num_upload file uploads" );
+}
+
+sub post_body {
+    my ( $self ) = @_;
+    return $self->cgi->param( 'POSTDATA' );
 }
 
 1;

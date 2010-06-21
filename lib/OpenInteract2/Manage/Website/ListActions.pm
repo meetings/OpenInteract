@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::ListActions;
 
-# $Id: ListActions.pm,v 1.12 2005/03/17 14:58:04 sjn Exp $
+# $Id: ListActions.pm,v 1.13 2005/07/03 20:10:25 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use OpenInteract2::Action;
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::ListActions::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'list_actions';
@@ -31,15 +31,18 @@ sub run_task {
         unless ( ref( $urls ) && $urls->[0] ) {
             $urls = [ 'n/a' ];
         }
+        my $package_name = $action->package_name;
+        my $url_desc = '[' . join( '] [', @{ $urls } ) . ']';
         $self->_ok(
             'OpenInteract2 Action',
-            "Action $name mapped to $urls->[0]",
-            url     => $urls,
-            name    => $name,
-            type    => $action_info->{type},
-            class   => $action_info->{class},
-            method  => $action_info->{method},
-            template => $action_info->{template}
+            "Action $name in package $package_name mapped to URLs $url_desc",
+            url      => $urls,
+            name     => $name,
+            type     => $action_info->{type},
+            class    => $action_info->{class},
+            method   => $action_info->{method},
+            template => $action_info->{template},
+            package  => $package_name,
         );
     }
 }
@@ -66,7 +69,7 @@ OpenInteract2::Manage::Website::ListActions - List all actions in a website
      'list_actions', { website_dir => $website_dir });
  my @status = $task->execute;
  foreach my $s ( @status ) {
-     print "Action [[$s->{name}]]\n",
+     print "Action [[$s->{name}]] in package $s->{package}\n",
            "Type:     $s->{type}\n",
            "Class:    $s->{class}\n",
            "Method:   $s->{method}\n",
@@ -86,6 +89,10 @@ In addition to the default entries, each status message includes:
 =item B<name>
 
 Name of the action
+
+=item B<package>
+
+OpenInteract2 package action came from
 
 =item B<url>
 

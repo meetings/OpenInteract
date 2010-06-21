@@ -1,4 +1,4 @@
-# $Id: utils.pl,v 1.100 2005/03/04 03:11:21 lachoy Exp $
+# $Id: utils.pl,v 1.101 2005/09/21 12:33:54 lachoy Exp $
 
 use strict;
 use Data::Dumper             qw( Dumper );
@@ -43,10 +43,11 @@ sub main::barf {
 }
 
 sub main::get_packages {
-    return qw( base  base_box  base_error  base_group  base_page
-               base_security  base_template  base_theme  base_user
-               comments  full_text  lookup  news  object_activity
-               system_doc  whats_new );
+    return @{ OpenInteract2::Manage->SYSTEM_PACKAGES() };
+}
+
+sub main::get_num_packages {
+    return scalar @{ OpenInteract2::Manage->SYSTEM_PACKAGES() };
 }
 
 ########################################

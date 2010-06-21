@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Ini;
 
-# $Id: Ini.pm,v 1.21 2005/03/18 04:09:50 lachoy Exp $
+# $Id: Ini.pm,v 1.22 2005/03/29 21:55:34 infe Exp $
 
 use strict;
 use File::Basename           qw( dirname );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Ini::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -30,13 +30,15 @@ sub new {
     my ( $pkg, $params ) = @_;
     my $class = ref $pkg || $pkg;
     my $self = bless( {
-        filename  => '',
-        directory => '',
-        sections  => [],
-        comments  => {},
-        order     => [],
-        order_map => {},
-        global    => [],
+        _m => {
+            filename  => '',
+            directory => '',
+            sections  => [],
+            comments  => {},
+            order     => [],
+            order_map => {},
+            global    => [],
+        }
     }, $class );
     if ( $self->{_m}{filename} = $params->{filename} ) {
         $self->{_m}{directory} = $params->{directory} || dirname( $params->{filename} );

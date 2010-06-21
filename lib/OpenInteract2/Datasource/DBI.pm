@@ -1,6 +1,6 @@
 package OpenInteract2::Datasource::DBI;
 
-# $Id: DBI.pm,v 1.17 2005/03/17 14:58:01 sjn Exp $
+# $Id: DBI.pm,v 1.20 2005/10/18 21:21:30 lachoy Exp $
 
 use strict;
 use DBI                      qw();
@@ -9,18 +9,24 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_datasource_error );
 
-$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Datasource::DBI::VERSION  = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 use constant DEFAULT_READ_LEN => 32768;
 use constant DEFAULT_TRUNC_OK => 0;
 
+my @CONNECT_ATTRIBUTES = qw( RootClass );
+
+# Note that the \%ds_info has already been scrubbed by
+# resolve_datasource_info() at server startup (see
+# OI2::Setup::CheckDatasources)
+
 sub connect {
     my ( $class, $ds_name, $ds_info ) = @_;
     $log ||= get_logger( LOG_DS );
     unless ( ref $ds_info ) {
-        $log->error( "No data given to create DBI [$ds_name] handle" );
+        $log->error( "No data given to create DBI '$ds_name' handle" );
         oi_error "Cannot create connection without datasource info";
     }
     unless ( $ds_name ) {
@@ -28,10 +34,8 @@ sub connect {
                     '$class->connect( $ds_name, \%ds_info ). ',
                     'Continuing...' );
     }
-
-    my $full = $class->resolve_datasource_info( $ds_name, $ds_info );
-
-    unless ( $full->{driver_name} ) {
+    
+    unless ( $ds_info->{driver_name} ) {
         $log->error( "Required configuration key undefined ",
                      "'datasource.$ds_name.driver_name'" );
         oi_error "Value for 'driver_name' must be defined in ",
@@ -41,20 +45,25 @@ sub connect {
     # Make the connection -- let the 'die' trickle up to our caller if
     # it happens
 
-    my $dsn      = join( ':', 'DBI', $full->{driver_name}, $full->{dsn} );
-    my $username = $full->{username};
-    my $password = $full->{password};
+    my $dsn      = join( ':', 'DBI', $ds_info->{driver_name}, $ds_info->{dsn} );
+    my $username = $ds_info->{username};
+    my $password = $ds_info->{password};
+
+    my %connect_attr = map { $_ => $ds_info->{ $_ } }
+                       grep { defined $ds_info->{ $_ } }
+                       @CONNECT_ATTRIBUTES;
+    $connect_attr{RaiseError} = 0;
+    $connect_attr{PrintError} = 0;
 
     if ( $log->is_debug ) {
-        my %dumpable = %{ $full };
+        my %dumpable = %{ $ds_info };
         $dumpable{password} = '*' x length $password;
         $log->debug( "Trying to connect to DBI with: ",
                      CTX->dump( \%dumpable ) );
     }
 
     my $db = DBI->connect( $dsn, $username, $password,
-                           { RaiseError => 0,
-                             PrintError => 0 } );
+                           \%connect_attr );
     unless ( $db ) {
         oi_datasource_error
             "Error connecting to DBI database '$ds_name': $DBI::errstr",
@@ -70,10 +79,17 @@ sub connect {
     $db->{PrintError}  = 0;
     $db->{ChopBlanks}  = 1;
     $db->{AutoCommit}  = 1;
-    $db->{LongReadLen} = $full->{long_read_len} || DEFAULT_READ_LEN;
-    $db->{LongTruncOk} = $full->{long_trunc_ok} || DEFAULT_TRUNC_OK;
+    $db->{LongReadLen} = $ds_info->{long_read_len} || DEFAULT_READ_LEN;
+    $db->{LongTruncOk} = $ds_info->{long_trunc_ok} || DEFAULT_TRUNC_OK;
 
-    my $trace_level = $full->{trace_level} || '0';
+    while ( my ( $attrib, $value ) = each %{ $ds_info->{driver_attributes} } ) {
+        $db->{ $attrib } = $value;
+        $log->is_debug &&
+            $log->debug( "Assigning driver-specific attribute to db ",
+                         "handle: $attrib -> $value" );
+    }
+
+    my $trace_level = $ds_info->{trace_level} || '0';
     $db->trace( $trace_level );
 
     $log->is_debug &&
@@ -109,6 +125,7 @@ my %DBI_INFO = (
 sub resolve_datasource_info {
     my ( $self, $name, $ds_info ) = @_;
 
+    # TODO: keep this? it means we're not copying over handle attribs...
     # backwards compatibility - if 'spops' key exists just return as-is
     if ( $ds_info->{spops} ) {
         return { %{ $ds_info } };
@@ -117,7 +134,7 @@ sub resolve_datasource_info {
     my @copy_properties = qw(
         type dsn username password long_read_len long_trunc_ok trace_level
     );
-    my %info = map { $_ => $ds_info->{ $_ } } @copy_properties;
+    my %info = map { $_ => $ds_info->{ $_ } } @copy_properties, @CONNECT_ATTRIBUTES;
 
     my $dbi_type = lc $ds_info->{dbi_type};
     if ( $dbi_type ) {
@@ -131,6 +148,14 @@ sub resolve_datasource_info {
         $info{driver_name} = ( 'yes' eq lc $ds_info->{use_odbc} )
                                ? 'ODBC' : $dbi_info->[1];
     }
+    my $lc_driver = lc $info{driver_name};
+    my %driver_attribs = ();
+    foreach my $attrib ( keys %{ $ds_info } ) {
+        if ( $attrib =~ /^$lc_driver/ ) {
+            $driver_attribs{ $attrib } = $ds_info->{ $attrib };
+        }
+    }
+    $info{driver_attributes} = \%driver_attribs;
     return \%info;
 }
 
@@ -154,7 +179,7 @@ OpenInteract2::Datasource::DBI - Create DBI database handles
  password      = urkelnut
  
  # Define a handle 'win32' that uses Microsoft SQL Server and connects
- # with ODBC
+ # with ODBC and a custom parameter for the ODBC driver
  
  [datasource win32]
  type          = DBI
@@ -163,6 +188,7 @@ OpenInteract2::Datasource::DBI - Create DBI database handles
  dsn           = MyDSN
  username      = webuser
  password      = urkelnut
+ odbc_foo      = bar
  
  # Request the datasource 'main' from the context object (which in
  # turn requests it from the OpenInteract2::DatasourceManager object,
@@ -203,7 +229,10 @@ Returns: A DBI database handle with the following parameters set:
 
 The parameter C<\%datasource_info> defines how we connect to the
 database and is pulled from your 'datasource.$name' server
-configuration.
+configuration. But by the time this method gets the data it's already
+been scrubbed by the C<resolve_datasource_info()> method since that
+method is invoked at server startup by
+L<OpenInteract2::Setup::CheckDatasources>.
 
 =over 4
 
@@ -236,8 +265,8 @@ DBD driver for what to do.
 
 B<dbi_type> ($)
 
-What database type are you using?  Available values are: 'MySQL',
-'Pg', 'Sybase', 'ASAny', 'Oracle', 'SQLite' and 'MSSQL'.
+What database type are you using?  Available case-insensitive values
+are: 'MySQL', 'Pg', 'Sybase', 'ASAny', 'Oracle', 'SQLite' and 'MSSQL'.
 
 =item *
 
@@ -293,12 +322,12 @@ tracing. As documented by L<DBI|DBI>, the levels are:
 =back
 
 Any errors encountered will throw an exception, usually of the
-L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
-variety.
+L<OpenInteract2::Exception::Datasource> variety.
 
 B<resolve_datasource_info( $name, \%datasource_info )>
 
-Internal method used to resolve some shortcuts we allow for
+Internal method called by L<OpenInteract2::Setup::CheckDatasources> at
+server startup, used to resolve some shortcuts we allow for
 usability. This will look at the 'dbi_type' and add keys to the
 datasource information:
 
@@ -315,13 +344,34 @@ second ':' place in the DBI C<connect()> call.
 
 =back
 
+You may also define driver-specific parameters that get passed through
+to the C<connect()> method in the key 'driver_attributes'; eventually
+these get assigned directly to the database handle just after it's
+created. A parameter is identified as driver-specific if it begins
+with the driver name. So if we were using L<DBD::Pg> we might do:
+
+ [datasource main]
+ type              = DBI
+ dbi_type          = Pg
+ dsn               = dbname=oi2
+ username          = oi2
+ password          = oi2
+ pg_server_prepare = 0
+
+which, when you create a database handle, is equivalent to:
+
+ my $dbh = DBI->connect( ... );
+ $dbh->{pg_server_prepare} = 0;
+
 Returns a new hashref of information. For backwards compatibility, if
 we see the key C<spops> in C<\%datasource_info> we just return a new
 hashref with the same data.
 
 =head1 SEE ALSO
 
-L<OpenInteract2::Exception::Datasource|OpenInteract2::Exception::Datasource>
+L<OpenInteract2::Setup::CheckDatasources>
+
+L<OpenInteract2::Exception::Datasource>
 
 L<Apache::DBI|Apache::DBI>
 

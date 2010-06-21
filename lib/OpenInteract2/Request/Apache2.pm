@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Apache2;
 
-# $Id: Apache2.pm,v 1.3 2005/03/17 14:58:04 sjn Exp $
+# $Id: Apache2.pm,v 1.5 2006/08/18 00:25:28 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -10,12 +10,12 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 
-$OpenInteract2::Request::Apache2::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Apache2::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 my @FIELDS = qw( apache );
-OpenInteract2::Request::Apache2->mk_accessors( @FIELDS );
+__PACKAGE__->mk_accessors( @FIELDS );
 
 my ( $done );
 
@@ -66,7 +66,10 @@ sub init {
     $self->language_header( $in->{'Accept-Language'} );
 
     $self->server_name( $r->get_server_name );
+    $self->server_port( $r->get_server_port );
     $self->remote_host( $r->connection->remote_addr->ip_get );
+    $self->forwarded_for( $r->headers_in->get('X-Forwarded-For') );
+    
     $log->is_info &&
         $log->info( "Finished creating Apache 2.x request" );
 
@@ -150,6 +153,14 @@ sub init {
     return $self;
 }
 
+sub post_body {
+    my ( $self ) = @_;
+    my ( $body, $buf );
+        while ( $self->apache->read( $buf, $self->apache->header_in('Content-length') ) ) {
+            $body .= $buf;
+        }
+    return $body;
+}
 
 1;
 

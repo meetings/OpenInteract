@@ -1,13 +1,14 @@
 package OpenInteract2::Cache;
 
-# $Id: Cache.pm,v 1.13 2005/03/18 04:09:48 lachoy Exp $
+# $Id: Cache.pm,v 1.15 2005/07/04 03:05:54 lachoy Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
+use Scalar::Util             qw( blessed );
 
-$OpenInteract2::Cache::VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Cache::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 # Returns: caching object (implementation-neutral)
 
@@ -44,7 +45,16 @@ sub get {
         return undef;
     }
 
-    my $key       = $p->{key};
+    # allow for get( $key ) and get({ key => $key }) calling methods
+    my ( $key );
+    if ( ref $p ) {
+        $key = $p->{key};
+    }
+    else {
+        $key = $p;
+        $p   = {}; 
+    }
+
     my $is_object = 0;
     my $obj_class = undef;
     if ( ! $key and $p->{class} and $p->{object_id} ) {
@@ -56,20 +66,17 @@ sub get {
         return undef  unless ( $obj_class->pre_cache_get( $p->{object_id} ) );
     }
     unless ( $key ) {
-        $log->is_debug &&
-            $log->debug( "Cache MISS (no key)" );
+        $log->is_debug && $log->debug( "Cache MISS (no key)" );
         return undef;
     }
 
     my $data = $self->get_data( $self->{_cache_object}, $key );
     unless ( $data ) {
-        $log->is_debug &&
-            $log->debug( "Cache MISS [$key]" );
+        $log->is_debug && $log->debug( "Cache MISS [$key]" );
         return undef;
     }
 
-    $log->is_debug &&
-        $log->debug( "Cache HIT [$key]" );
+    $log->is_debug && $log->debug( "Cache HIT [$key]" );
     if ( $is_object ) {
         return undef unless ( $obj_class->post_cache_get( $data ) );
     }
@@ -93,7 +100,7 @@ sub set {
     my $key  = $p->{key};
     my $data = $p->{data};
     my ( $obj );
-    if ( _is_object( $data ) ) {
+    if ( _is_spops_object( $data ) ) {
         $obj = $data;
         $key = _make_spops_idx( ref $obj, $obj->id );
         $log->is_debug &&
@@ -117,7 +124,7 @@ sub clear {
     return undef unless ( $self->{_cache_object} );
 
     my $key = $p->{key};
-    if ( ! $key and _is_object( $p->{data} ) ) {
+    if ( ! $key and _is_spops_object( $p->{data} ) ) {
         $key = _make_spops_idx( ref $p->{data}, $p->{data}->id );
     }
     elsif ( ! $key and $p->{class} and $p->{object_id} ) {
@@ -147,11 +154,11 @@ sub purge {
 }
 
 
-sub _is_object {
+sub _is_spops_object {
     my ( $item ) = @_;
     my $typeof = ref $item;
-    return undef if ( ! $typeof );
-    return undef if ( $typeof =~ /^(HASH|ARRAY|SCALAR)$/ );
+    return undef unless ( blessed( $item ) );
+    return undef unless ( $item->isa( 'SPOPS' ) );
     return 1;
 }
 
@@ -243,10 +250,14 @@ B<object_id>: ID of SPOPS object
 
 =back
 
-B<get( \%params )>
+B<get( $key || \%params )>
 
 Returns the data in the cache associated with a key; undef if data
 corresponding to the key is not found.
+
+Note that the common case (where you just want to retrieve a cached
+item by key) allows you to skip creating a hashref to pass in a single
+argument.
 
 B<set( \%params )>
 
@@ -260,9 +271,9 @@ Parameters:
 
 =item *
 
-B<data>: The data to save in the cache. This can be an SPOPS object,
-HTML content or any cacheable Perl data structure. (Don't try to store
-database handles, filehandles, or any other object with 'live'
+B<data>: The data to save in the cache. This can be an object, HTML
+content or any other cacheable Perl data structure. (Don't try to
+store database handles, filehandles, or any other object with 'live'
 connections to real-world resources.)
 
 =item *

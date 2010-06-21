@@ -1,6 +1,6 @@
 package OpenInteract2::SQLInstall;
 
-# $Id: SQLInstall.pm,v 1.30 2005/03/17 14:57:58 sjn Exp $
+# $Id: SQLInstall.pm,v 1.31 2005/04/02 23:42:21 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use SPOPS::Import;
 
-$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::SQLInstall::VERSION  = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -355,19 +355,8 @@ DATAFILE:
     foreach my $data_file ( @files ) {
         my $relative_file = "$DATA_DIR/$data_file";
         my $full_file = $pkg->find_file( $relative_file );
-        my $data_text = $pkg->read_file( $relative_file );
-        my ( $data_struct );
-        {
-            no strict 'vars';
-            $data_struct = eval $data_text;
-            if ( $@ ) {
-                $self->_set_state( $full_file,
-                                   undef,
-                                   "Invalid Perl data structure: $@",
-                                   undef );
-                next DATAFILE;
-            }
-        }
+        my $data_struct = $self->_translate_file_to_struct( $full_file );
+        next DATAFILE unless ( defined $data_struct and ref $data_struct eq 'ARRAY' );
         $log->is_debug &&
             $log->debug( "Data structure read from '$full_file': ",
                          CTX->dump( $data_struct ) );
@@ -453,6 +442,76 @@ DATAFILE:
                                "Inserted: $insert_ok" );
         }
     }
+}
+
+sub _translate_file_to_struct {
+    my ( $self, $filename ) = @_;
+    my ( $data_struct );
+    if ( $filename =~ /\.dat$/ ) {
+        no strict 'vars';
+        my $data = OpenInteract2::Util->read_file( $filename );
+        $data_struct = eval $data;
+        if ( $@ ) {
+            $self->_set_state( $filename,
+                               undef,
+                               "Invalid Perl data structure: $@",
+                               undef );
+            $data_struct = undef;
+        }
+    }
+    elsif ( $filename =~ /\.csv$/ ) {
+        $data_struct = eval { $self->translate_csv_data_file( $filename ) };
+        if ( $@ ) {
+            $self->_set_state( $filename, undef, "$@", undef );
+            $data_struct = undef;
+        }
+    }
+    return $data_struct;
+}
+
+sub translate_csv_data_file {
+    my ( $self, $filename ) = @_;
+    my $data_struct = [];
+    my $data = OpenInteract2::Util->read_file( $filename );
+    my ( $meta_list, $labels, @records ) = split /[\r\n]+/, $data;
+    $meta_list =~ s/^\s+//; $meta_list =~ s/\s+$//;
+    my %meta = ();
+    foreach my $pair ( split /\s*;\s*/, $meta_list ) {
+        my ( $key, $value ) = split /\s*=\s*/, $pair, 2;
+        if ( $key =~ /^transform_(default|now)$/ ) {
+            $value = [ split( /\s*,\s*/, $value ) ];
+        }
+        $meta{ $key } = $value;
+    }
+    my $delimiter = $meta{delimiter};
+    if ( $delimiter ) {
+        $labels =~ s/^\s+//; $labels =~ s/\s+$//;
+        $delimiter =~ s/\|/\\|/;
+        my @record_labels = split /\s*$delimiter\s*/, $labels;
+        my $num_labels = scalar @record_labels;
+        $meta{field_order} = \@record_labels;
+        push @{ $data_struct }, \%meta;
+
+        my $count = 1;
+        foreach my $rec ( @records ) {
+            $rec =~ s/^\s+//; $rec =~ s/\s+$//;
+            my @fields = split /\s*$delimiter\s*/, $rec;
+            my $num_fields = scalar @fields;
+            if ( $num_labels == $num_fields ) {
+                push @{ $data_struct }, \@fields;
+            }
+            else {
+                oi_error "Record $count has a different number of fields ",
+                         "($num_fields) than specified in the labels ",
+                         "($num_labels)";
+            }
+            $count++;
+        }
+    }
+    else {
+        oi_error "You must set the 'delimiter' to split fields/records";
+    }
+    return $data_struct;
 }
 
 
@@ -1348,15 +1407,43 @@ Here is an example where the table names change as well:
 
 =head1 DEVELOPERS: IMPORTING DATA
 
+=head2 Import data formats
+
 We need to be able to pass data from one database to another and be
 very flexible as to how we do it. The various data file formats have
 taken care of everything I could think of -- hopefully you will think
 up some more.
 
-The data file discussed below is a Perl data structure. This does
+The data file discussed below is in one of two formats, either a perl
+data structure or a text file with delimited data. (The former goes
 against the general OI2 bias against using data structures for humans
 to edit, but since this is generally a write-once operation it is not
-as important that it be human-readable.
+as important that it be human-readable.)
+
+Both files are translated into the same data structure when they're
+read in so later parts of the process don't know the difference.
+
+Here's an example of a perl data structure:
+
+ $var = [ { import_type => 'object',
+            spops_class => 'OpenInteract2::Group',
+            field_order => [ qw/ group_id name / ] },
+            [ 1, 'admin' ],
+            [ 2, 'public' ],
+            [ 3, 'site admin' ],
+ ];
+
+And here's an example of the same file in delimited format:
+
+ import_type = object; spops_class = OpenInteract2::Group; delimiter = |
+ group_id | name
+ 1 | admin
+ 2 | public
+ 3 | site admin
+
+The first line has metadata about the data to import, the second has
+the delimited field labels, and every line thereafter is a delimited
+set of record data.
 
 To begin, there are two elements to a data file. The first element
 tells the installer what type of data follows -- should we create
@@ -1384,7 +1471,7 @@ plug in values as many times as necessary. This can be used most
 anywhere and for anything. And you can use this for updating and
 deleting data as well as inserting.
 
-=head2 Object Processing
+=head2 Object Processing: What's in the metadata?
 
 The first item in the list describes the class you want to use to
 create objects and the order the fields that follow are in. Here is a
@@ -1397,6 +1484,14 @@ simple example of the data file used to install initial groups:
                   [ 2, 'public' ],
                   [ 3, 'site admin' ],
   ];
+
+And the same thing in delimited format:
+
+ import_type = object; spops_class = OpenInteract2::Group; delimiter = |
+ group_id | name
+ 1        | admin
+ 2        | public
+ 3        | site admin
 
 Here is a slightly abbreviated form of what steps would look like if
 they were done in code:
@@ -1430,6 +1525,18 @@ security data:
                 [ 'OpenInteract2::Action::Group', 0, 'w', 'world', 4 ],
                 [ 'OpenInteract2::Action::Group', 0, 'g', 'site_admin_group', 8 ]
   ];
+
+In delimited format:
+
+ import_type = object; spops_class = OpenInteract2::Security; transform_default => scope_id; delimiter = |
+ class                        | object_id | scope | scope_id         | security_level
+ OpenInteract2::Group         | 1         | w     | world            | 1
+ OpenInteract2::Group         | 2         | w     | world            | 4
+ OpenInteract2::Group         | 2         | g     | site_admin_group | 8
+ OpenInteract2::Group         | 3         | w     | world            | 4
+ OpenInteract2::Group         | 3         | g     | site_admin_group | 8
+ OpenInteract2::Action::Group | 0         | w     | world            | 4
+ OpenInteract2::Action::Group | 0         | g     | site_admin_group | 8
 
 So these steps would look like:
 
@@ -1469,6 +1576,12 @@ example:
                    field_order        => [ qw/ group_id user_id / ] },
                  [ 1, 1 ]
   ];
+
+And in delimited format:
+
+ import_type = dbdata; datasource_pointer = group; sql_table = sys_group_user; delimiter = |
+ group_id | user_id
+ 1 | 1
 
 So we specify the import type ('dbdata', which corresponds to
 L<SPOPS::Import::DBI::Data>), the table to operate on
@@ -1525,6 +1638,10 @@ Here is a sample usage:
                  [ 1, 1, '2000-02-14', 'high' ]
   ];
 
+There's currently no way to map a nested data structure like
+'field_type' into delimited format, so you must use the serialized
+perl data structure..
+
 Additionally you can create Perl code to do this for you.
 
 =head2 SQL Processing: Updating Data
@@ -1544,6 +1661,9 @@ type you do not need to specify any data, just metadata:
                 field       => [ 'name' ],
                 field_value => [ 'A New Group' ],
               } ];
+
+It doesn't make any sense to represent this as a delimited file so you
+must use the serialized perl data structure.
 
 (See L<SQL Processing: Inserting Data> for how to declare a datasource
 using 'datasource_pointer'.)
@@ -1597,6 +1717,9 @@ type you do not need to specify any data, just metadata:
                 where       => 'group_id > ?',
                 value       => [ '10' ]
               } ];
+
+It doesn't make any sense to represent this as a delimited file so you
+must use the serialized perl data structure.
 
 (See L<SQL Processing: Inserting Data> for how to declare a datasource
 using 'datasource_pointer'.)

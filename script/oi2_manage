@@ -1,10 +1,11 @@
 #!/usr/bin/perl
 
-# $Id: oi2_manage,v 1.34 2005/03/17 14:58:06 sjn Exp $
+# $Id: oi2_manage,v 1.36 2005/10/22 21:57:17 lachoy Exp $
 
 use strict;
 use Cwd                   qw( cwd );
 use Data::Dumper          qw( Dumper );
+use File::Spec::Functions qw( rel2abs );
 use Getopt::Long          qw( GetOptions );
 use Log::Log4perl         qw( :levels );
 use OpenInteract2::Log;
@@ -13,7 +14,7 @@ use Text::Wrap;
 
 $Text::Wrap::columns = 70;
 
-my $VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
+my $VERSION = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 
 # Legitimate commands; anything not listed here will be kicked out and
 # the 'usage' stuff displayed
@@ -50,6 +51,7 @@ my $HELP_LIST = 'openinteract-help@lists.sourceforge.net';
 my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
 
 {
+    my $invocation = join( ' ', $0, @ARGV );
     my @opt_defs = OpenInteract2::Manage->all_parameters_long_options;
     push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s';
     my %OPT = ( help => \$OPT_help, debug  => \$OPT_debug,
@@ -61,6 +63,11 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
         show_help();
         exit(0);
     }
+
+    # Ensure the original invocation is preserved for the management
+    # tasks
+
+    $OPT{invocation} = $invocation;
 
     # Do this before initializing the log so we can use the existing
     # category levels
@@ -106,15 +113,6 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
         exit(1);
     }
 
-    # Lop off any trailing '/' characters in directories passed in,
-    # replace any initial '~' with $ENV{HOME}
-
-    for ( $OPT{website_dir}, $OPT{package_dir}, $OPT{source_dir} ) {
-        next unless defined $_;
-        s/[\\|\/]+$//;
-        s/^~/$ENV{HOME}/
-    }
-
     # Do any help/non-Manage tasks here
 
     if ( $task_name eq 'list_tasks' ) {
@@ -137,6 +135,14 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
             exit(1);
         }
         exit(0);
+    }
+
+    # directory munging...
+    foreach my $dir_type ( qw( website_dir package_dir source_dir ) ) {
+        next unless defined $OPT{ $dir_type };
+        $OPT{ $dir_type } =~ s/^~/$ENV{HOME}/;
+        $OPT{ $dir_type } = rel2abs( $OPT{ $dir_type } );
+        $OPT{ $dir_type } =~ s/[\\|\/]+$//;
     }
 
     # delete our own entries...

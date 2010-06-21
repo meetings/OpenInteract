@@ -1,13 +1,13 @@
 package OpenInteract2::I18N;
 
-# $Id: I18N.pm,v 1.9 2005/03/18 04:09:48 lachoy Exp $
+# $Id: I18N.pm,v 1.11 2005/04/12 18:38:13 infe Exp $
 
 use strict;
 use base qw( Locale::Maketext );
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( LOG_TRANSLATE );
 
-$OpenInteract2::I18N::VERSION   = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::I18N::VERSION   = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -31,8 +31,19 @@ sub maketext {
         }
     };
     if ( $@ ) {
-        $log->error( "Failed to translate '$key': $@" );;
-        return "Message error for '$key'";
+        if ( $log->is_debug ) {
+            $log->debug( "Failed to translate '$key': $@" );;
+            return "Message error for '$key'";
+        }
+        else {
+            my $iteration = 1;
+            while ( 1 ) {
+                last unless $key =~ /\[_$iteration\]/;
+                $key =~ s/\[_$iteration\]/$args[$iteration-1]/g;
+                $iteration++;
+            }
+            return $key;
+        }
     }
     $log->is_debug &&
         $log->debug( "Message for key '$key': '$msg'; given ",

@@ -1,0 +1,20 @@
+/admin_db_asa_batch/1.1/Thu Jul 10 06:23:46 2003//
+/admin_db_asa_create_start/1.1/Thu Jul 10 06:23:46 2003//
+/admin_db_asa_dba_password/1.1/Thu Jul 10 06:23:46 2003//
+/admin_db_asa_permissions/1.1/Thu Jul 10 06:23:46 2003//
+/admin_db_mysql_createdb/1.1/Tue Feb 26 04:52:34 2002//
+/admin_db_mysql_createuser/1.1/Tue Feb 26 04:52:34 2002//
+/admin_db_mysql_grantuser/1.1/Tue Feb 26 04:52:34 2002//
+/admin_db_mysql_reload/1.1/Tue Feb 26 04:52:34 2002//
+/admin_db_pg_createdb/1.1/Tue Feb 26 04:52:34 2002//
+/admin_db_pg_createuser/1.1/Tue Feb 26 04:52:34 2002//
+/conversion_eu_manifest/1.1/Sun Jun 29 16:17:42 2003//
+/ldap_auth_test_script/1.2/Wed Jun  9 01:10:51 2004//
+/ldap_base_dn_calc/1.1/Mon Mar  4 03:50:20 2002//
+/ldap_create_existing_security/1.2/Wed Jun 11 02:16:21 2003//
+/ldap_declare_object_security/1.1/Wed Jun 11 02:13:57 2003//
+/ldap_define_datasource/1.2/Wed Jun 11 02:13:57 2003//
+/ldap_oi_manage_test/1.2/Wed Jun 11 02:13:57 2003//
+/ldap_spops_base_dn_multiple_ds/1.2/Wed Jun 11 02:13:57 2003//
+/ldap_spops_datasource_specify/1.2/Wed Jun 11 02:13:57 2003//
+D

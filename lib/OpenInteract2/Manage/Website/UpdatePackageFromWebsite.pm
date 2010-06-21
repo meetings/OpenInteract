@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::UpdatePackageFromWebsite;
 
-# $Id: UpdatePackageFromWebsite.pm,v 1.5 2005/03/18 04:09:50 lachoy Exp $
+# $Id: UpdatePackageFromWebsite.pm,v 1.6 2005/04/19 11:53:19 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -8,7 +8,7 @@ use File::Spec::Functions  qw( catfile );
 use OpenInteract2::Context qw( CTX );
 use OpenInteract2::Config::PackageChanges;
 
-$OpenInteract2::Manage::Website::UpdatePackageFromWebsite::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::UpdatePackageFromWebsite::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 my $ACTION = 'update development package';
 
@@ -56,7 +56,7 @@ sub validate_param {
             return "Must be a valid directory";
         }
         my $changelog = catfile( $param_value, 'Changes' );
-        my $package_conf = catfile( $param_value, 'package.conf' );
+        my $package_conf = catfile( $param_value, 'package.ini' );
         unless ( -f $changelog && -f $package_conf ) {
             return "Does not appear to be a valid package directory";
         }

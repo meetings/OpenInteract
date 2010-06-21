@@ -148,6 +148,7 @@ lib/OpenInteract2/Manual/Changes.pod
 lib/OpenInteract2/Manual/Conversion.pod
 lib/OpenInteract2/Manual/DataImport.pod
 lib/OpenInteract2/Manual/Datasource.pod
+lib/OpenInteract2/Manual/FAQ.pod
 lib/OpenInteract2/Manual/Intro.pod
 lib/OpenInteract2/Manual/I18N.pod
 lib/OpenInteract2/Manual/LDAP.pod

@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Package::CreatePackageFromTable;
 
-# $Id: CreatePackageFromTable.pm,v 1.2 2005/02/18 03:28:08 lachoy Exp $
+# $Id: CreatePackageFromTable.pm,v 1.3 2005/10/22 21:56:03 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Manage::Package::CreatePackageFromTable::VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::CreatePackageFromTable::VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -129,8 +129,11 @@ sub run_task {
 
 
     my $package_name = $self->param( 'package' )->[0];
+    my $invocation = $self->invocation;
+    $invocation =~ s/(password=?)\S+/password=XXX/;
     my $package = OpenInteract2::Package->create_skeleton({
         name       => $package_name,
+        invocation => $invocation,
         brick_name => 'package_from_table',
         brick_vars => {
             key_field    => $key_field,
@@ -172,7 +175,7 @@ sub _get_key_field {
                  "the keys [", join( ', ', @keys ), "].";
     }
     unless ( $keys[0] ) {
-        oi_error "Sorry, no primary key seems to be available table '$table'";
+        oi_error "Sorry, no primary key seems to be available in table '$table'";
     }
     return $keys[0];
 }

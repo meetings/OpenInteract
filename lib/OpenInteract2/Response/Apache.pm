@@ -1,6 +1,6 @@
 package OpenInteract2::Response::Apache;
 
-# $Id: Apache.pm,v 1.21 2005/03/17 14:58:04 sjn Exp $
+# $Id: Apache.pm,v 1.23 2006/02/01 20:18:34 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -11,7 +11,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::Apache::VERSION  = sprintf("%d.%02d", q$Revision: 1.21 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Apache::VERSION  = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -29,7 +29,7 @@ sub send {
     my ( $self ) = @_;
     $log ||= get_logger( LOG_RESPONSE );
 
-    $log->is_info && $log->info( "Sending Apache response" );
+    $log->is_info && $log->info( "Sending Apache 1.x response..." );
 
     my $apache = $self->apache;
 
@@ -67,7 +67,8 @@ sub send {
     }
     else {
         $self->_send_header;
-        $apache->print( $self->content );
+        my $content = $self->content;
+        $apache->print( ( ref $content ) ? ${ $content } : $content );
     }
 }
 
@@ -94,8 +95,6 @@ sub _send_header {
 sub redirect {
     my ( $self, $url ) = @_;
     $log ||= get_logger( LOG_RESPONSE );
-
-    $self->save_session;
 
     $url ||= $self->return_url;
     $log->is_info &&

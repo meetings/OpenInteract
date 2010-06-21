@@ -1,6 +1,6 @@
 package OpenInteract2::ActionResolver;
 
-# $Id: ActionResolver.pm,v 1.3 2005/03/02 15:30:38 lachoy Exp $
+# $Id: ActionResolver.pm,v 1.4 2005/07/04 03:09:10 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory );
@@ -12,7 +12,7 @@ use OpenInteract2::Util;
 
 my ( $log );
 
-$OpenInteract2::ActionResolver::VERSION  = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ActionResolver::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 sub resolver_sort {
     return $a->get_order <=> $b->get_order;
@@ -189,6 +189,11 @@ So to do the above you'd create:
          $request->find_languages( $lang, $request->language );
      }
  }
+
+B<assign_additional_params_from_url( $request, @params )>
+
+Just assigns the values in C<@params> to C<$request> using its
+C<param_url_additional()> method.
 
 =head1 SEE ALSO
 

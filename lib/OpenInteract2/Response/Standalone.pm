@@ -1,6 +1,6 @@
 package OpenInteract2::Response::Standalone;
 
-# $Id: Standalone.pm,v 1.15 2005/03/17 14:58:05 sjn Exp $
+# $Id: Standalone.pm,v 1.16 2006/02/01 20:18:34 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -12,7 +12,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::Standalone::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::Standalone::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -90,12 +90,14 @@ sub generate_cgi_header_fields {
 
 sub redirect {
     my ( $self, $url ) = @_;
-    $self->save_session;
-    my @header = ();
-    push @header, "Status: 302 Moved";
-    push @header, "Location: $url";
-    push @header, $self->_generate_cookie_lines;
-    $self->out( join( "\r\n", @header ), "\r\n\r\n" );
+    $log ||= get_logger( LOG_RESPONSE );
+
+    $url ||= $self->return_url;
+    $log->is_info &&
+        $log->info( "Assigning redirect status and redirect ",
+                    "'Location' header to '$url'" );
+    $self->status( RC_FOUND );
+    $self->header( Location => $url );
 }
 
 

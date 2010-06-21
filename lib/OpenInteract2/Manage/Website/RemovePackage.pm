@@ -1,12 +1,12 @@
 package OpenInteract2::Manage::Website::RemovePackage;
 
-# $Id: RemovePackage.pm,v 1.7 2005/03/17 14:58:04 sjn Exp $
+# $Id: RemovePackage.pm,v 1.8 2005/03/24 05:31:01 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use OpenInteract2::Context qw( CTX );
 
-$OpenInteract2::Manage::Website::RemovePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::RemovePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'remove_package'
@@ -21,7 +21,19 @@ sub get_parameters {
     return {
         website_dir => $self->_get_website_dir_param,
         package     => $self->_get_package_param,
+        full_remove => {
+            description =>
+                'Flag to indicate whether we should also remove package files',
+            is_required => 'no',
+            do_validate => 'no',
+            is_boolean  => 'yes',
+        },
     };
+}
+
+sub setup_task {
+    my ( $self ) = @_;
+    $self->_setup_context({ skip => 'read packages' });
 }
 
 sub run_task {
@@ -33,7 +45,10 @@ sub run_task {
     foreach my $name ( @package_names ) {
         next unless ( $name );
         my $package = $repository->fetch_package( $name );
-        eval { $repository->remove_package( $package ) };
+        eval {
+            $repository->remove_package( $package );
+            $package->remove_files( $self->param( 'website_dir' ) );
+        };
         my $action = "remove package $name";
         if ( $@ ) {
             $self->_fail( $action, "Error: $@" );

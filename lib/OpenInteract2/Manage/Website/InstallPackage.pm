@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::InstallPackage;
 
-# $Id: InstallPackage.pm,v 1.20 2005/03/17 14:58:04 sjn Exp $
+# $Id: InstallPackage.pm,v 1.23 2005/03/25 14:50:25 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -9,7 +9,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Repository;
 
-$OpenInteract2::Manage::Website::Install::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Install::VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -33,7 +33,19 @@ sub get_parameters {
         },
         package_class => {
             description =>
-                'Package distribution application class that can perform installation',
+                'OpenInteract2::App:: class that can perform installation',
+            is_required => 'no',
+            do_validate => 'yes',
+        },
+        brick_class => {
+            description =>
+                'OpenInteract2::Brick:: class that contains package as zip file',
+            is_required => 'no',
+            do_validate => 'yes',
+        },
+        brick_name => {
+            description =>
+                'Name of OpenInteract2::Brick:: implementation that contains package as zip file',
             is_required => 'no',
             do_validate => 'yes',
         },
@@ -44,13 +56,38 @@ sub validate_param {
     my ( $self, $name, $value ) = @_;
     if ( $name eq 'package_class' ) {
         my $pkg_file = $self->param( 'package_file' );
-        unless ( $value or $pkg_file ) {
-            return "Either 'package_class' or 'package_file' must be defined.";
+        my $brick_class = $self->param( 'brick_class' );
+        my $brick_name  = $self->param( 'brick_name' );
+        unless ( $value or $pkg_file or $brick_class or $brick_name ) {
+            return "One of  'package_class', 'package_file', " .
+                   "'brick_class', or 'brick_name' must be defined.";
         }
         return;
     }
     elsif ( $name eq 'package_file' ) {
         return unless ( $value );
+    }
+    elsif ( $name eq 'brick_class' ) {
+        return unless ( $value );
+        eval "require $value";
+        if ( $@ ) {
+            return "Failed to require '$value': $@";
+        }
+        my $brick_name = $value->get_name();
+        unless ( $brick_name ) {
+            return "Class '$value' is valid but did not return a " .
+                   "name with 'get_name()'";
+        }
+        $self->param( brick_name => $brick_name );
+        return;
+    }
+    elsif ( $name eq 'brick_name' ) {
+        return unless ( $value );
+        my $brick = eval { OpenInteract2::Brick->new( $value ) };
+        if ( $@ or ! $brick ) {
+            my $error = $@ || 'no brick found';
+            return "Brick '$name' error: $error";
+        }
     }
     return $self->SUPER::validate_param( $name, $value );
 }
@@ -70,6 +107,9 @@ sub run_task {
     }
     elsif ( my $app_class = $self->param( 'package_class' ) ) {
         $self->_install_app( $app_class, \%status );
+    }
+    elsif ( my $brick_name = $self->param( 'brick_name' ) ) {
+        $self->_install_brick( $brick_name, \%status );
     }
     $self->_add_status( \%status );
 }
@@ -169,11 +209,29 @@ sub _install_app {
     $status->{version} = $version;
     $status->{message} = sprintf(
         'Installed package %s-%s to website %s',
-        $name, $version, $self->param( 'website_dir' )
+         $name, $version, $self->param( 'website_dir' )
     );
 
     $self->notify_observers(
         progress => "Finished with installation of $name-$version" );
+}
+
+sub _install_brick {
+    my ( $self, $brick_name, $status ) = @_;
+    my $brick = OpenInteract2::Brick->new( $brick_name );
+    my @resources = $brick->list_resources;
+    if ( scalar @resources > 1 ) {
+        $status->{is_ok} = 'no';
+        $status->{message} =
+            "Brick class " . ref( $brick ) . " should only have one " .
+            "resource -- the Base64 version of the zip file.";
+        return;
+    }
+    my $pkg_info = $brick->load_resource( $resources[0] );
+    my $pkg_file = OpenInteract2::Util->decode_base64_and_store(
+        \$pkg_info->{content}
+    );
+    $self->_install_file( $pkg_file, $status );
 }
 
 sub _check_package_exists {

@@ -1,11 +1,11 @@
 # -*-perl-*-
 
-# $Id: manage_list_packages.t,v 1.15 2005/03/04 03:46:21 lachoy Exp $
+# $Id: manage_list_packages.t,v 1.16 2005/09/21 12:33:54 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 21;
+use Test::More  tests => 22;
 
 require_ok( 'OpenInteract2::Manage' );
 
@@ -22,7 +22,7 @@ is( ref $task, 'OpenInteract2::Manage::Website::ListPackages',
 
 my @status = eval { $task->execute };
 ok( ! $@, 'Task executed ok' ) || diag "Error: $@";
-is( scalar @status, 16,
+is( scalar @status, get_num_packages(),
     'Correct number of packages listed' );
 
 my $count = 0;

@@ -1,6 +1,6 @@
 package OpenInteract2::Error;
 
-# $Id: Error.pm,v 1.1 2005/02/25 00:07:19 lachoy Exp $
+# $Id: Error.pm,v 1.2 2005/03/24 05:11:22 lachoy Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use Template;
 
-$OpenInteract2::Error::VERSION  = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Error::VERSION  = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 my $DATE_PATTERN = '%Y-%m-%d %H:%M:%S %3N';
 my ( $PARSER );
@@ -21,6 +21,9 @@ my %FIELDS = map { $_ => 1 } qw(
     host user_id username session browser referer url
 );
 __PACKAGE__->mk_accessors( keys %FIELDS );
+
+my $TEMPLATE       = Template->new();
+my $ERROR_TEMPLATE = _error_template();
 
 sub new {
     my ( $class, %params ) = @_;
@@ -82,19 +85,19 @@ sub save {
     unless ( $file ) {
         oi_error "Parameter 'file' must be defined to store an error.";
     }
-    if ( -f $file ) {
-        oi_error "Cannot overwrite existing file '$file' with error contents";
-    }
     eval {
         mkpath( dirname( $file ) )
     };
     if ( $@ ) {
         oi_error "Cannot create directories for '$file': $@";
     }
-    my $error_template = $self->_error_template();
-    my $template = Template->new();
-    $template->process( \$error_template, { e => $self }, $file )
-        || oi_error "Cannot process error template to '$file': ", $template->error();
+
+    # if the file already exists, find another... (race condition)
+    while ( -f $file ) {
+        $file =~ s/(\d\d\d)\.txt$/sprintf( '%003d', $1 + 1 ) . '.txt'/e;
+    }
+    $TEMPLATE->process( \$ERROR_TEMPLATE, { e => $self }, $file )
+        || oi_error "Cannot process error template to '$file': ", $TEMPLATE->error();
     $self->file_storage( $file );
     return $file;
 }

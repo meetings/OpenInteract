@@ -1,6 +1,6 @@
 package OpenInteract2::Request;
 
-# $Id: Request.pm,v 1.54 2005/03/17 14:57:58 sjn Exp $
+# $Id: Request.pm,v 1.59 2006/08/18 00:25:27 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::ParamContainer Class::Factory Class::Accessor::Fast );
@@ -15,7 +15,7 @@ use OpenInteract2::I18N;
 use OpenInteract2::SessionManager;
 use OpenInteract2::URL;
 
-$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.54 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::VERSION = sprintf("%d.%02d", q$Revision: 1.59 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -23,9 +23,9 @@ my ( $log );
 # ACCESSORS
 
 my %FIELDS = map { $_ => 1 } qw(
-    now server_name remote_host
-    user_agent referer cookie_header language_header
-    url_absolute url_relative url_initial
+    now server_name server_port remote_host
+    user_agent referer cookie_header language_header post_body
+    url_absolute url_relative url_initial forwarded_for
     session auth_user auth_group auth_is_admin auth_is_logged_in
 );
 __PACKAGE__->mk_accessors( keys %FIELDS );
@@ -382,25 +382,24 @@ sub assign_languages {
         push @lang, ref( $session_lang ) eq 'ARRAY'
                          ? @{ $session_lang } : $session_lang;
     }
-    elsif ( my @param_lang = $self->param( $lang_config->{choice_param_name} ) ) {
+
+    if ( my @param_lang = $self->param( $lang_config->{choice_param_name} ) ) {
         $log->is_debug &&
             $log->debug( "Added language from request parameter ",
                          "'$lang_config->{choice_param_name}'" );
-        push @lang, @param_lang;
+        unshift @lang, @param_lang;
     }
-    else {
-        $log->is_debug &&
-            $log->debug( "Added default language: $lang_config->{default_language}" );
-        push @lang, $lang_config->{default_language};
-    }
-
 
     if ( my @browser_lang = $self->_find_browser_languages ) {
         $log->is_debug &&
             $log->debug( "Added language to head from browser: ",
                          join( ', ', @browser_lang ) );
-        unshift @lang, @browser_lang;
+        push @lang, @browser_lang;
     }
+
+    $log->is_debug &&
+        $log->debug( "Added default language: $lang_config->{default_language}" );
+    push @lang, $lang_config->{default_language};
 
     $self->{_user_language} = \@lang;
     $log->is_debug &&
@@ -471,6 +470,8 @@ sub factory_error {
 # Initialize new object
 sub init { oi_error 'Subclass must implement init()' }
 
+sub post_body { oi_error 'Subclass must implement post_body()' }
+
 1;
 
 __END__
@@ -499,15 +500,10 @@ L<Apache::Request|Apache::Request>, so there are a couple of items
 that are slightly inconsistent with the rest of OpenInteract.
 
 When you create a new request object you need to specify what type of
-request it is. (Your OpenInteract server configuration should have
-this specified in the 'context_info' section.) The process of
-initializing the object during the C<new()> call fills the Request
-object with any parameters, uploaded files and important headers from
-the client.
-
-The L<OpenInteract2::Context|OpenInteract2::Context> object is
-responsible for associating cookies and the session with this request
-object.
+request it is -- this is done in your adapter (CGI script, Apache
+handler, etc.) The process of initializing the object during the
+C<new()> call fills the Request object with any parameters, uploaded
+files and important headers from the client.
 
 =head1 METHODS
 
@@ -642,9 +638,7 @@ B<assign_request_url( $full_url_path )>
 This method is normally only called by the implementing subclass. The
 subclass should pass the full, absolute URL path -- no protocol, host
 or port, but query arguments should be included. With this the
-C<url_absolute> and C<url_relative> properties are properly set. The
-method also sets the action name and task for use by the controller,
-delegating the actual work to L<OpenInteract2::URL>.
+C<url_absolute> and C<url_relative> properties are properly set.
 
 If you want to do any behind-the-scenes redirection before the
 L<OpenInteract2::Controller|OpenInteract2::Controller> is
@@ -777,16 +771,6 @@ B<session>
 
 The stateful session for the current user.
 
-B<action_name>
-
-Name of the action as gleaned from the URL. (May be empty, may change
-as a result of lookups.)
-
-B<task_name>
-
-Task of the action as gleaned from the URL. (May be empty, may change
-as a result of lookups.)
-
 B<auth_user>
 
 User logged in (or not) for this request. This should B<always> be
@@ -821,9 +805,20 @@ B<server_name>
 
 Hostname of our server.
 
+B<server_port>
+
+Port of our server.
+
 B<remote_host>
 
 Client IP address or hostname connecting to us.
+
+B<forwarded_for>
+
+Comma separated list of IP addresses some proxies inbetween might
+have forwarded the request for. If OpenInteract2 is behind truested proxies,
+this is a good place to look for the real IP address instead of
+the I<remote_host()> which includes the IP address of your proxy.
 
 B<user_agent>
 
@@ -832,6 +827,11 @@ The browser identification string. (May be empty, forged, etc.)
 B<referer>
 
 URL (string) where the user came from. (May be empty, forged, etc.)
+
+B<post_body>
+
+POST body content in the request. This can be used to retrieve for example
+SOAP or XML-RPC requests.
 
 =head2 Action Messages
 
@@ -875,16 +875,15 @@ documentation...) That said, here are a few tips:
 
 If your architecture is deployed under a particular URL you should set
 this as soon as possible. Do so using the C<assign_deploy_url()>
-method of the context. See
-L<OpenInteract2::Request::CGI|OpenInteract2::Request::CGI> for an
+method of the context. See L<OpenInteract2::Request::CGI> for an
 example.
 
 =back
 
 Other than that take a look at
-L<OpenInteract::Request::Standalone|OpenInteract::Request::Standalone>. It
-forces you to deal with parameters and file uploads yourself, but it
-may be the path of least resistance.
+L<OpenInteract::Request::Standalone>. It forces you to deal with
+parameters and file uploads yourself, but it may be the path of least
+resistance.
 
 =head2 Methods
 

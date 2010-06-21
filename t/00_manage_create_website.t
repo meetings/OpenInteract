@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: 00_manage_create_website.t,v 1.5 2005/02/28 01:03:59 lachoy Exp $
+# $Id: 00_manage_create_website.t,v 1.6 2005/09/21 12:33:54 lachoy Exp $
 
 # Odd name rationale: we try to run this test first to get the test
 # site created and available for other tests that need it.
@@ -40,7 +40,7 @@ warn "\nCreating website... this may take a while\n";
 
 my @status = eval { $task->execute };
 ok( ! $@, 'Task executed' ) || diag "Execution error: $@";
-is( scalar @status, 110,
+is( scalar @status, 111,
     'Number of status messages' );
 
 # Look at the directories we should have created and see they're there
@@ -101,7 +101,7 @@ is( count_files( $site_msg_dir ), 1,
     'Number of files in msg/' );
 
 my $site_pkg_dir = catdir( $website_dir, 'pkg' );
-is( count_dirs( $site_pkg_dir ), 16,
+is( count_dirs( $site_pkg_dir ), get_num_packages(),
     'Number of directories in pkg/' );
 
 my $site_template_dir = catdir( $website_dir, 'template' );
@@ -122,7 +122,7 @@ is( $repository->full_config_dir, $site_conf_dir,
 is( $repository->full_package_dir, $site_pkg_dir,
     'Repository reports proper config dir' );
 my $packages = $repository->fetch_all_packages;
-is( scalar @{ $packages }, 16,
+is( scalar @{ $packages }, get_num_packages(),
     'Repository contains correct number of packages' );
 
 

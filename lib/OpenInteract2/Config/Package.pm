@@ -1,6 +1,6 @@
 package OpenInteract2::Config::Package;
 
-# $Id: Package.pm,v 1.24 2005/03/17 14:58:00 sjn Exp $
+# $Id: Package.pm,v 1.25 2006/01/17 22:57:32 infe Exp $
 
 use strict;
 use base qw( Class::Accessor::Fast );
@@ -11,7 +11,7 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Config::Package::VERSION = sprintf("%d.%02d", q$Revision: 1.25 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -26,7 +26,7 @@ sub get_required_fields { return [ @REQUIRED_FIELDS ] }
 my @SERIAL_FIELDS = qw( name version author url
                         spops_file action_file message_file module
                         sql_installer template_plugin
-                        observer config_watcher description );
+                        observer observer_map config_watcher description );
 my @OBJECT_FIELDS = qw( filename package_dir );
 
 # Define the keys in 'package.ini' that can be a list, meaning you
@@ -534,12 +534,17 @@ Template Toolkit plugins defined by this package. Each plugin is
 defined by a space-separated key/value pair. The template users access
 the plugin by the key, the value is used to instantiate the plugin.
 
-B<observers> (\%)
+B<observer> (\%)
 
 Observers (commonly in the guise of filters) defined by this
 package. It should be in a space-separated key/value pair simiilar to
 C<template_plugin>, where the key defines the observer name and the
 value defines the observer class.
+
+B<observer_map> (\%)
+
+Key/value pairs defining observer's name as the key and observed
+action's name as the value.
 
 B<config_watcher> (\@)
 

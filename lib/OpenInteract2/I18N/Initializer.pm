@@ -1,6 +1,6 @@
 package OpenInteract2::I18N::Initializer;
 
-# $Id: Initializer.pm,v 1.14 2005/03/18 04:09:50 lachoy Exp $
+# $Id: Initializer.pm,v 1.18 2005/03/30 00:13:51 infe Exp $
 
 use strict;
 use File::Spec::Functions;
@@ -12,7 +12,7 @@ use Template;
 
 my ( $TEMPLATE, $BASE_CLASS );
 
-$OpenInteract2::I18N::Initializer::VERSION   = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::I18N::Initializer::VERSION   = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -145,11 +145,12 @@ sub _assign_file_messages {
     while ( my ( $key, $value ) = each %{ $file_messages } ) {
         if ( $all_messages->{ $lang }{ $key } ) {
             my $source = $all_messages->{ $lang }{SOURCE}{ $key };
-            $log->warn(
-                "DUPLICATE MESSAGE KEY FOUND. Key '$key' from ",
-                "'$file' was already found in message file ",
-                "'$source' read in earlier. Existing key WILL NOT BE ",
-                "OVERWRITTEN, which may cause odd application behavior." );
+            $log->is_debug &&
+                $log->debug(
+                    "DUPLICATE MESSAGE KEY FOUND. Key '$key' from ",
+                    "'$file' was already found in message file ",
+                    "'$source' read in earlier. Existing key WILL NOT BE ",
+                    "OVERWRITTEN, which may cause odd behavior." );
         }
         else {
             $all_messages->{ $lang }{ $key }         = $value;
@@ -181,7 +182,8 @@ sub _read_msg_file {
             $current_msg .= $line;
         }
         else {
-            my ( $key, $msg ) = $line =~ /^\s*([\w\.]+)\s*=\s*(.*)$/;
+            # since we split on a '=' the key can have any character EXCEPT a '='
+            my ( $key, $msg ) = split( /\s*=\s*/, $line, 2 );
             if ( $key ) {
                 if ( $current_key ) {
                     $messages{ $current_key } = $current_msg;
@@ -208,6 +210,12 @@ sub _read_gettext_file {
         || oi_error "Failed to open gettext file: $!";
     my $msg = Locale::Maketext::Lexicon::Gettext->parse( <GETTEXT> );
     close( GETTEXT );
+    
+    # The PO header metadata is parsed and added with __ prefixes to
+    # message hash. The complete header is stored with key ''
+    # which we remove as unnecessary.
+    delete $msg->{ '' } if exists $msg->{ '' };
+
     if ( $log->is_debug ) {
         $log->debug( "Read following messages from '$gettext_file': " );
         while ( my ( $key, $value ) = each %{ $msg } ) {
@@ -250,7 +258,6 @@ sub _generate_language_class {
         lang       => $lang,
         lang_class => $lang_class,
         base_class => $base_class,
-        messages   => $messages,
     );
 
     $log->is_debug &&
@@ -274,6 +281,11 @@ sub _generate_language_class {
     }
     $log->is_debug &&
         $log->debug( "Evaluated class $lang_class ok" );
+
+    $lang_class->_assign_messages( $messages );
+    $log->is_debug &&
+        $log->debug( "Assigned mesages to $lang_class ok" );
+
     return $lang_class;
 }
 
@@ -287,13 +299,16 @@ use vars qw( %Lexicon );
 
 @[% lang_class %]::ISA = qw( [% base_class %] );
 
+%Lexicon = ();
+
 sub get_oi2_lang { return '[% lang %]' }
 
-%Lexicon = (
-[% FOREACH msg_key = messages.keys -%]
-  '[% msg_key %]' => q{[% messages.$msg_key %]},
-[% END -%]
-);
+sub _assign_messages {
+    my ( $class, $messages ) = @_;
+    while ( my ( $key, $value ) = each %{ $messages } ) {
+        $Lexicon{ $key } = $value;
+    }
+}
 
 1;
 

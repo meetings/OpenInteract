@@ -1,6 +1,6 @@
 package OpenInteract2::Brick;
 
-# $Id: Brick.pm,v 1.4 2005/02/17 04:59:43 lachoy Exp $
+# $Id: Brick.pm,v 1.7 2005/10/22 22:11:14 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory );
@@ -14,258 +14,12 @@ use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Util;
 use Template;
 
-$OpenInteract2::Brick::VERSION  = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Brick::VERSION  = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
-my $TEMPLATE = Template->new();
-
-my ( $log );
-
-sub list_bricks {
-    my ( $class ) = @_;
-    return $class->get_registered_types;
-}
-
-sub list_resources {
-    my ( $self ) = @_;
-    my %all_resources = $self->get_resources;
-    return sort keys %all_resources;
-}
-
-sub load_resource {
-    my ( $self, $name ) = @_;
-    unless ( $name ) {
-        oi_error "You must specify a resource name to load.";
-    }
-    my %all_resources = $self->get_resources;
-    my $info = $all_resources{ $name };
-    unless ( $info ) {
-        oi_error "Resource '$name' is invalid. Valid resources are: ",
-                 join( ', ', sort keys %all_resources );
-    }
-    $info->[1] ||= 'yes';
-    return {
-        content     => $self->load( $name ),
-        destination => $info->[0],
-        evaluate    => $info->[1],
-    };
-}
-
-sub copy_all_resources_to {
-    my ( $self, $dest_dir, $template_vars ) = @_;
-    return $self->copy_resources_to(
-        $dest_dir, $template_vars, $self->list_resources
-    );
-}
-
-sub copy_resources_to {
-    my ( $self, $dest_dir, $template_vars, @resource_names ) = @_;
-    $log ||= get_logger( LOG_INIT );
-
-    $template_vars ||= {};
-
-    my @copied  = ();
-    my @skipped = ();
-    my @same    = ();
-
-NAME:
-    foreach my $name ( @resource_names ) {
-        my $info = $self->load_resource( $name );
-
-        # First process any template keys in the destination...
-        my ( $final_dest_spec );
-        $TEMPLATE->process( \$info->{destination}, $template_vars, \$final_dest_spec )
-            || oi_error "Cannot process destination '$info->{destination}': ",
-                        $TEMPLATE->error();
-        $log->is_info && $log->info( "Translated '$info->{destination}' ",
-                                     "-> $final_dest_spec" );
-        my @dest_spec      = split( /\s+/, $final_dest_spec );
-        my $relative_dest  = join( '/', @dest_spec );
-        my $full_dest_file = catfile( $dest_dir, @dest_spec );
-
-        if ( $self->_is_readonly( $full_dest_file ) ) {
-            $log->is_info &&
-                $log->info( "Skipping '$full_dest_file', marked ",
-                            "as readonly in the destination directory" );
-            push @skipped, $full_dest_file;
-            next NAME;
-        }
-
-        # ...next, evaluate the content if we're supposed to
-        my $content = $info->{content};
-        unless ( 'no' eq lc $info->{evaluate} ) {
-            my ( $new_content );
-            $TEMPLATE->process( \$content, $template_vars, \$new_content )
-                || oi_error "Cannot copy and replace tokens from resource '$name': ",
-                            $TEMPLATE->error();
-            $log->is_info && $log->info( "Processed template ok" );
-            $content = $new_content;
-        }
-
-        if ( $self->_is_same( $full_dest_file, $content ) ) {
-            $log->is_info &&
-                $log->info( "Skipping '$full_dest_file', content and ",
-                            "destination file are the same" );
-            push @same, $full_dest_file;
-            next NAME;
-        }
-
-        my $dest_dir = dirname( $full_dest_file );
-        unless ( -d $dest_dir ) {
-            mkpath( $dest_dir );
-        }
-        open( OUT, '>', $full_dest_file )
-            || oi_error "Cannot write resource '$name' to '$full_dest_file': $!";
-        print OUT $content;
-        close( OUT );
-        $log->is_info &&
-            $log->info( "Copied resource '$name' to '$full_dest_file' ok" );
-        push @copied, $full_dest_file;
-    }
-    return {
-        copied  => \@copied,
-        skipped => \@skipped,
-        same    => \@same,
-    };
-}
-
-sub _is_readonly {
-    my ( $self, $dest_file ) = @_;
-    return 0 unless ( -f $dest_file );
-    my $base_dest_file = basename( $dest_file );
-    my $full_dest_dir  = dirname( $dest_file );
-    my $ro_check = OpenInteract2::Config::Readonly->new( $full_dest_dir );
-    return ( ! $ro_check->is_writeable( $base_dest_file ) );
-}
-
-sub _is_same {
-    my ( $self, $dest_file, $content ) = @_;
-    return 0 unless ( -f $dest_file );
-    my $source_size = length $content;
-    my $dest_file_size   = (stat $dest_file)[7];
-    return 0 unless ( $source_size == $dest_file_size );
-    my $source_digest =
-        OpenInteract2::Util->digest_content( $content );
-    my $dest_digest   =
-        OpenInteract2::Util->digest_file( $dest_file );
-    return ( $source_digest eq $dest_digest );
-}
-
-########################################
-# SUBCLASSES
-
-sub get_name      { _must_implement( 'get_name', @_ ) }
-sub get_resources { _must_implement( 'get_resources', @_ ) }
-sub load          { _must_implement( 'load', @_ ) }
-
-sub _must_implement {
-    my ( $method, $item ) = @_;
-    my $class = ref( $item ) || $item;
-    oi_error "Class '$class' must implement method '$method'";
-}
-
-OpenInteract2::Util->find_factory_subclasses(
-    'OpenInteract2::Brick', @INC
-);
-
-########################################
-# GENERATING NEW BRICKS
-
-sub get_brick_class_template {
-    return <<'TEMPLATE';
-package OpenInteract2::Brick::[% brick_name %];
-
-use strict;
-use base qw( OpenInteract2::Brick );
-use OpenInteract2::Exception;
-
-my %INLINED_SUBS = (
-[% FOREACH file_info = all_files -%]
-    '[% file_info.name %]' => '[% file_info.inline_name %]',
-[% END -%]
-);
-
-sub get_name {
-    return '[% lc_brick_name %]';
-}
-
-sub get_resources {
-    return (
-[% FOREACH file_info = all_files -%]
-        '[% file_info.name %]' => [ '[% file_info.destination %]', '[% file_info.evaluate %]' ],
-[% END -%]
-    );
-}
-
-sub load {
-    my ( $self, $resource_name ) = @_;
-    my $inline_sub_name = $INLINED_SUBS{ $resource_name };
-    unless ( $inline_sub_name ) {
-        OpenInteract2::Exception->throw(
-            "Resource name '$resource_name' not found ",
-            "in ", ref( $self ), "; cannot load content." );
-    }
-    return $self->$inline_sub_name();
-}
-
-OpenInteract2::Brick->register_factory_type( get_name() => __PACKAGE__ );
+# Docs are up here because parsers get confused by the included class
+# below...
 
 =pod
-
-=head1 NAME
-
-OpenInteract2::Brick::[% brick_name %] - [% brick_summary %]
-
-=head1 SYNOPSIS
-
-[% brick_example | indent(2) %]
-
-=head1 DESCRIPTION
-
-[% brick_description %]
-
-=head2 Resources
-
-You can grab resources individually using the names below and
-C<load_resource()> and C<copy_resources_to()>, or you can copy all the
-resources at once using C<copy_all_resources_to()> -- see
-L<OpenInteract2::Brick> for details.
-
-=over 4
-
-[% FOREACH file_info = all_files %]
-=item B<[% file_info.name %]>
-[% END %]
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright (c) 2005 [% author_names.join( ', ' ) %]. All rights reserved.
-
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
-
-=head1 AUTHORS
-
-[% FOREACH author_info = authors %]
-[% author_info.name %] E<lt>[% author_info.email %]E<gt>
-[% END %]
-
-=cut
-
-[% FOREACH file_info = all_files %]
-sub [% file_info.inline_name %] {
-    return <<'SOMELONGSTRING';
-[% file_info.contents %]
-SOMELONGSTRING
-}
-[% END %]
-TEMPLATE
-}
-
-1;
-
-__END__
 
 =head1 NAME
 
@@ -459,3 +213,261 @@ it under the same terms as Perl itself.
 =head1 AUTHORS
 
 Chris Winters E<lt>chris@cwinters.comE<gt>
+
+=cut
+
+
+my $TEMPLATE = Template->new();
+
+my ( $log );
+
+sub list_bricks {
+    my ( $class ) = @_;
+    return $class->get_registered_types;
+}
+
+sub list_resources {
+    my ( $self ) = @_;
+    my %all_resources = $self->get_resources;
+    return sort keys %all_resources;
+}
+
+sub load_resource {
+    my ( $self, $name ) = @_;
+    unless ( $name ) {
+        oi_error "You must specify a resource name to load.";
+    }
+    my %all_resources = $self->get_resources;
+    my $info = $all_resources{ $name };
+    unless ( $info ) {
+        oi_error "Resource '$name' is invalid. Valid resources are: ",
+                 join( ', ', sort keys %all_resources );
+    }
+    $info->[1] ||= 'yes';
+    return {
+        content     => $self->load( $name ),
+        destination => $info->[0],
+        evaluate    => $info->[1],
+    };
+}
+
+sub copy_all_resources_to {
+    my ( $self, $dest_dir, $template_vars ) = @_;
+    return $self->copy_resources_to(
+        $dest_dir, $template_vars, $self->list_resources
+    );
+}
+
+sub copy_resources_to {
+    my ( $self, $dest_dir, $template_vars, @resource_names ) = @_;
+    $log ||= get_logger( LOG_INIT );
+
+    $template_vars ||= {};
+
+    my @copied  = ();
+    my @skipped = ();
+    my @same    = ();
+
+NAME:
+    foreach my $name ( @resource_names ) {
+        my $info = $self->load_resource( $name );
+        # First process any template keys in the destination...
+        my ( $final_dest_spec );
+        $TEMPLATE->process( \$info->{destination}, $template_vars, \$final_dest_spec )
+            || oi_error "Cannot process destination '$info->{destination}': ",
+                        $TEMPLATE->error();
+        $log->is_info && $log->info( "Translated '$info->{destination}' ",
+                                     "-> $final_dest_spec" );
+        my @dest_spec      = split( /\s+/, $final_dest_spec );
+        my $relative_dest  = join( '/', @dest_spec );
+        my $full_dest_file = catfile( $dest_dir, @dest_spec );
+
+        if ( $self->_is_readonly( $full_dest_file ) ) {
+            $log->is_info &&
+                $log->info( "Skipping '$full_dest_file', marked ",
+                            "as readonly in the destination directory" );
+            push @skipped, $full_dest_file;
+            next NAME;
+        }
+
+        # ...next, evaluate the content if we're supposed to
+        my $content = $info->{content};
+        unless ( 'no' eq lc $info->{evaluate} ) {
+            my ( $new_content );
+            $template_vars->{source_template} = $name;
+            $TEMPLATE->process( \$content, $template_vars, \$new_content )
+                || oi_error "Cannot copy and replace tokens from resource '$name': ",
+                            $TEMPLATE->error();
+            $log->is_info && $log->info( "Processed template ok" );
+            $content = $new_content;
+        }
+
+        if ( $self->_is_same( $full_dest_file, $content ) ) {
+            $log->is_info &&
+                $log->info( "Skipping '$full_dest_file', content and ",
+                            "destination file are the same" );
+            push @same, $full_dest_file;
+            next NAME;
+        }
+
+        my $dest_dir = dirname( $full_dest_file );
+        unless ( -d $dest_dir ) {
+            mkpath( $dest_dir );
+        }
+        open( OUT, '>', $full_dest_file )
+            || oi_error "Cannot write resource '$name' to '$full_dest_file': $!";
+        print OUT $content;
+        close( OUT );
+        $log->is_info &&
+            $log->info( "Copied resource '$name' to '$full_dest_file' ok" );
+        push @copied, $full_dest_file;
+    }
+    return {
+        copied  => \@copied,
+        skipped => \@skipped,
+        same    => \@same,
+    };
+}
+
+sub _is_readonly {
+    my ( $self, $dest_file ) = @_;
+    return 0 unless ( -f $dest_file );
+    my $base_dest_file = basename( $dest_file );
+    my $full_dest_dir  = dirname( $dest_file );
+    my $ro_check = OpenInteract2::Config::Readonly->new( $full_dest_dir );
+    return ( ! $ro_check->is_writeable( $base_dest_file ) );
+}
+
+sub _is_same {
+    my ( $self, $dest_file, $content ) = @_;
+    return 0 unless ( -f $dest_file );
+    my $source_size = length $content;
+    my $dest_file_size   = (stat $dest_file)[7];
+    return 0 unless ( $source_size == $dest_file_size );
+    my $source_digest =
+        OpenInteract2::Util->digest_content( $content );
+    my $dest_digest   =
+        OpenInteract2::Util->digest_file( $dest_file );
+    return ( $source_digest eq $dest_digest );
+}
+
+########################################
+# SUBCLASSES
+
+sub get_name      { _must_implement( 'get_name', @_ ) }
+sub get_resources { _must_implement( 'get_resources', @_ ) }
+sub load          { _must_implement( 'load', @_ ) }
+
+sub _must_implement {
+    my ( $method, $item ) = @_;
+    my $class = ref( $item ) || $item;
+    oi_error "Class '$class' must implement method '$method'";
+}
+
+OpenInteract2::Util->find_factory_subclasses(
+    'OpenInteract2::Brick', @INC
+);
+
+########################################
+# GENERATING NEW BRICKS
+
+sub get_brick_class_template {
+    return <<'TEMPLATE';
+# This OpenInteract2 file was generated
+#   by:    [% invocation %]
+#   on:    [% date %]
+#   from:  OpenInteract2::Brick->get_brick_class_template()
+#   using: OpenInteract2 version [% oi2_version %]
+
+package OpenInteract2::Brick::[% brick_name %];
+
+use strict;
+use base qw( OpenInteract2::Brick );
+use OpenInteract2::Exception;
+
+my %INLINED_SUBS = (
+[% FOREACH file_info = all_files -%]
+    '[% file_info.name %]' => '[% file_info.inline_name %]',
+[% END -%]
+);
+
+sub get_name {
+    return '[% lc_brick_name %]';
+}
+
+sub get_resources {
+    return (
+[% FOREACH file_info = all_files -%]
+        '[% file_info.name %]' => [ '[% file_info.destination %]', '[% file_info.evaluate %]' ],
+[% END -%]
+    );
+}
+
+sub load {
+    my ( $self, $resource_name ) = @_;
+    my $inline_sub_name = $INLINED_SUBS{ $resource_name };
+    unless ( $inline_sub_name ) {
+        OpenInteract2::Exception->throw(
+            "Resource name '$resource_name' not found ",
+            "in ", ref( $self ), "; cannot load content." );
+    }
+    return $self->$inline_sub_name();
+}
+
+OpenInteract2::Brick->register_factory_type( get_name() => __PACKAGE__ );
+
+=pod
+
+=head1 NAME
+
+OpenInteract2::Brick::[% brick_name %] - [% brick_summary %]
+
+=head1 SYNOPSIS
+
+[% brick_example | indent(2) %]
+
+=head1 DESCRIPTION
+
+[% brick_description %]
+
+=head2 Resources
+
+You can grab resources individually using the names below and
+C<load_resource()> and C<copy_resources_to()>, or you can copy all the
+resources at once using C<copy_all_resources_to()> -- see
+L<OpenInteract2::Brick> for details.
+
+=over 4
+
+[% FOREACH file_info = all_files %]
+=item B<[% file_info.name %]>
+[% END %]
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright (c) 2005 [% author_names.join( ', ' ) %]. All rights reserved.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=head1 AUTHORS
+
+[% FOREACH author_info = authors %]
+[% author_info.name %] E<lt>[% author_info.email %]E<gt>
+[% END %]
+
+=cut
+
+[% FOREACH file_info = all_files %]
+sub [% file_info.inline_name %] {
+    return <<'SOMELONGSTRING';
+[% file_info.contents %]
+SOMELONGSTRING
+}
+[% END %]
+TEMPLATE
+}
+
+1;

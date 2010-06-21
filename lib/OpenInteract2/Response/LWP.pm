@@ -1,6 +1,6 @@
 package OpenInteract2::Response::LWP;
 
-# $Id: LWP.pm,v 1.22 2005/03/17 14:58:05 sjn Exp $
+# $Id: LWP.pm,v 1.23 2006/02/01 20:18:34 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Response );
@@ -12,7 +12,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::LWP::VERSION  = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -31,11 +31,7 @@ sub send {
     $log ||= get_logger( LOG_RESPONSE );
 
     $log->is_info && $log->info( "Sending LWP response" );
-    if ( $self->is_redirect ) {
-        $log->is_info
-            && $log->info( "Response is redirect, already sent" );
-        return;
-    }
+
     $self->content_type( 'text/html' ) unless ( $self->content_type );
     $self->status( RC_OK )             unless ( $self->status );
 
@@ -48,7 +44,19 @@ sub send {
     else {
         $self->lwp_response( HTTP::Response->new( $self->status ) );
     }
-    if ( my $filename = $self->send_file ) {
+
+    if ( $self->is_redirect ) {
+        $self->_set_lwp_headers;
+        if ( my $client = $self->client ) {
+            $client->send_response( $self->lwp_response );
+            $log->is_info && $log->info( "Sent redirect response" );
+        }
+        else {
+            $log->is_info &&
+                $log->info( "Set content/headers but did not send content" );
+        }
+    }
+    elsif ( my $filename = $self->send_file ) {
         $self->set_file_info;
         $self->_set_lwp_headers;
         my $fh = IO::File->new( "< $filename" )
@@ -78,30 +86,13 @@ sub redirect {
     my ( $self, $url ) = @_;
     $log ||= get_logger( LOG_RESPONSE );
 
-    $self->save_session;
-
     $url ||= $self->return_url;
     $log->is_info &&
-        $log->info( "Got request for redirect to '$url'" );
+        $log->info( "Assigning redirect status and redirect ",
+                    "'Location' header to '$url'" );
 
-    my $lwp_response = $self->lwp_response;
-    unless ( $lwp_response ) {
-        $self->lwp_response( HTTP::Response->new( RC_FOUND ) );
-        $lwp_response = $self->lwp_response;
-    }
-    else {
-        $lwp_response->code( RC_FOUND );
-    }
     $self->status( RC_FOUND );
-    $lwp_response->header( Location => $url );
-    $log->is_info &&
-        $log->info( "Set 'Location' header to ", $lwp_response->header( 'Location' ) );
-    $self->_set_lwp_cookies;
-    $log->debug( "Getting ready to send response: ", CTX->dump( $lwp_response ) );
-    if ( my $client = $self->client ) {
-        $client->send_response( $lwp_response );
-    }
-    $log->is_info && $log->info( "Sent redirect ok" );
+    $self->header( Location => $url );
 }
 
 sub _set_lwp_headers {

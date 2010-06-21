@@ -1,11 +1,11 @@
 package OpenInteract2::Manage::Package::CreatePackage;
 
-# $Id: CreatePackage.pm,v 1.15 2005/03/17 14:58:03 sjn Exp $
+# $Id: CreatePackage.pm,v 1.16 2005/10/22 21:56:03 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Package );
 
-$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Package::CreatePackage::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -52,7 +52,8 @@ sub run_task {
     }
     my $package_name = $self->param( 'package' )->[0];
     my $package = OpenInteract2::Package->create_skeleton({
-        name => $package_name,
+        name       => $package_name,
+        invocation => $self->invocation,
     });
     my $msg = sprintf( 'Package %s created ok in %s',
                        $package->name, $package->directory );

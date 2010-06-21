@@ -1,6 +1,6 @@
 package OpenInteract2::Setup;
 
-# $Id: Setup.pm,v 1.61 2005/03/18 04:09:48 lachoy Exp $
+# $Id: Setup.pm,v 1.62 2005/10/20 19:36:02 lachoy Exp $
 
 use strict;
 use base qw( Class::Factory OpenInteract2::ParamContainer );
@@ -14,7 +14,7 @@ use OpenInteract2::Setup::DependencySource;
 use OpenInteract2::URL; # don't get rid of this...
 use OpenInteract2::Util;
 
-$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.61 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Setup::VERSION = sprintf("%d.%02d", q$Revision: 1.62 $ =~ /(\d+)\.(\d+)/);
 
 my ( $DEP );                # Algorithm::Dependency object
 my ( $DEFAULT_DEPENDENCY ); # Name of server config dep, set after we find all actions
@@ -174,7 +174,7 @@ $DEFAULT_DEPENDENCY = OpenInteract2::Setup::ReadServerConfig->get_name;
 
 {
     require Algorithm::Dependency;
-    if ( Algorithm::Dependency->VERSION <= 1.110 ) {
+    unless ( Algorithm::Dependency->can( 'without' ) ) {
         eval <<'WITHOUT';
 
 sub Algorithm::Dependency::without {
@@ -199,6 +199,12 @@ ITEM:
     return \@good_items;
 }
 
+WITHOUT
+    }
+
+    unless ( Algorithm::Dependency->can( 'dependent_on' ) ) {
+        eval <<'DEPENDENTON';
+
 sub Algorithm::Dependency::dependent_on {
     my $self   = shift;
     my $parent = shift;
@@ -216,7 +222,7 @@ sub Algorithm::Dependency::dependent_on {
     return \@deps;
 }
 
-WITHOUT
+DEPENDENTON
 
     }
 }

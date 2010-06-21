@@ -1,6 +1,6 @@
 package OpenInteract2::Manage;
 
-# $Id: Manage.pm,v 1.49 2005/03/17 14:57:58 sjn Exp $
+# $Id: Manage.pm,v 1.52 2005/10/22 21:56:03 lachoy Exp $
 
 use strict;
 use base qw( Exporter OpenInteract2::ParamContainer Class::Factory Class::Observable );
@@ -12,14 +12,15 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error oi_param_error );
 use OpenInteract2::Setup;
 
-$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.49 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::VERSION = sprintf("%d.%02d", q$Revision: 1.52 $ =~ /(\d+)\.(\d+)/);
 
-my $SYSTEM_PACKAGES = [
-    qw/ base       base_box        base_error    base_group
+my $SYSTEM_PACKAGES = [ qw/
+        base       base_box        base_error    base_group
         base_page  base_security   base_template base_theme
-        base_user  comments        full_text     news
-        lookup     object_activity system_doc    whats_new /
-];
+        base_user  comments        full_text     lookup
+        news       object_activity object_tags   system_doc
+        whats_new
+/];
 
 sub SYSTEM_PACKAGES { return $SYSTEM_PACKAGES }
 
@@ -41,6 +42,11 @@ sub new {
     my ( $pkg, $task_name, $params, @extra ) = @_;
     my $class = $pkg->get_factory_class( $task_name );
     my $self = bless( { _status => [] }, $class );
+
+    if ( $params->{invocation} ) {
+        $self->invocation( $params->{invocation} );
+        delete $params->{invocation};
+    }
 
     if ( ref $params eq 'HASH' ) {
         while ( my ( $name, $value ) = each %{ $params } ) {
@@ -396,6 +402,15 @@ sub param_copy_from {
     my ( $self, $other_task ) = @_;
     $self->param_assign( $other_task->param );
     return $self->param;
+}
+
+
+sub invocation {
+    my ( $self, $invocation ) = @_;
+    if ( $invocation ) {
+        $self->{invocation} = $invocation;
+    }
+    return $self->{invocation};
 }
 
 

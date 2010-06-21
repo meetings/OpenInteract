@@ -6,7 +6,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::MangeBoxes::VERSION  = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::MangeBoxes::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -25,7 +25,13 @@ sub add_box {
     my ( $self, $box ) = @_;
     return undef unless ( ref $box );
 
-    my $name = ( ref $box eq 'HASH' ) ? $box->{name} : $box->name;
+    my ( $name );
+    if ( ref $box eq 'HASH' ) {
+        $name = $box->{box_name} || $box->{name};
+    }
+    else {
+        $name = $box->param( 'box_name' ) || $box->name;
+    }
     $log->is_info &&
         $log->info( "Adding box '$name' to response" );
 

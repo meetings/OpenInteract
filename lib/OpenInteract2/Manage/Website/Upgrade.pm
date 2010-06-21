@@ -1,25 +1,25 @@
 package OpenInteract2::Manage::Website::Upgrade;
 
-# $Id: Upgrade.pm,v 1.19 2005/03/18 04:09:50 lachoy Exp $
+# $Id: Upgrade.pm,v 1.20 2005/03/24 05:31:55 lachoy Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
 use File::Spec::Functions  qw( catdir );
 use OpenInteract2::Manage  qw( SYSTEM_PACKAGES );
 
-$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::Upgrade::VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 sub get_name {
     return 'upgrade_website';
 }
 
 sub get_brief_description {
-    return <<'DESC';
-Upgrade your website to a new version of OpenInteract2 --
-remember to read 'perldoc OpenInteract2::Manual::Changes'
-to see what has been updated and find any configuration changes
-you may need to make.
-DESC
+    return join( "\n",
+        q{Upgrade your website to a new version of OpenInteract2 -- },
+        q{remember to read 'perldoc OpenInteract2::Manual::Changes' },
+        q{to see what has been updated and find any configuration changes },
+        q{you may need to make.}
+    );
 }
 
 sub get_parameters {

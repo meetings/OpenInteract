@@ -1,6 +1,6 @@
 package OpenInteract2::Request::LWP;
 
-# $Id: LWP.pm,v 1.22 2005/03/18 04:09:51 lachoy Exp $
+# $Id: LWP.pm,v 1.24 2006/08/18 00:25:28 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -13,12 +13,12 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 use OpenInteract2::Upload;
 
-$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::LWP::VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
 my @FIELDS = qw( lwp );
-OpenInteract2::Request::LWP->mk_accessors( @FIELDS );
+__PACKAGE__->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self, $params ) = @_;
@@ -42,6 +42,7 @@ sub init {
     my $cookie = $lwp_request->header( 'Cookie' );
     $self->cookie_header( $cookie );
     $self->language_header( $lwp_request->header( 'Accept-Language' ) );
+    $self->forwarded_for( $lwp_request->header( 'X-Forwarded-For' ) );
 
     if ( $client ) {
         $self->remote_host( $client->peerhost );
@@ -158,6 +159,11 @@ sub _parse_multipart_data {
                      "uploads ($num_upload)" );
 }
 
+sub post_body {
+    my ( $self ) = @_;
+    return $self->lwp->content;
+}
+                                        
 1;
 
 __END__

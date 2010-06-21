@@ -1,6 +1,6 @@
 package OpenInteract2::Request::Standalone;
 
-# $Id: Standalone.pm,v 1.14 2005/03/18 04:09:51 lachoy Exp $
+# $Id: Standalone.pm,v 1.16 2006/08/18 00:25:28 infe Exp $
 
 use strict;
 use base qw( OpenInteract2::Request );
@@ -12,9 +12,12 @@ use OpenInteract2::Upload;
 use OpenInteract2::URL;
 use Sys::Hostname;
 
-$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Request::Standalone::VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
+
+my @FIELDS = qw( props );
+__PACKAGE__->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self, $props ) = @_;
@@ -56,7 +59,9 @@ sub init {
     }
 
     $self->server_name( $props->{server_name} );
+    $self->server_port( $props->{server_port} );
     $self->remote_host( $props->{remote_host} );
+    $self->forwarded_for( $props->{forwarded_for} );
     $log->is_debug &&
         $log->debug( "Set request and server properties ok" );
 
@@ -75,6 +80,8 @@ sub init {
     }
     $log->is_debug &&
         $log->debug( "Set uploads ok ($num_upload)" );
+
+    $self->props( $props );
 
     $log->is_info &&
         $log->info( "Finished creating Standalone request" );
@@ -132,6 +139,11 @@ sub _check_properties {
     }
 }
 
+sub post_body {
+    my ( $self ) = @_;
+    return $self->props->{content};
+}
+
 1;
 
 __END__
@@ -146,21 +158,23 @@ OpenInteract2::Request::Standalone - Manually create a request object
  
  OpenInteract2::Request->set_implementation_type( 'standalone' );
  
- # Create all the request infomration offline...
+ # Create all the request information offline...
  
  my %req_params = (
-   url         => '/path/to/my/doc.html',
-   referer     => 'http://www.foo.bar/path/to/my/index.html',
-   user_agent  => 'OI2 Standalone Requester',
-   server_name => 'www.foo.bar',
-   remote_host => '192.168.1.1',
-   param       => { eyes => 'two',
-                    soda => [ 'rc', 'mr. pibb' ] },
-   cookie      => [ 'lastSeen=1051797475;firstLogin=1051797075',
-                    OpenInteract2::Cookie->new( ... ), ],
-   upload      => { sendfile   => OpenInteract2::Upload->new( ... ),
-                    screenshot => OpenInteract2::Upload->new( ... ) },
-   languages   => [ 'en-UK', 'en-US', 'de', 'fr' ],
+   url           => '/path/to/my/doc.html',
+   referer       => 'http://www.foo.bar/path/to/my/index.html',
+   user_agent    => 'OI2 Standalone Requester',
+   server_name   => 'www.foo.bar',
+   remote_host   => '192.168.1.1',
+   forwarded_for => '154.12.0.4, 10.2.1.2',
+   param         => { eyes => 'two',
+                      soda => [ 'rc', 'mr. pibb' ] },
+   cookie        => [ 'lastSeen=1051797475;firstLogin=1051797075',
+                      OpenInteract2::Cookie->new( ... ), ],
+   upload        => { sendfile   => OpenInteract2::Upload->new( ... ),
+                      screenshot => OpenInteract2::Upload->new( ... ) },
+   languages     => [ 'en-UK', 'en-US', 'de', 'fr' ],
+   content       => '<?xml version="1.0"?>'
  );
  
  # ...and create a new object with it
@@ -233,6 +247,13 @@ anything other than an upload object, will cause an exception.
 
 Default: none
 
+=item *
+
+B<content> - Set to the POST content. This is useful if you simulate
+for example a XML call.
+
+Default: none
+
 =back
 
 The simple request properties set are:
@@ -244,6 +265,10 @@ The simple request properties set are:
 B<referer> - Set to what you'd like to be the referring page.
 
 Default: none
+
+=item *
+
+B<forwarded_for> - Set to the list of proxy IP addresses inbetween of the request.
 
 =item *
 

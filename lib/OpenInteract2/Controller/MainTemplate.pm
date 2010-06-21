@@ -1,6 +1,6 @@
 package OpenInteract2::Controller::MainTemplate;
 
-# $Id: MainTemplate.pm,v 1.9 2005/03/17 14:58:01 sjn Exp $
+# $Id: MainTemplate.pm,v 1.13 2006/02/01 22:02:38 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Controller
@@ -11,7 +11,7 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -20,8 +20,12 @@ __PACKAGE__->mk_accessors( @FIELDS );
 
 sub init {
     my ( $self ) = @_;
-    if ( CTX->request->param( 'no_template' ) eq 'yes' ) {
+    my $req = CTX->request;
+    if ( $req->param( 'no_template' ) eq 'yes' ) {
         $self->no_template( 'yes' );
+    }
+    if ( my $main_template = $req->param( 'oi_main_template' ) ) {
+        $self->main_template( $main_template );
     }
     $self->init_boxes;
     $self->init_templates;
@@ -41,16 +45,18 @@ sub execute {
     }
 
     my $content = eval { $action->execute };
-    if ( $@ ) {
-        $log->error( "Caught exception from action: $@" );
 
-        # TODO: Set this error message from config file
-        $self->add_content_param( title => 'Action execution error' );
-        $content = $@;
+    # If action died, check what to do depending on the error
+    $content = $self->_action_error_content( $@ ) if $@;
+
+    # If an action issued a redirect, we're done
+    if ( CTX->response->is_redirect ) {
+        $log->is_info &&
+            $log->info( "Action specified a redirect" );
+        return;
     }
 
     # If an action set a file to send back, we're done
-
     if ( my $send_file = CTX->response->send_file ) {
         $log->is_info &&
             $log->info( "Action specified return file '$send_file'" );
@@ -94,14 +100,29 @@ sub execute {
                               { name => $template_name } )
     };
     if ( $@ ) {
-        my $msg = "Content generator failed to execute: $@";
+        my $msg = "Content generator failed to execute ($@); will " .
+                  "return previously-generated content...";
         $log->error( $msg );
-        oi_error $msg;
+        $full_content = $content;
     }
-    $log->is_debug &&
-        $log->debug( "Generated content ok, setting to response" );
+    else {
+        $log->is_debug && $log->debug( "Generated content ok..." );
+    }
+    $log->is_debug && $log->debug( "Setting content to response" );
     CTX->response->content( \$full_content );
     return;
+}
+
+sub _action_error_content {
+    my ($self, $error) = @_;
+    $log ||= get_logger( LOG_ACTION );
+
+    $log->error( "Caught exception from action: $error" );
+
+    # TODO: Set this error message from config file
+    $self->add_content_param( title => 'Action execution error' );
+    
+    return $error;
 }
 
 ########################################

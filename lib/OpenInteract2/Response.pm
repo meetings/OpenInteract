@@ -1,6 +1,6 @@
 package OpenInteract2::Response;
 
-# $Id: Response.pm,v 1.28 2005/03/17 14:57:58 sjn Exp $
+# $Id: Response.pm,v 1.30 2006/09/30 02:03:46 a_v Exp $
 
 use strict;
 use base qw( Class::Factory Class::Accessor::Fast );
@@ -10,7 +10,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Response::VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
 
@@ -159,7 +159,8 @@ sub remove_cookie {
 
 sub save_session {
     my ( $self ) = @_;
-    OpenInteract2::SessionManager->save( CTX->request->session );
+    my $session_class = CTX->lookup_session_config->{class};
+    $session_class->save( CTX->request->session );
 }
 
 
@@ -177,8 +178,8 @@ sub set_file_info {
             oi_error "Cannot set outbound file information for ",
                      "'$filename': file does not exist";
         }
-        $log->is_debug &&
-            $log->debug( "Set response information for file '$filename'" );
+        $log->is_info &&
+            $log->info( "Set response information for file '$filename'" );
         unless ( $self->header( 'Content-Length' ) ) {
             $self->header( 'Content-Length', (stat $filename)[7] );
         }

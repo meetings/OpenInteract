@@ -1,6 +1,6 @@
 package OpenInteract2::ContentGenerator::TemplateSource;
 
-# $Id: TemplateSource.pm,v 1.15 2005/03/17 14:58:01 sjn Exp $
+# $Id: TemplateSource.pm,v 1.16 2007/03/09 03:52:41 a_v Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Exception qw( oi_error );
 
-$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::ContentGenerator::TemplateSource::VERSION  = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 
 my $REQUIRED = 0;
 
@@ -87,7 +87,7 @@ sub identify {
         oi_error "No template to process!";
     }
 
-    if ( $name and CTX->controller->can( 'add_template_used' ) ) {
+    if ( $name and CTX->controller and CTX->controller->can( 'add_template_used' ) ) {
         CTX->controller->add_template_used( $name );
     }
     return ( $source_type, $source );

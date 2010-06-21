@@ -1,6 +1,6 @@
 package OpenInteract2::Context;
 
-# $Id: Context.pm,v 1.87 2005/03/17 14:57:57 sjn Exp $
+# $Id: Context.pm,v 1.91 2006/09/25 15:33:19 a_v Exp $
 
 use strict;
 use base                     qw( Exporter Class::Accessor::Fast );
@@ -10,13 +10,13 @@ use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Log       qw( uchk );
 
-$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.87 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Context::VERSION   = sprintf("%d.%02d", q$Revision: 1.91 $ =~ /(\d+)\.(\d+)/);
 
 use constant DEFAULT_TEMP_LIB_DIR => 'templib';
 
 my ( $log_spops, $log_act, $log_init );
 
-sub version { return '1.99_06' }
+sub version { return '1.99_07' }
 
 # Exportable deployment URL call -- main, images, static
 
@@ -355,7 +355,7 @@ sub lookup_action_info {
 
     unless ( $action_info ) {
         my $msg = "Action '$action_name' not found in action table" ;
-        $log_act->error( $msg );
+        $log_act->info( $msg );
         OpenInteract2::Exception->throw( $msg );
     }
 
@@ -387,9 +387,7 @@ sub lookup_action {
     $log_act ||= get_logger( LOG_ACTION );
     my $action_info = $self->lookup_action_info( $action_name );
     unless ( $action_info ) {
-        my $msg = "No action found for '$action_name'";
-        $log_act->error( $msg );
-        OpenInteract2::Exception->throw( $msg );
+        OpenInteract2::Exception->throw( "No action found for '$action_name'" );
     }
     return OpenInteract2::Action->new( $action_info, $props );
 }
@@ -625,11 +623,6 @@ sub lookup_redirect_config {
     return $self->server_config->{redirect};
 }
 
-sub lookup_box_config {
-    my ( $self ) = @_;
-    return $self->server_config->{box};
-}
-
 
 ########################################
 # CLASS LOOKUP
@@ -794,10 +787,6 @@ sub language_handle {
 sub cleanup_request {
     my ( $self ) = @_;
     $self->set( $_, undef )  for ( @REQUEST_FIELDS );
-
-    # TODO: These two methods Needed?
-    $self->clear_global_attributes;
-    $self->clear_exceptions;
 }
 
 
@@ -1555,10 +1544,6 @@ Looks up the configuration watcher configuration.
 B<lookup_redirect_config()>
 
 Looks up the redirect configuration.
-
-B<lookup_box_config()>
-
-Looks up the configuration for boxes, found in the 'box' section.
 
 =head2 Object Methods: Localization
 

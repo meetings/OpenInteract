@@ -1,6 +1,6 @@
 # -*-perl-*-
 
-# $Id: repository.t,v 1.11 2005/02/28 01:02:38 lachoy Exp $
+# $Id: repository.t,v 1.12 2005/09/21 12:33:54 lachoy Exp $
 
 use strict;
 use lib 't/';
@@ -91,7 +91,7 @@ my ( $package_add_name );
     like( "$@", qr/^Must pass in package name/,
           'Correctly threw exception with no name to fetch package' );
 
-    is( scalar( @{ $repos->fetch_all_packages } ), 16,
+    is( scalar( @{ $repos->fetch_all_packages } ), get_num_packages(),
         'Fetched the correct number of packages' );
 
     $package_add_name = $package->name; # save for later
@@ -114,7 +114,7 @@ my ( $package_add_name );
         '...refetched name matches' );
     is( $pkg_check_add->version, $package_add->version,
         '...refetched version matches' );
-    is( scalar @{ $repos->fetch_all_packages }, 17,
+    is( scalar @{ $repos->fetch_all_packages }, get_num_packages() + 1,
         '...number of packages matches' );
 
     # Open another copy of the repository and check
@@ -129,7 +129,7 @@ my ( $package_add_name );
         '...new refetched name matches' );
     is( $pkg_check_post->version, $package_add->version,
         '...new refetched name matches' );
-    is( scalar @{ $repos_check->fetch_all_packages }, 17,
+    is( scalar @{ $repos_check->fetch_all_packages }, get_num_packages() + 1,
         '...new refetched number of packages matches' );
 }
 
@@ -139,14 +139,14 @@ my ( $package_add_name );
     ok( ! $@, 'Removed package from repository' ) || diag "Error: $@";
     is( $repos->fetch_package( $package_add_name ), undef,
         'Removed package no longer exists in repository' );
-    is( scalar @{ $repos->fetch_all_packages }, 16,
+    is( scalar @{ $repos->fetch_all_packages }, get_num_packages(),
         'Number of packages matches' );
 
     # Open another copy of the repository and check
 
     my $repos_check =
         OpenInteract2::Repository->new({ website_dir => $website_dir });
-    is( scalar @{ $repos_check->fetch_all_packages }, 16,
+    is( scalar @{ $repos_check->fetch_all_packages }, get_num_packages(),
         '...refetched Number of packages matches' );
 }
 

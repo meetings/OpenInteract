@@ -1,11 +1,11 @@
 # -*-perl-*-
 
-# $Id: manage_list_objects.t,v 1.9 2005/03/04 20:48:41 lachoy Exp $
+# $Id: manage_list_objects.t,v 1.10 2005/09/21 12:33:54 lachoy Exp $
 
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 43;
+use Test::More  tests => 45;
 
 
 my %OBJECTS = (
@@ -19,6 +19,7 @@ my %OBJECTS = (
                news               => 'News',
                news_section       => 'NewsSection',
                object_action      => 'ObjectAction',
+               object_tag         => 'ObjectTag',
                page               => 'Page',
                page_content       => 'PageContent',
                page_directory     => 'PageDirectory',

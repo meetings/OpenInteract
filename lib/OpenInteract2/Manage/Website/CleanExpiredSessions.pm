@@ -1,6 +1,6 @@
 package OpenInteract2::Manage::Website::CleanExpiredSessions;
 
-# $Id: CleanExpiredSessions.pm,v 1.5 2005/03/18 04:09:50 lachoy Exp $
+# $Id: CleanExpiredSessions.pm,v 1.6 2006/02/03 03:12:36 a_v Exp $
 
 use strict;
 use base qw( OpenInteract2::Manage::Website );
@@ -12,7 +12,7 @@ use Storable                 qw( thaw );
 my $TEMP_TRACK_FILE = 'tmp_session_id';
 my $DECODE          = 'base64';
 
-$OpenInteract2::Manage::Website::CleanExpiredSessions::VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$OpenInteract2::Manage::Website::CleanExpiredSessions::VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 # METADATA
 
@@ -53,6 +53,7 @@ sub validate_param {
         }
         $self->param( expire_time => $days );
     }
+    return undef;
 }
 
 # TASK
