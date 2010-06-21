@@ -1,0 +1,12 @@
+<p><span class="commentSubject">[% comment.subject %]</span><br>
+<div class="commentContent">
+[% IF override_content %][% override_content -%]
+[% ELSE %][% comment.content -%]
+[% END %]
+</div>
+
+<p class="commentPoster">
+[%- poster = PROCESS comments::comment_poster -%]
+[% MSG( 'comments.posting', poster,
+        OI.date_format( comment.posted_on, '%B %d, %Y %l:%M %p' )  ) %]
+</p>

@@ -1,0 +1,5 @@
+# If a file is listed here it will not be updated when the
+# package to which it belongs is updated.
+
+index.html
+main.css

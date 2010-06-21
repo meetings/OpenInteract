@@ -1,0 +1,6 @@
+$security = [ 
+   { import_type => 'object',
+     spops_class => 'OpenInteract2::UserLanguage',
+     field_order => [ qw/ language / ] },
+   [ 'en' ],
+];

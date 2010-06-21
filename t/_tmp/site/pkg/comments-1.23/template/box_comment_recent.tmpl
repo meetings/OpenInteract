@@ -1,0 +1,15 @@
+[%- DEFAULT theme = OI.theme_properties; -%]
+
+[% IF comments.size == 0 -%]
+
+  <p>[% MSG( 'comments.no_comments' ) %]</p>
+
+[% ELSE -%]
+
+  [% FOREACH comment = comments;
+     object_url  = comment.get_summary.object_url -%]
+   [% theme.bullet %] <a href="[% object_url %]">[% comment.subject %]</a> on 
+                      [% OI.date_format( comment.posted_on, '%Y-%m-%d %H:%M' ) %] <br />
+  [% END %]
+
+[% END -%]

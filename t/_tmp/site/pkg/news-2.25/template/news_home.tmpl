@@ -1,0 +1,13 @@
+[%- OI.box_add( 'news_tools_box' );
+    DEFAULT num_latest = 10 -%]
+
+[%- PROCESS error_message;
+    PROCESS status_message; -%]
+
+[% INCLUDE news::news_filter_form %]
+
+<h2>[% MSG( 'news.home.title' ) %]</h2>
+
+<p>[% MSG( 'news.home.summary', num_latest ) %]</p>
+
+[% OI.action_execute( 'latest_news', num_items = num_latest ) %]
