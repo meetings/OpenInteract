@@ -1,1 +1,0 @@
-CREATE GENERATOR oi_sys_group_seq

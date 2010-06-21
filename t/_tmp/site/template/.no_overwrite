@@ -1,6 +1,0 @@
-# These are templates that will not be overwritten when you
-# refresh the widgets or upgrade your site (one template
-# per line)
-
-base_main
-base_simple

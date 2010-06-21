@@ -1,1 +1,0 @@
-CREATE SEQUENCE oi_sys_security_seq

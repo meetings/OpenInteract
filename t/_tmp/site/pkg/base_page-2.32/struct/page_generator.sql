@@ -1,1 +1,0 @@
-CREATE GENERATOR oi_page_seq

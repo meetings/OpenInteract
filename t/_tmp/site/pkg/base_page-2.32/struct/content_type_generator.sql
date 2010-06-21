@@ -1,1 +1,0 @@
-CREATE GENERATOR oi_content_type_seq

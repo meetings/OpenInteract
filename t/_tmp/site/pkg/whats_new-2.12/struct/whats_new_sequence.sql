@@ -1,1 +1,0 @@
-CREATE SEQUENCE oi_whats_new_seq

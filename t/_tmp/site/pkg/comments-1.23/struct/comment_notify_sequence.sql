@@ -1,1 +1,0 @@
-CREATE SEQUENCE oi_comment_notify_seq

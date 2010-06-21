@@ -1,6 +1,0 @@
-$page_dir = [ 
-   { import_type => 'object',
-     spops_class => 'OpenInteract2::PageDirectory',
-     field_order => [ qw/ directory action subdirs_inherit / ] },
-     [ '/', 'file_index', 'yes' ],
-];
