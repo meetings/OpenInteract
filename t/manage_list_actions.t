@@ -5,7 +5,7 @@
 use strict;
 use lib 't/';
 require 'utils.pl';
-use Test::More  tests => 55;
+use Test::More;
 
 require_ok( 'OpenInteract2::Manage' );
 
@@ -25,7 +25,7 @@ ok( ! $@, 'Task executed ok' ) || diag "Error: $@";
 
 my @names = qw(
     admin_tools_box all_tags_box boxes comment comment_admin comment_recent
-    content_type edit_document_box error_browser file_index forgotpassword
+    content_type edit_document_box emailtester error_browser file_index forgotpassword
     group latest_news login_box logout lookups my_tags new new_comment_form
     news news_archive_monthly news_section news_tools_box newuser
     object_modify_box objectactivity package page pagedirectory
@@ -42,3 +42,5 @@ for ( my $i = 0; $i < scalar @names; $i++ ) {
     is( $status[$i]->{name}, $names[$i],
         "Action " . ($i + 1) . " name correct ($names[$i])" );
 }
+
+done_testing();

@@ -79,7 +79,7 @@ foreach my $pkg_name ( get_packages() ) {
 my $action_table = $ctx->action_table;
 is( ref $action_table, 'HASH',
     'Action table is correct data structure' );
-is( scalar keys %{ $action_table }, 50,
+is( scalar keys %{ $action_table }, 51,
     'Correct number of actions in table' );
 
 my $news_info = $ctx->lookup_action_info( 'news' );

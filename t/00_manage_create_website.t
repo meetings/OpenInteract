@@ -40,7 +40,7 @@ warn "\nCreating website... this may take a while\n";
 
 my @status = eval { $task->execute };
 ok( ! $@, 'Task executed' ) || diag "Execution error: $@";
-is( scalar @status, 111,
+is( scalar @status, 112,
     'Number of status messages' );
 
 # Look at the directories we should have created and see they're there
@@ -69,7 +69,7 @@ is( count_dirs( catdir( $website_dir, 'cache' ) ), 4,
     'Number of directories in cache/' );
 
 my $site_conf_dir = catdir( $website_dir, 'conf' );
-is( count_files( $site_conf_dir ), 16,
+is( count_files( $site_conf_dir ), 17,
     "Number of files in conf/" );
 is( first_file( $site_conf_dir ), 'bootstrap.ini',
     "First file in conf/" );
