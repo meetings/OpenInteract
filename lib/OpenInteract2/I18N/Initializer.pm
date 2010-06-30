@@ -294,6 +294,7 @@ sub _get_lang_template {
 package [% lang_class %];
 
 use strict;
+use Dicole::Utils::Text;
 
 use vars qw( %Lexicon );
 
@@ -306,7 +307,7 @@ sub get_oi2_lang { return '[% lang %]' }
 sub _assign_messages {
     my ( $class, $messages ) = @_;
     while ( my ( $key, $value ) = each %{ $messages } ) {
-        $Lexicon{ $key } = $value;
+        $Lexicon{ $key } = Dicole::Utils::Text->ensure_utf8($value);
     }
 }
 
