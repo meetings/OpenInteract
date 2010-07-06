@@ -24,6 +24,239 @@ release should be a release candidate (1.99_07/2.0 RC1) -- its new
 features should only be minor; everything else should be bugfixes or
 pushed off to 2.01.
 
+=head1 1.99_07 (2.0 RC 1),
+
+=head2 Upgrade Notes
+
+B<box section ignored in server.ini>
+
+The 'box' section in B<server.ini> is no longer used -- all
+configuration is done in C<conf/base_box/action.ini>. (It doesn't hurt
+anything to leave it though.)
+
+=head2 Major Changes
+
+=head2 Minor Changes
+
+L<OpenInteract2::Action>
+
+=over 4
+
+=item *
+
+Add properties 'url_pattern' and 'url_pattern_group'.
+
+=item *
+
+Don't cache requests by administrators! (fix in _is_using_cache())
+
+=item *
+
+Add method C<task_security_allowed( $task )> so you can check whether
+the current user/group can execute a given task on the same action --
+useful for generating conditional 'Edit' links...
+
+=back
+
+L<OpenInteract2::ActionResolver::MatchRegex>
+
+=over 4
+
+=item *
+
+New class so you can match a URL with an action based on a regular
+expression found in the action's 'url_pattern' property, optionally
+using the 'url_pattern_group' property as well.
+
+=back
+
+L<OpenInteract2::Brick::Apache>
+
+=over 4
+
+=item *
+
+httpd_modperl.conf: remove reference to old proxy-helper; thanks to
+Ken Youens-Clark for the spot.
+
+=back
+
+L<OpenInteract2::Brick::Apache>
+
+=over 4
+
+=item *
+
+oi2_daemon.ini: add 'ReuseAddr = 1' to make the daemon work as
+expected.
+
+=back
+
+L<OpenInteract2::Brick::WebsiteConfig>
+
+=over 4
+
+=item *
+
+server.ini: add 'devel_mode = no' to 'Global' configuration section;
+if it's set to 'yes' we recreate the temporary library directory with
+every server restart.
+
+=back
+
+L<OpenInteract2::Cache>
+
+=over 4
+
+=item *
+
+Modify C<get()> to more easily accommodate the common case of just
+passing in a key; instead of using -E<gt>get({ key =E<gt> $key }) 
+you can now also use -E<gt>get( $key ).
+
+=item *
+
+Modify C<set()> to be able to store a non-SPOPS object.
+
+=back
+
+L<OpenInteract2::Config::Readonly>
+
+=over 4
+
+=item *
+
+OIN-180: Fix bug, when 'readonly' config not found we'd return
+arrayref instead of hashref, forcing OI2::Package copy html files
+routine to abort.
+
+=back
+
+L<OpenInteract2::Context>
+
+=over 4
+
+=item *
+
+Don't log an error when we don't find an action with lookup_action().
+
+=back
+
+L<OpenInteract2::Error>
+
+=over 4
+
+=item *
+
+OIN-159: If our error filename already exists keep incrementing the
+number of ms until one doesn't. (Happens when two errors raised in the
+same second...)
+
+=back
+
+L<OpenInteract2::Manage::Website::ListActions>
+
+=over 4
+
+=item *
+
+Make the description returned in the message more useful by including
+the package name; also specified what 'mapped to' means.
+
+=back
+
+L<OpenInteract2::Manage::Website::RemovePackage>
+
+=over 4
+
+=item *
+
+OIN-158: Add 'full_remove' parameter to get rid of the package
+directories on demand.
+
+=back
+
+L<OpenInteract2::Manage::Website::UpdatePackageFromWebsite>
+
+=over 4
+
+=item *
+
+Fix old reference to C<package.conf>. Thanks to Ken Youens-Clark for
+the tip.
+
+=back
+
+L<OpenInteract2::Manual::FAQ>
+
+=over 4
+
+=item *
+
+OIN-88: Create a FAQ for the end-user rather than framework developer
+
+=back
+
+L<OpenInteract2::Package>
+
+=over 4
+
+=item *
+
+OIN-172: when installing a package add pkg/foo-x.xx/conf/README
+pointing to the actual config location (conf/foo) and delete the
+package configuration files so there's no confusion.
+
+=back
+
+L<OpenInteract2::Response::Apache>
+
+=over 4
+
+=item *
+
+Sometimes $apache-&gt;print(...) would print out 'SCALAR(0x...)'
+instead of resolving it for us, so we'll do it ourselves.
+
+=back
+
+L<OpenInteract2::Setup::CreateTemporaryLibraryDirectory>
+
+=over 4
+
+=item *
+
+Look in the server config for the 'devel_mode' key (under 'Global');
+if it's set to 'yes' then we ALWAYS remove the temporary library
+directory and recreate it.
+
+=back
+
+=head2 Package Updates
+
+The following packages have been updated since the last version. See
+the 'Changes' file for each to view the modifications:
+
+   OpenInteract     1.99_06 -> 1.99_07
+   -----------------------------------
+   base:            2.15    -> 2.15
+   base_box:        2.21    -> 2.21
+   base_error:      3.02    -> 3.02
+   base_group:      2.20    -> 2.20
+   base_page:       2.32    -> 2.32
+   base_security:   2.22    -> 2.22
+   base_template:   3.17    -> 3.17
+   base_theme:      2.13    -> 2.13
+   base_user:       2.41    -> 2.41
+   comments:        1.23    -> 1.23
+   full_text:       2.61    -> 2.61
+   lookup:          2.09    -> 2.09
+   news:            2.25    -> 2.25
+   object_activity: 2.13    -> 2.13
+   system_doc:      2.10    -> 2.10
+   whats_new:       2.12    -> 2.12
+
+
 =head1 1.99_06 (2.0 beta 6), 18 March 2005
 
 =head2 Upgrade Notes
@@ -554,18 +787,18 @@ the 'Changes' file for each to view the modifications:
    OpenInteract     1.99_05 -> 1.99_06
    -----------------------------------
    base:            2.11    -> 2.15
-   base_box:        2.17    -> 2.20
+   base_box:        2.17    -> 2.21
    base_error:      2.10    -> 3.02
-   base_group:      2.16    -> 2.19
-   base_page:       2.28    -> 2.31
-   base_security:   2.18    -> 2.21
+   base_group:      2.16    -> 2.20
+   base_page:       2.28    -> 2.32
+   base_security:   2.18    -> 2.22
    base_template:   3.15    -> 3.17
    base_theme:      2.10    -> 2.13
-   base_user:       2.35    -> 2.40
+   base_user:       2.35    -> 2.41
    comments:        1.18    -> 1.23
    full_text:       2.58    -> 2.61
    lookup:          2.07    -> 2.09
-   news:            2.20    -> 2.24
+   news:            2.20    -> 2.25
    object_activity: 2.11    -> 2.13
    system_doc:      2.08    -> 2.10
    whats_new:       2.10    -> 2.12

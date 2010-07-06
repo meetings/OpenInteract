@@ -273,7 +273,7 @@ commented lines (those beginning with a '#') and blank lines.
 
 A message key is unique per language and has a single value that is
 its associated message for that language. It is separated from the
-message by an '='.
+message by an '=' and may contain any character B<except> a '='.
 
 =item B<continued values>
 

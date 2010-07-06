@@ -258,7 +258,7 @@ L<OpenInteract2::Auth::User|OpenInteract2::Auth::User>: Base class for creating 
 
 =item *
 
-L<OpenInteract2::Brick|OpenInteract2::Brick>: [% brick_summary %]
+L<OpenInteract2::Brick|OpenInteract2::Brick>: Base class for inlined data packages
 
 =item *
 
@@ -270,11 +270,11 @@ L<OpenInteract2::Brick::Apache2|OpenInteract2::Brick::Apache2>: All resources us
 
 =item *
 
-L<OpenInteract2::Brick::Base|OpenInteract2::Brick::Base>: Base-64 encoded OI2 package 'base-2.15.zip' shipped with distribution
+L<OpenInteract2::Brick::Base|OpenInteract2::Brick::Base>: Base-64 encoded OI2 package 'base-2.51.zip' shipped with distribution
 
 =item *
 
-L<OpenInteract2::Brick::BaseBox|OpenInteract2::Brick::BaseBox>: Base-64 encoded OI2 package 'base_box-2.21.zip' shipped with distribution
+L<OpenInteract2::Brick::BaseBox|OpenInteract2::Brick::BaseBox>: Base-64 encoded OI2 package 'base_box-2.32.zip' shipped with distribution
 
 =item *
 
@@ -286,7 +286,7 @@ L<OpenInteract2::Brick::BaseGroup|OpenInteract2::Brick::BaseGroup>: Base-64 enco
 
 =item *
 
-L<OpenInteract2::Brick::BasePage|OpenInteract2::Brick::BasePage>: Base-64 encoded OI2 package 'base_page-2.32.zip' shipped with distribution
+L<OpenInteract2::Brick::BasePage|OpenInteract2::Brick::BasePage>: Base-64 encoded OI2 package 'base_page-2.33.zip' shipped with distribution
 
 =item *
 
@@ -294,7 +294,7 @@ L<OpenInteract2::Brick::BaseSecurity|OpenInteract2::Brick::BaseSecurity>: Base-6
 
 =item *
 
-L<OpenInteract2::Brick::BaseTemplate|OpenInteract2::Brick::BaseTemplate>: Base-64 encoded OI2 package 'base_template-3.17.zip' shipped with distribution
+L<OpenInteract2::Brick::BaseTemplate|OpenInteract2::Brick::BaseTemplate>: Base-64 encoded OI2 package 'base_template-3.19.zip' shipped with distribution
 
 =item *
 
@@ -302,7 +302,7 @@ L<OpenInteract2::Brick::BaseTheme|OpenInteract2::Brick::BaseTheme>: Base-64 enco
 
 =item *
 
-L<OpenInteract2::Brick::BaseUser|OpenInteract2::Brick::BaseUser>: Base-64 encoded OI2 package 'base_user-2.41.zip' shipped with distribution
+L<OpenInteract2::Brick::BaseUser|OpenInteract2::Brick::BaseUser>: Base-64 encoded OI2 package 'base_user-2.42.zip' shipped with distribution
 
 =item *
 
@@ -310,7 +310,7 @@ L<OpenInteract2::Brick::CGI|OpenInteract2::Brick::CGI>: Script for running OI2 a
 
 =item *
 
-L<OpenInteract2::Brick::Comments|OpenInteract2::Brick::Comments>: Base-64 encoded OI2 package 'comments-1.23.zip' shipped with distribution
+L<OpenInteract2::Brick::Comments|OpenInteract2::Brick::Comments>: Base-64 encoded OI2 package 'comments-1.25.zip' shipped with distribution
 
 =item *
 
@@ -330,7 +330,7 @@ L<OpenInteract2::Brick::Messages|OpenInteract2::Brick::Messages>: All global loc
 
 =item *
 
-L<OpenInteract2::Brick::News|OpenInteract2::Brick::News>: Base-64 encoded OI2 package 'news-2.25.zip' shipped with distribution
+L<OpenInteract2::Brick::News|OpenInteract2::Brick::News>: Base-64 encoded OI2 package 'news-2.29.zip' shipped with distribution
 
 =item *
 
@@ -350,7 +350,7 @@ L<OpenInteract2::Brick::PackageFromTable|OpenInteract2::Brick::PackageFromTable>
 
 =item *
 
-L<OpenInteract2::Brick::SystemDoc|OpenInteract2::Brick::SystemDoc>: Base-64 encoded OI2 package 'system_doc-2.10.zip' shipped with distribution
+L<OpenInteract2::Brick::SystemDoc|OpenInteract2::Brick::SystemDoc>: Base-64 encoded OI2 package 'system_doc-2.12.zip' shipped with distribution
 
 =item *
 
@@ -358,7 +358,7 @@ L<OpenInteract2::Brick::WebsiteConfig|OpenInteract2::Brick::WebsiteConfig>: Vari
 
 =item *
 
-L<OpenInteract2::Brick::WhatsNew|OpenInteract2::Brick::WhatsNew>: Base-64 encoded OI2 package 'whats_new-2.12.zip' shipped with distribution
+L<OpenInteract2::Brick::WhatsNew|OpenInteract2::Brick::WhatsNew>: Base-64 encoded OI2 package 'whats_new-2.13.zip' shipped with distribution
 
 =item *
 
