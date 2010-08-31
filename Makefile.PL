@@ -18,6 +18,7 @@ my %opts = (
       'Archive::Zip'               => 0,
       'Cache::FileCache'           => 0,
       'CGI::Cookie'                => 0,
+      'CGI::Fast'                  => 0,
       'Carp::Assert'               => 0,
       'Class::Accessor'            => 0,
       'Class::Factory'             => 1.00,

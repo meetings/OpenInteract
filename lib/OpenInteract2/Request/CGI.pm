@@ -4,7 +4,7 @@ package OpenInteract2::Request::CGI;
 
 use strict;
 use base qw( OpenInteract2::Request );
-use CGI;
+use CGI::Fast;
 use Log::Log4perl            qw( get_logger );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX );
@@ -27,7 +27,7 @@ sub init {
     }
     else {
         binmode STDIN;
-        $self->cgi( CGI->new() );
+        $self->cgi( CGI::Fast->new() );
     }
     my $cgi = $self->cgi;
     my $req_type = $cgi->request_method || 'GET';
