@@ -70,14 +70,22 @@ sub init {
     for my $upload_name ($self->apache->upload) {
         my $upload = $self->apache->upload($upload_name);
 
-        my $oi_upload = OpenInteract2::Upload->new({
-            name         => $upload->name,
-            content_type => $upload->type,
-            size         => $upload->size,
-            filehandle   => $upload->fh,
-            filename     => $upload->filename,
-            tmp_name     => $upload->tempname
-        });
+        my $oi_upload = eval {
+            OpenInteract2::Upload->new({
+                name         => $upload->name,
+                content_type => $upload->type,
+                size         => $upload->size,
+                filehandle   => $upload->fh,
+                filename     => $upload->filename,
+                tmp_name     => $upload->tempname
+            })
+        };
+
+        if ($@) {
+            $log->error("Failed to process upload $upload_name: $@");
+            next;
+        }
+
         $self->_set_upload( $upload->name => $oi_upload );
     }
 
