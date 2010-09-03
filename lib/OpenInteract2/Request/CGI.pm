@@ -93,14 +93,17 @@ sub _assign_params_from_cgi {
         if ( ref( $items[0] ) ) {
             foreach my $upload ( @items ) {
                 my $upload_info = $cgi->uploadInfo( $upload );
-                my $oi_upload = OpenInteract2::Upload->new({
+                my $params = {
                     name         => $field,
                     content_type => $upload_info->{'Content-Type'},
                     size         => (stat $upload)[7],
-                    filehandle   => $upload,
-                    filename     => $cgi->tmpFileName( $upload )
-                });
+                    filehandle   => $upload->handle,
+                    filename     => $upload,
+                    tmp_name     => $cgi->tmpFileName( $upload )
+                };
+                my $oi_upload = OpenInteract2::Upload->new($params);
                 $self->_set_upload( $field, $oi_upload );
+                $self->param( $field, $params->{filename} );
                 $num_upload++;
             }
         }
