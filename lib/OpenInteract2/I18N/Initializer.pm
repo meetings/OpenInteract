@@ -309,9 +309,7 @@ sub get_oi2_lang { return '[% lang %]' }
 sub _assign_messages {
     my ( $class, $messages ) = @_;
     while ( my ( $key, $value ) = each %{ $messages } ) {
-        $Lexicon{ $key } = encode( utf8 => 
-            ( is_utf8($value) ? $value : decode(Guess => $value) )
-        );
+        $Lexicon{ $key } = Dicole::Utils::Text->ensure_utf8($value);
     }
 }
 
