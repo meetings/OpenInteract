@@ -24,41 +24,37 @@ use OpenInteract2::Response;
 
     my $log = get_logger(LOG_APP);
 
-    $log->error("Creating context");
+    $log->debug("Creating context");
 
     my $ctx = OpenInteract2::Context->create({
         website_dir => $website_dir
     });
 
-    $log->error("Assigning request and response types");
+    $log->debug("Assigning request and response types");
 
     $ctx->assign_request_type( 'cgi' );
     $ctx->assign_response_type( 'cgi' );
 
-    $log->error("Creating FastCGI request object");
-    
-    #my $fcgi_request = FCGI::Request();
-
-    $log->error("Waiting for a client request");
+    $log->debug("Waiting for a client request");
 
     while ( my $fcgi_request = CGI::Fast->new ) { # ) $fcgi_request->Accept() >= 0 ) {
         $SPOPS::Tie::COUNT = {};
 
         #DB::enable_profile();
 
-        $log->error("Got a request");
+        $log->debug("Got a request");
 
-        $log->error("Creating response");
+        $log->debug("Creating response");
         my $response = OpenInteract2::Response->new({ cgi => $fcgi_request });
 
-        $log->error("Creating request");
+        $log->debug("Creating request");
         my $request  = OpenInteract2::Request->new({ cgi => $fcgi_request });
 
-        $log->error("Calling auth->new");
+        $log->debug("Calling auth->new");
 
         OpenInteract2::Auth->new()->login();
 
-        $log->error("Creating controller object");
+        $log->debug("Creating controller object");
 
         my $controller = eval {
             OpenInteract2::Controller->new( $request, $response )
@@ -68,20 +64,18 @@ use OpenInteract2::Response;
             $response->content( $@ );
         }
         else {
-            $log->error("Executing controller");
+            $log->debug("Executing controller");
             $controller->execute;
         }
 
-        $log->error("Sending response");
+        $log->debug("Sending response");
 
         $response->send;
 
-        $log->error("Cleaning up");
+        $log->debug("Cleaning up");
 
         $ctx->cleanup_request;
 
         #DB::disable_profile();
-
-        $log->error(Dumper($SPOPS::Tie::COUNT));
     }
 }
