@@ -81,8 +81,7 @@ sub _assign_params_from_cgi {
     # See if there are any uploads among the parameters. (Note: only
     # supporting a single upload per fieldname right now...)
 
-    my @fields = $cgi->url_param, $cgi->param;
-
+    my @fields = ( $cgi->url_param, $cgi->param );
     my $num_param = 0;
     my $num_upload = 0;
     foreach my $field ( @fields ) {
