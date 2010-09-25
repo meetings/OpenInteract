@@ -208,7 +208,7 @@ sub _create_from_config {
 
         $CONFIG_ACTIONS{ $name } = $self;
     }
-    return $CONFIG_ACTIONS{ $name }->clone;
+    return $CONFIG_ACTIONS{ $name }->clone( { clone_from_config => 1 } );
 }
 
 sub init { return $_[0] }
@@ -220,14 +220,24 @@ sub clone {
         $log->debug( "Creating new action from existing action ",
                      "named '", $self->name, "' '", ref( $self ), "'" );
     my $new = bless( {}, ref( $self ) );
-    $new->_set_name( $self->name );
-    $new->property_assign( $self->property );
-    $new->param_assign( $self->param );
-    if ( $props->{REQUEST_URL} ) {
-        $self->_set_url( $props->{REQUEST_URL} );
+    if ( $props->{clone_from_config} ) {
+        # SCARY OPTIMIZATION: This saves us from a lof of work..
+        # But might cause problems if some parameters are actually
+        # deep copied and altered afterwards..
+        # Anyhow currently only the cache_expires is deep copied
+        # .. and even it doesn't seem to change
+        $new->{$_} = $self->{$_} for keys %$self;
     }
-    $new->property_assign( $props );
-    $new->param_assign( $props );
+    else {
+        $new->_set_name( $self->name );
+        $new->property_assign( $self->property );
+        $new->param_assign( $self->param );
+        if ( $props->{REQUEST_URL} ) {
+            $self->_set_url( $props->{REQUEST_URL} );
+        }
+        $new->property_assign( $props );
+        $new->param_assign( $props );
+    }
     return $new->init();
 }
 
