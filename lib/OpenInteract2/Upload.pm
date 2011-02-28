@@ -46,7 +46,7 @@ sub base_filename {
 sub clean_filename {
     my ( $class, $name ) = @_;
     $name =~ s/^\.+//;
-    $name =~ s/\.\./_/g;
+    $name =~ s/\.+/./g;
     $name =~ s/\s/_/g;
     my $funny_chars = $class->FUNNY_CHARACTERS;
     $name =~ s/[$funny_chars]//g;
