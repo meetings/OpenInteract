@@ -18,7 +18,7 @@ sub parse {
 sub create {
     my ( $class, $params ) = @_;
     my %cgi_params = ();
-    my @cgi_keys = qw( name value expires domain path );
+    my @cgi_keys = qw( name value expires domain path httponly secure );
     foreach my $key ( @cgi_keys ) {
         next unless ( $params->{ $key } );
         $cgi_params{ "-$key" } = $params->{ $key };
