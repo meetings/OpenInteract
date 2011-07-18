@@ -57,10 +57,11 @@ use constant REQUEST_KEY    => 'REQUEST';
 use constant RESPONSE_KEY   => 'RESPONSE';
 my @TEMPLATE_KEYS = qw( ACTION_KEY REQUEST_KEY RESPONSE_KEY );
 
-use constant SESSION_COOKIE => 'oi2ssn';
+use constant SESSION_COOKIE        => 'oi2ssn';
+use constant SESSION_COOKIE_SECURE => 'oi2ssns';
 
 @OpenInteract2::Constants::EXPORT_OK   = (
-        @OI_STATUS, @LOG_LEVEL, @LOG_CATEGORY, @FILE, @TEMPLATE_KEYS, 'SESSION_COOKIE',
+        @OI_STATUS, @LOG_LEVEL, @LOG_CATEGORY, @FILE, @TEMPLATE_KEYS, 'SESSION_COOKIE', 'SESSION_COOKIE_SECURE'
 );
 %OpenInteract2::Constants::EXPORT_TAGS = (
     'all'      => [ @OpenInteract2::Constants::EXPORT_OK ],
