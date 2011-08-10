@@ -11,6 +11,8 @@ use OpenInteract2::Context   qw( CTX );
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Exception qw( oi_error );
 
+use Dicole::Utils::Trace;
+
 $OpenInteract2::Controller::MainTemplate::VERSION  = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 my ( $log );
@@ -44,11 +46,11 @@ sub execute {
         );
     }
 
-    my $trace = CTX->response->start_trace('OI2 action execute');
+    my $trace = Dicole::Utils::Trace->start_trace('OI2 action execute');
 
     my $content = eval { $action->execute };
 
-    CTX->response->end_trace($trace);
+    Dicole::Utils::Trace->end_trace($trace);
 
     # If action died, check what to do depending on the error
     $content = $self->_action_error_content( $@ ) if $@;
@@ -97,7 +99,7 @@ sub execute {
                         "theme with ID '", CTX->request->theme->id, "'" );
     }
 
-    $trace = CTX->response->start_trace('OI2 generate content');
+    $trace = Dicole::Utils::Trace->start_trace('OI2 generate content');
 
     my $generator = CTX->content_generator( $self->generator_type );
     my $full_content = eval {
@@ -106,7 +108,7 @@ sub execute {
                               { name => $template_name } )
     };
 
-    CTX->response->end_trace($trace);
+    Dicole::Utils::Trace->end_trace($trace);
 
     if ( $@ ) {
         my $msg = "Content generator failed to execute ($@); will " .
