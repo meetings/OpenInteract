@@ -44,7 +44,11 @@ sub execute {
         );
     }
 
+    my $trace = CTX->response->start_trace('OI2 action execute');
+
     my $content = eval { $action->execute };
+
+    CTX->response->end_trace($trace);
 
     # If action died, check what to do depending on the error
     $content = $self->_action_error_content( $@ ) if $@;
@@ -93,12 +97,17 @@ sub execute {
                         "theme with ID '", CTX->request->theme->id, "'" );
     }
 
+    $trace = CTX->response->start_trace('OI2 generate content');
+
     my $generator = CTX->content_generator( $self->generator_type );
     my $full_content = eval {
         $generator->generate( $self->template_params,
                               $self->content_params,
                               { name => $template_name } )
     };
+
+    CTX->response->end_trace($trace);
+
     if ( $@ ) {
         my $msg = "Content generator failed to execute ($@); will " .
                   "return previously-generated content...";
