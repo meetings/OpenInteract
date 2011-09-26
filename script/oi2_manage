@@ -48,7 +48,7 @@ my %ALIASES = (
 my $DEV_LIST  = 'openinteract-dev@lists.sourceforge.net';
 my $HELP_LIST = 'openinteract-help@lists.sourceforge.net';
 
-my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
+my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr );
 
 {
     my $invocation = join( ' ', $0, @ARGV );
@@ -56,7 +56,7 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
     push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s';
     my %OPT = ( help => \$OPT_help, debug  => \$OPT_debug,
                 man  => \$OPT_man,  status => \$OPT_verbose,
-                task => \$OPT_task );
+                task => \$OPT_task, stderr => \$OPT_stderr );
     GetOptions( \%OPT, @opt_defs );
 
     if ( $OPT_help ) {
@@ -189,18 +189,18 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
     my @new_status = $task->merge_status_by_action();
 
     foreach my $action_status ( @new_status ) {
-        warn "ACTION: $action_status->{action}\n";
+        progress("ACTION: $action_status->{action}\n");
         foreach my $item_status ( @{ $action_status->{status} } ) {
             if ( $item_status->{is_ok} eq 'yes' ) {
                 # TODO: replace hack when we fix progress/summarization features
                 if ( $item_status->{filename} and $item_status->{filename} !~ /^OIPKG/ ) {
-                    warn "    OK:     $item_status->{filename}\n";
+                    progress("    OK:     $item_status->{filename}\n");
                     if ( $item_status->{message} ) {
-                        warn "            $item_status->{message}\n";
+                        progress("            $item_status->{message}\n");
                     }
                 }
                 else {
-                    warn "    OK:     $item_status->{message}\n";
+                    progress("    OK:     $item_status->{message}\n");
                 }
             }
             else {
@@ -214,7 +214,7 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task );
                 }
             }
         }
-        warn "\n";
+        progress("\n");
     }
 
 }
@@ -337,6 +337,9 @@ sub show_parameter_contents {
     return join( "\n", @out ), "\n";
 }
 
+sub progress {
+    print { $OPT_stderr ? *STDERR : *STDOUT } @_;
+}
 
 sub out {
     warn join( '', @_ ), "\n";
@@ -351,9 +354,9 @@ sub outl {
 sub progress_observer {
     my ( $task, $type, $message, $params ) = @_;
     return unless ( $type eq 'progress' );
-    warn "PROGRESS: $message\n";
+    progress("PROGRESS: $message\n");
     if ( defined $params->{long} and $params->{long} eq 'yes' ) {
-        warn " ... this may take a while ...\n";
+        progress(" ... this may take a while ...\n");
     }
 }
 
@@ -366,8 +369,8 @@ sub status_observer {
                       ? 'OK' : 'FAILED';
     my $show_file = ( $status->{filename} )
                       ? "-- $status->{filename} " : '';
-    warn "STATUS: $status->{action} $show_file-- ",
-         "$show_ok \n  $status->{message}\n";
+    progress("STATUS: $status->{action} $show_file-- ",
+         "$show_ok \n  $status->{message}\n");
 }
 
 __END__
