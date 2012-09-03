@@ -53,7 +53,7 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr );
 {
     my $invocation = join( ' ', $0, @ARGV );
     my @opt_defs = OpenInteract2::Manage->all_parameters_long_options;
-    push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s';
+    push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s', 'stderr_progress';
     my %OPT = ( help => \$OPT_help, debug  => \$OPT_debug,
                 man  => \$OPT_man,  status => \$OPT_verbose,
                 task => \$OPT_task, stderr => \$OPT_stderr );
