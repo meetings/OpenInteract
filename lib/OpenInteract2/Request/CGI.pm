@@ -85,7 +85,9 @@ sub _assign_params_from_cgi {
     my $num_param = 0;
     my $num_upload = 0;
     foreach my $field ( @fields ) {
-        my @items = $cgi->param( $field ) // $cgi->url_param($field);
+        my @items = $cgi->param( $field );
+        @items = $cgi->url_param($field) unless @items > 1 || defined $items[0];
+
         next unless ( scalar @items );
 
         # ISA upload
