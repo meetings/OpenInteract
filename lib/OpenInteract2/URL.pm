@@ -11,7 +11,7 @@ use URI;
 
 $OpenInteract2::URL::VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
-use constant QUERY_ARG_SEPARATOR => '&';
+use constant QUERY_ARG_SEPARATOR => '&amp;';
 
 my ( $log );
 
