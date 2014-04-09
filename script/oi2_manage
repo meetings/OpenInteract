@@ -48,15 +48,19 @@ my %ALIASES = (
 my $DEV_LIST  = 'openinteract-dev@lists.sourceforge.net';
 my $HELP_LIST = 'openinteract-help@lists.sourceforge.net';
 
-my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr );
+my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr, $OPT_disable_warnings, $OPT_logfile, $OPT_disable_progress );
 
 {
     my $invocation = join( ' ', $0, @ARGV );
     my @opt_defs = OpenInteract2::Manage->all_parameters_long_options;
-    push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s', 'stderr_progress';
+    push @opt_defs, 'help|?', 'debug+', 'man', 'verbose', 'task=s', 'stderr_progress', 'logfile=s', 'disable_warnings', 'disable_progress';
     my %OPT = ( help => \$OPT_help, debug  => \$OPT_debug,
                 man  => \$OPT_man,  status => \$OPT_verbose,
-                task => \$OPT_task, stderr_progress => \$OPT_stderr );
+                task => \$OPT_task, stderr_progress => \$OPT_stderr,
+                logfile => \$OPT_logfile,
+                disable_warnings => \$OPT_disable_warnings,
+                disable_progress => \$OPT_disable_progress,
+            );
     GetOptions( \%OPT, @opt_defs );
 
     if ( $OPT_help ) {
@@ -81,10 +85,12 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr );
     # the fact that you could be mingling your oi2_manage messages
     # with your live website
 
-    my $log = OpenInteract2::Log->init_file( 'oi2_manage.log' );
+    my $log = OpenInteract2::Log->init_file( $OPT_logfile || 'oi2_manage.log' );
 
     my $log_level = ( $OPT_debug ) ? $DEBUG : $WARN;
     $log->level( $log_level );
+
+    $log->level( $ERROR ) if $OPT_disable_warnings;
 
     # Grab the command
 
@@ -338,6 +344,8 @@ sub show_parameter_contents {
 }
 
 sub progress {
+    return if $OPT_disable_progress;
+
     print { $OPT_stderr ? *STDERR : *STDOUT } @_;
 }
 
