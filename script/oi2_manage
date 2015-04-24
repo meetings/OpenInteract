@@ -7,7 +7,7 @@ use Cwd                   qw( cwd );
 use Data::Dumper          qw( Dumper );
 use File::Spec::Functions qw( rel2abs );
 use Getopt::Long          qw( GetOptions );
-use Log::Log4perl         qw( :levels );
+use Log::Log4perl         qw( :levels get_logger );
 use OpenInteract2::Log;
 use OpenInteract2::Manage qw( SYSTEM_PACKAGES );
 use Text::Wrap;
@@ -84,13 +84,23 @@ my ( $OPT_help, $OPT_debug, $OPT_man, $OPT_verbose, $OPT_task, $OPT_stderr, $OPT
     # available, but that's too confusing b/c of permission issues and
     # the fact that you could be mingling your oi2_manage messages
     # with your live website
+    # Now we look for a specific conf for the manage process
+    # If this file is not found, we use a file appender
 
-    my $log = OpenInteract2::Log->init_file( $OPT_logfile || 'oi2_manage.log' );
+    my $log;
+    my $logconf_file = File::Spec->catfile( $OPT{website_dir}, 'conf', 'oi2_manage_log4perl.conf' );
+    if ( -f $logconf_file ) {
+        Log::Log4perl::init( $logconf_file );
+        $log = get_logger();
+    }
+    else {
+        $log = OpenInteract2::Log->init_file( $OPT_logfile || 'oi2_manage.log' );
 
-    my $log_level = ( $OPT_debug ) ? $DEBUG : $WARN;
-    $log->level( $log_level );
+        my $log_level = ( $OPT_debug ) ? $DEBUG : $WARN;
+        $log->level( $log_level );
 
-    $log->level( $ERROR ) if $OPT_disable_warnings;
+        $log->level( $ERROR ) if $OPT_disable_warnings;
+    }
 
     # Grab the command
 
