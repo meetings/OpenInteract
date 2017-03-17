@@ -1,0 +1,11 @@
+MYMETA.json
+MYMETA.yml
+Makefile
+_build/
+blib/
+lib/OpenInteract2/Brick/
+lib/OpenInteract2/Manual/FAQ.pod
+oi2_manage.log
+pkg/
+pm_to_blib
+site/
