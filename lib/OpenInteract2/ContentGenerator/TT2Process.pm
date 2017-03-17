@@ -32,8 +32,12 @@ sub generate {
     my ( $self, $template_config, $template_vars, $template_source ) = @_;
     $log ||= get_logger( LOG_TEMPLATE );
 
+    my $trace = Dicole::Utils::Trace->start_trace('TT2 generate: identify source');
+
     my ( $source_type, $source ) =
         OpenInteract2::ContentGenerator::TemplateSource->identify( $template_source );
+
+    Dicole::Utils::Trace->end_trace($trace);
 
     my ( $template_name );
 
@@ -42,10 +46,14 @@ sub generate {
     # (b) it's only necessary for the custom_variable_class
 
     if ( $source_type eq 'NAME' ) {
+        $trace = Dicole::Utils::Trace->start_trace('TT2 generate: load source');
+
         $template_name = $source;
         my ( $text, $filename, $modtime ) =
             OpenInteract2::ContentGenerator::TemplateSource->load_source( $template_name );
         $source = \$text;
+
+        Dicole::Utils::Trace->end_trace($trace);
     }
     else {
         $template_name = '_anonymous_';
@@ -71,6 +79,8 @@ sub generate {
     # Create a 'MSG' method and add the Locale::Maketext object
     # available:
 
+    $trace = Dicole::Utils::Trace->start_trace('TT2 generate: create maketext');
+
     if ( CTX->request ) {
         my $lh = CTX->request->language_handle;
         $template_vars->{MSG} = sub {
@@ -82,13 +92,23 @@ sub generate {
         $template_vars->{MSG} = sub { return "$_[0]: no language handle" };
     }
 
+    Dicole::Utils::Trace->end_trace($trace);
+
+    $trace = Dicole::Utils::Trace->start_trace('TT2 generate: customize template variables');
+
     $self->_customize_template_variables( $template_name, $template_vars );
+
+    Dicole::Utils::Trace->end_trace($trace);
 
     my ( $html );
     eval {
+        $trace = Dicole::Utils::Trace->start_trace('TT2 generate: process template');
+
         $template->process( $source, $template_vars, \$html )
             || die "Cannot process template '$template_name': ",
                    $template->error(), "\n";
+
+        Dicole::Utils::Trace->end_trace($trace);
     };
     if ( $@ ) {
         $log->error( "Failed to process template '$template_name': $@" );
